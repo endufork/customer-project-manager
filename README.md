@@ -16,6 +16,12 @@
 - `run_server.cmd`  
   Windows 启动脚本。
 
+- `tools/version.cmd` / `tools/version.ps1`  
+  Git 版本管理半自动脚本，支持查看状态、保存提交、创建功能分支和打版本标签。
+
+- `VERSIONING.md`  
+  版本管理规则和脚本使用说明。
+
 - `customer-project-management-requirements-v0.2.md`  
   当前主需求文档，方向为“新项目优先规范录入，老项目按需补录”。已补充“临时项目号 + 内部设备号”的双编号策略。
 
