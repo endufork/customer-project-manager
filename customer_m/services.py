@@ -4,9 +4,20 @@ New code should import from customer_m.modules.* directly. The Web API still
 imports this module so the first modularization pass can stay behavior-neutral.
 """
 
-from .modules.lifecycle import generate_intake_no, create_event
+from .modules.lifecycle import create_default_project_todos, create_event, create_todo, generate_intake_no
 from .modules.customers import get_or_create_customer_group, get_or_create_customer, get_or_create_site, get_or_create_contact
-from .modules.projects import validate_equipment_no, normalize_project_nature
+from .modules.projects import (
+    create_project_record,
+    delete_project_record,
+    get_project_detail_payload,
+    get_project_folder_path,
+    get_project_shared_folder_path,
+    list_project_records,
+    normalize_project_nature,
+    scan_project_shared_folder,
+    update_project_record,
+    validate_equipment_no,
+)
 from .modules.file_types import classify_file
 from .modules.parsers import extract_text, extract_pdf_text, extract_docx_text, extract_xlsx_text
 from .modules.folders import (
@@ -28,12 +39,22 @@ from .modules.file_import import iter_source_files, import_source_path
 __all__ = [
     "generate_intake_no",
     "create_event",
+    "create_todo",
+    "create_default_project_todos",
     "get_or_create_customer_group",
     "get_or_create_customer",
     "get_or_create_site",
     "get_or_create_contact",
     "validate_equipment_no",
     "normalize_project_nature",
+    "list_project_records",
+    "get_project_detail_payload",
+    "create_project_record",
+    "update_project_record",
+    "delete_project_record",
+    "get_project_folder_path",
+    "get_project_shared_folder_path",
+    "scan_project_shared_folder",
     "classify_file",
     "extract_text",
     "extract_pdf_text",

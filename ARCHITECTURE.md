@@ -9,7 +9,7 @@ app.py
 customer_m/server.py
 ```
 
-`app.py` 是启动入口。`customer_m/server.py` 是 Web API 网关，负责 HTTP 路由、JSON 请求/响应、本地静态页面服务。
+`app.py` 是启动入口。`customer_m/server.py` 是 Web API 网关，负责 HTTP 路由、JSON 请求/响应、本地静态页面服务。它不直接处理客户、项目、目录和文件业务，只负责调用业务模块。
 
 ## 数据层
 
@@ -33,13 +33,19 @@ customer_m/modules/customers.py
 customer_m/modules/projects.py
 ```
 
-项目基础规则模块。负责内部设备号校验、项目性质规范化。
+项目记录与项目流程模块。负责项目列表、详情、创建、修改、删除、内部设备号校验、项目性质规范化，以及项目共享资料扫描的流程编排。
+
+```text
+customer_m/modules/lookups.py
+```
+
+基础下拉数据模块。负责启动页需要的设置、状态、币种、客户、工厂、联系人、项目性质等表单选项。
 
 ```text
 customer_m/modules/lifecycle.py
 ```
 
-项目生命周期辅助模块。当前负责临时项目号生成和项目事件记录，后续可扩展状态流转、待办、提醒、交期逻辑。
+项目生命周期辅助模块。当前负责临时项目号生成、项目事件记录、默认待办创建，后续可扩展状态流转、提醒、交期逻辑。
 
 ```text
 customer_m/modules/folders.py
@@ -81,4 +87,4 @@ customer_m/services.py
 
 ## 后续拆分方向
 
-下一阶段可以继续把 `server.py` 中较重的 SQL 查询和项目创建/更新流程下沉到业务模块，让 Web API 网关只负责路由和请求响应。
+下一阶段可以继续把设置管理、备份、导出、搜索做成独立模块，并把项目生命周期状态流转从 `projects.py` 继续拆到 `lifecycle.py`。
