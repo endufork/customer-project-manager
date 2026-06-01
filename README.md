@@ -10,6 +10,9 @@
 - `customer_m/`  
   后端模块包：`config.py` 配置和常量，`database.py` 数据库初始化和迁移，`services.py` 项目/文件业务逻辑，`server.py` HTTP 接口。
 
+- `customer_m/modules/`  
+  后端业务模块：客户与联系人、项目规则、生命周期辅助、目录管家、文件分类、文档解析、文件导入和目录扫描。
+
 - `static/`  
   前端页面，包含新项目录入、项目列表、筛选和项目详情抽屉。
 
@@ -21,6 +24,9 @@
 
 - `VERSIONING.md`  
   版本管理规则和脚本使用说明。
+
+- `ARCHITECTURE.md`  
+  后端模块职责和后续拆分方向说明。
 
 - `customer-project-management-requirements-v0.2.md`  
   当前主需求文档，方向为“新项目优先规范录入，老项目按需补录”。已补充“临时项目号 + 内部设备号”的双编号策略。

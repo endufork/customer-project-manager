@@ -9,7 +9,24 @@ from urllib.parse import parse_qs, urlparse
 
 from .config import DB_PATH, PROJECT_NATURE_OPTIONS, STATIC_DIR
 from .database import db_connect, init_db, row_to_dict, set_setting
-from .services import *
+from .modules.customers import (
+    get_or_create_contact,
+    get_or_create_customer,
+    get_or_create_customer_group,
+    get_or_create_site,
+)
+from .modules.file_import import import_source_path
+from .modules.folders import (
+    delete_project_folder_if_requested,
+    ensure_standard_dirs,
+    get_or_create_project_group,
+    move_project_folder_if_needed,
+    project_folder_for,
+    project_group_folder_for,
+)
+from .modules.lifecycle import create_event, generate_intake_no
+from .modules.projects import normalize_project_nature, validate_equipment_no
+from .modules.scanner import scan_project_folder, scan_project_group_shared_folder
 from .utils import make_id, now_iso, safe_print
 
 class AppHandler(SimpleHTTPRequestHandler):
