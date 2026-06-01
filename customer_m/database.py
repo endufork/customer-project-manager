@@ -1,6 +1,7 @@
 import sqlite3
 
 from .config import CATEGORY_DEFAULT_FOLDERS, DATA_DIR, DB_PATH, SCHEMA_PATH
+from .utils import now_iso
 
 def db_connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
@@ -128,7 +129,24 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     ensure_column(conn, "projects", "po_customer_id", "po_customer_id TEXT")
     ensure_column(conn, "projects", "project_nature", "project_nature TEXT")
     ensure_column(conn, "projects", "related_legacy_no", "related_legacy_no TEXT")
+    ensure_column(conn, "projects", "status_date", "status_date TEXT")
     conn.execute("UPDATE projects SET project_nature = ? WHERE project_nature IS NULL OR trim(project_nature) = ''", ("新设备",))
+    conn.execute(
+        """
+        UPDATE projects
+        SET status_date = COALESCE(
+            CASE
+                WHEN status_code IN ('quoted', 'waiting_feedback') THEN quote_date
+                WHEN status_code = 'po_received' THEN po_date
+                WHEN status_code IN ('shipped', 'completed') THEN actual_ship_date
+                WHEN status_code IN ('inquiry', 'no_equipment_no', 'clarification') THEN inquiry_date
+                ELSE NULL
+            END,
+            inquiry_date
+        )
+        WHERE status_date IS NULL OR trim(status_date) = ''
+        """
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_customers_group_id ON customers(group_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_customer_sites_customer_id ON customer_sites(customer_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_contacts_site_id ON contacts(site_id)")
@@ -139,6 +157,7 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_groups_customer_id ON project_groups(customer_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_groups_site_id ON project_groups(site_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_group_files_group_id ON project_group_files(project_group_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_status_date ON projects(status_date)")
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict | None:

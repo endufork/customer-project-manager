@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS projects (
   project_nature TEXT NOT NULL DEFAULT '新设备',
   related_legacy_no TEXT,
   status_code TEXT NOT NULL,
+  status_date TEXT,
   currency_code TEXT NOT NULL DEFAULT 'CNY',
   estimated_quote_amount NUMERIC CHECK (estimated_quote_amount IS NULL OR estimated_quote_amount >= 0),
   final_quote_amount NUMERIC CHECK (final_quote_amount IS NULL OR final_quote_amount >= 0),

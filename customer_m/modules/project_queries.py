@@ -2,7 +2,29 @@
 
 import sqlite3
 
+from ..config import STATUS_DATE_FIELD_BY_STATUS, STATUS_DATE_LABELS
 from ..database import row_to_dict
+
+
+def status_date_label(status_code: str) -> str:
+    return STATUS_DATE_LABELS.get(status_code, "状态日期")
+
+
+def current_status_date(project: dict) -> str:
+    status_code = project.get("status_code") or ""
+    mapped_field = STATUS_DATE_FIELD_BY_STATUS.get(status_code)
+    if project.get("status_date"):
+        return project["status_date"]
+    if mapped_field and project.get(mapped_field):
+        return project[mapped_field]
+    return ""
+
+
+def enrich_project_status_date(project: dict) -> dict:
+    project["status_date_label"] = status_date_label(project.get("status_code") or "")
+    project["current_status_date"] = current_status_date(project)
+    return project
+
 
 def list_project_records(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
     filters = []
@@ -54,8 +76,9 @@ def list_project_records(conn: sqlite3.Connection, query: dict[str, list[str]]) 
         SELECT
           p.id, p.intake_no, p.equipment_no, p.equipment_name, p.project_name,
           p.project_nature, p.related_legacy_no,
-          p.status_code, s.name AS status_name, p.currency_code,
-          p.inquiry_date, p.expected_delivery_date, p.has_quote, p.has_po,
+          p.status_code, s.name AS status_name, p.status_date, p.currency_code,
+          p.inquiry_date, p.quote_date, p.po_date, p.expected_delivery_date,
+          p.actual_ship_date, p.has_quote, p.has_po,
           p.has_3d_model, p.project_folder_path, p.created_at,
           cg.name AS customer_group_name, cs.name AS site_name, pg.name AS project_group_name, p.department,
           c.name AS customer_name, co.name AS contact_name,
@@ -73,7 +96,7 @@ def list_project_records(conn: sqlite3.Connection, query: dict[str, list[str]]) 
         ORDER BY p.created_at DESC
         LIMIT 200
     """
-    rows = [row_to_dict(row) for row in conn.execute(sql, params)]
+    rows = [enrich_project_status_date(row_to_dict(row)) for row in conn.execute(sql, params)]
     kpis = row_to_dict(
         conn.execute(
             """
@@ -147,7 +170,7 @@ def get_project_detail_payload(conn: sqlite3.Connection, project_id: str) -> dic
             (project_id,),
         )
     ]
-    return {"project": project, "files": files, "shared_files": shared_files, "events": events}
+    return {"project": enrich_project_status_date(project), "files": files, "shared_files": shared_files, "events": events}
 
 def _project_file_flags(conn: sqlite3.Connection, project_id: str) -> tuple[int, int, int]:
     has_quote = 1 if conn.execute(

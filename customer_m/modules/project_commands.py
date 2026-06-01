@@ -3,7 +3,7 @@
 import sqlite3
 from pathlib import Path
 
-from ..config import SHARED_FOLDER_NAME
+from ..config import SHARED_FOLDER_NAME, STATUS_DATE_FIELD_BY_STATUS
 from .customers import (
     get_or_create_contact,
     get_or_create_customer,
@@ -45,14 +45,30 @@ def _project_input(data: dict, default_status: str = "inquiry") -> dict:
         "project_nature": normalize_project_nature(data.get("project_nature") or ""),
         "related_legacy_no": (data.get("related_legacy_no") or "").strip(),
         "status_code": (data.get("status_code") or default_status).strip(),
+        "status_date": (data.get("status_date") or "").strip() or None,
         "currency_code": (data.get("currency_code") or "CNY").strip().upper(),
         "equipment_no_raw": (data.get("equipment_no") or "").strip(),
         "source_path": (data.get("source_path") or "").strip(),
         "inquiry_date": (data.get("inquiry_date") or "").strip() or None,
+        "quote_date": (data.get("quote_date") or "").strip() or None,
+        "po_date": (data.get("po_date") or "").strip() or None,
         "expected_delivery_date": (data.get("expected_delivery_date") or "").strip() or None,
+        "actual_ship_date": (data.get("actual_ship_date") or "").strip() or None,
         "quote_due_date": (data.get("quote_due_date") or "").strip(),
         "notes": (data.get("notes") or "").strip() or None,
     }
+
+
+def _sync_status_dates(payload: dict) -> None:
+    status_date = payload.get("status_date")
+    mapped_field = STATUS_DATE_FIELD_BY_STATUS.get(payload["status_code"])
+    if not status_date and mapped_field:
+        status_date = payload.get(mapped_field)
+    if not status_date and payload["status_code"] in {"inquiry", "no_equipment_no", "clarification"}:
+        status_date = payload.get("inquiry_date")
+    payload["status_date"] = status_date
+    if mapped_field and status_date:
+        payload[mapped_field] = status_date
 
 def _validate_project_input(conn: sqlite3.Connection, payload: dict) -> None:
     if not payload["equipment_name"]:
@@ -128,6 +144,7 @@ def _ensure_project_group(conn: sqlite3.Connection, payload: dict, context: dict
 
 def create_project_record(conn: sqlite3.Connection, data: dict) -> dict:
     payload = _project_input(data)
+    _sync_status_dates(payload)
     _validate_project_input(conn, payload)
 
     equipment_no = validate_equipment_no(conn, payload["equipment_no_raw"])
@@ -153,13 +170,14 @@ def create_project_record(conn: sqlite3.Connection, data: dict) -> dict:
           id, intake_no, equipment_no, source_type, customer_id, contact_id,
           project_group_id, customer_group_id, site_id, department, origin_role, po_customer_id,
           project_name, equipment_name, project_nature, related_legacy_no, status_code, currency_code,
-          inquiry_date, expected_delivery_date, project_folder_path,
+          status_date, inquiry_date, quote_date, po_date, expected_delivery_date, actual_ship_date,
+          project_folder_path,
           original_source_path, has_quote, has_po, has_3d_model,
           is_historical, is_data_complete, is_archived, notes, created_at, updated_at
         )
         VALUES (
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         """,
         (
@@ -181,8 +199,12 @@ def create_project_record(conn: sqlite3.Connection, data: dict) -> dict:
             payload["related_legacy_no"] or None,
             payload["status_code"],
             payload["currency_code"],
+            payload["status_date"],
             payload["inquiry_date"],
+            payload.get("quote_date"),
+            payload.get("po_date"),
             payload["expected_delivery_date"],
+            payload.get("actual_ship_date"),
             str(project_folder),
             payload["source_path"] or None,
             0,
@@ -220,6 +242,7 @@ def create_project_record(conn: sqlite3.Connection, data: dict) -> dict:
 
 def update_project_record(conn: sqlite3.Connection, project_id: str, data: dict) -> dict:
     payload = _project_input(data)
+    _sync_status_dates(payload)
     _validate_project_input(conn, payload)
     existing = conn.execute("SELECT id, project_folder_path, intake_no FROM projects WHERE id = ?", (project_id,)).fetchone()
     if existing is None:
@@ -281,9 +304,13 @@ def update_project_record(conn: sqlite3.Connection, project_id: str, data: dict)
             project_nature = ?,
             related_legacy_no = ?,
             status_code = ?,
+            status_date = ?,
             currency_code = ?,
             inquiry_date = ?,
+            quote_date = ?,
+            po_date = ?,
             expected_delivery_date = ?,
+            actual_ship_date = ?,
             notes = ?,
             updated_at = ?
         WHERE id = ?
@@ -303,9 +330,13 @@ def update_project_record(conn: sqlite3.Connection, project_id: str, data: dict)
             payload["project_nature"],
             payload["related_legacy_no"] or None,
             payload["status_code"],
+            payload["status_date"],
             payload["currency_code"],
             payload["inquiry_date"],
+            payload.get("quote_date"),
+            payload.get("po_date"),
             payload["expected_delivery_date"],
+            payload.get("actual_ship_date"),
             payload["notes"],
             now_iso(),
             project_id,

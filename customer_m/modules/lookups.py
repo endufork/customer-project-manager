@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from ..config import PROJECT_NATURE_OPTIONS
+from ..config import PROJECT_NATURE_OPTIONS, STATUS_DATE_LABELS
 from ..database import row_to_dict
 
 
@@ -25,6 +25,7 @@ def get_bootstrap_payload(conn: sqlite3.Connection) -> dict:
             )
         ],
         "project_natures": list(PROJECT_NATURE_OPTIONS),
+        "status_date_labels": STATUS_DATE_LABELS,
         "customer_groups": [
             row_to_dict(row)
             for row in conn.execute("SELECT id, name FROM customer_groups ORDER BY name")

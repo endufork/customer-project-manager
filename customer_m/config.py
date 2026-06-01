@@ -12,6 +12,35 @@ PROJECT_GROUP_CONTAINER = "02_客户产品项目"
 SHARED_FOLDER_NAME = "00_共享资料"
 PROJECT_NATURE_OPTIONS = ("新设备", "老设备改造", "夹具/治具", "备件/耗材", "售后/服务", "纯方案/报价", "其他")
 PROJECT_NATURES = set(PROJECT_NATURE_OPTIONS)
+STATUS_DATE_LABELS = {
+    "inquiry": "询价日期",
+    "no_equipment_no": "询价日期",
+    "clarification": "需求澄清日期",
+    "solution_design": "方案设计日期",
+    "cost_review": "内部评估日期",
+    "internal_quote": "内部报价日期",
+    "quoted": "客户报价日期",
+    "waiting_feedback": "客户报价日期",
+    "po_received": "PO 日期",
+    "purchasing": "备料/采购日期",
+    "manufacturing": "装配/制作日期",
+    "acceptance": "验收/调试日期",
+    "shipped": "发货日期",
+    "completed": "完成日期",
+    "paused": "暂停日期",
+    "lost_closed": "关闭日期",
+    "historical_entry": "补录日期",
+}
+STATUS_DATE_FIELD_BY_STATUS = {
+    "inquiry": "inquiry_date",
+    "no_equipment_no": "inquiry_date",
+    "clarification": "inquiry_date",
+    "quoted": "quote_date",
+    "waiting_feedback": "quote_date",
+    "po_received": "po_date",
+    "shipped": "actual_ship_date",
+    "completed": "actual_ship_date",
+}
 STANDARD_PROJECT_FOLDERS = (
     "01_输入资料",
     "02_报价与订单",

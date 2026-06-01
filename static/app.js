@@ -121,8 +121,7 @@ async function loadBootstrap() {
       .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
       .join("");
 
-  const inquiryDate = document.querySelector('[name="inquiry_date"]');
-  if (!inquiryDate.value) inquiryDate.value = today();
+  bindStatusDateControl($("#projectForm"), true);
 }
 
 async function loadProjects() {
@@ -210,8 +209,8 @@ function renderProjects(projects = sortedProjects()) {
           <td>${escapeHtml(project.contact_name || "")}</td>
           <td>${escapeHtml(project.project_nature || "新设备")}</td>
           <td>${escapeHtml(project.equipment_name)}<div class="subtext">${escapeHtml(project.project_name || "")}</div>${related}</td>
-          <td>${escapeHtml(project.status_name)}</td>
-          <td>${escapeHtml(project.inquiry_date || "")}</td>
+          <td>${escapeHtml(project.status_name)}<div class="subtext">${escapeHtml(project.status_date_label || "状态日期")}</div></td>
+          <td>${escapeHtml(statusDateValue(project))}</td>
           <td>${escapeHtml(project.currency_code)}</td>
           <td>${project.file_count || 0}</td>
           <td>${markers || `<span class="tag neutral">普通</span>`}</td>
@@ -253,6 +252,32 @@ function projectNatureOptions(selectedValue) {
       return `<option value="${escapeHtml(nature)}"${selected}>${escapeHtml(nature)}</option>`;
     })
     .join("");
+}
+
+function statusDateLabel(statusCode) {
+  return state.bootstrap?.status_date_labels?.[statusCode] || "状态日期";
+}
+
+function statusDateValue(project) {
+  return project.current_status_date || project.status_date || "";
+}
+
+function bindStatusDateControl(form, fillWhenEmpty = false) {
+  const statusSelect = form.elements.status_code;
+  const dateInput = form.elements.status_date;
+  const label = form.querySelector("[data-status-date-label]");
+  if (!statusSelect || !dateInput || !label) return;
+  const refresh = () => {
+    label.textContent = statusDateLabel(statusSelect.value);
+    if (fillWhenEmpty && !dateInput.value) {
+      dateInput.value = today();
+    }
+  };
+  if (!statusSelect.dataset.statusDateBound) {
+    statusSelect.addEventListener("change", refresh);
+    statusSelect.dataset.statusDateBound = "1";
+  }
+  refresh();
 }
 
 async function openDetail(projectId) {
@@ -298,6 +323,7 @@ async function openDetail(projectId) {
       <dt>联系人</dt><dd>${escapeHtml(project.contact_name || "未填写")}</dd>
       <dt>项目/设备/夹具</dt><dd>${escapeHtml(project.equipment_name)}</dd>
       <dt>状态</dt><dd>${escapeHtml(project.status_name)}</dd>
+      <dt>状态日期</dt><dd>${escapeHtml(project.status_date_label || "状态日期")}：${escapeHtml(statusDateValue(project) || "未填写")}</dd>
       <dt>询价日期</dt><dd>${escapeHtml(project.inquiry_date || "未填写")}</dd>
       <dt>预计交期</dt><dd>${escapeHtml(project.expected_delivery_date || "未填写")}</dd>
       <dt>币种</dt><dd>${escapeHtml(project.currency_code)}</dd>
@@ -307,6 +333,10 @@ async function openDetail(projectId) {
     <details class="edit-block">
       <summary>编辑基础信息</summary>
       <form id="detailEditForm" class="project-form compact-form">
+        <input type="hidden" name="inquiry_date" value="${escapeHtml(project.inquiry_date || "")}" />
+        <input type="hidden" name="quote_date" value="${escapeHtml(project.quote_date || "")}" />
+        <input type="hidden" name="po_date" value="${escapeHtml(project.po_date || "")}" />
+        <input type="hidden" name="actual_ship_date" value="${escapeHtml(project.actual_ship_date || "")}" />
         <div class="grid two">
           <label>
             客户集团
@@ -375,8 +405,8 @@ async function openDetail(projectId) {
             <select name="currency_code">${selectOptions(state.bootstrap.currencies, project.currency_code, (item) => `${item.code} · ${item.name}`)}</select>
           </label>
           <label>
-            询价日期
-            <input name="inquiry_date" type="date" value="${escapeHtml(project.inquiry_date || "")}" />
+            <span data-status-date-label>${escapeHtml(project.status_date_label || "状态日期")}</span>
+            <input name="status_date" type="date" value="${escapeHtml(statusDateValue(project))}" />
           </label>
         </div>
         <div class="grid two">
@@ -460,6 +490,7 @@ async function openDetail(projectId) {
 function bindDetailActions(projectId) {
   const editForm = $("#detailEditForm");
   if (editForm) {
+    bindStatusDateControl(editForm);
     editForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const button = event.submitter;
@@ -556,7 +587,7 @@ async function createProject(event) {
     });
     showToast(`项目已创建：${result.intake_no}`);
     form.reset();
-    document.querySelector('[name="inquiry_date"]').value = today();
+    bindStatusDateControl(form, true);
     await loadBootstrap();
     await loadProjects();
     switchView("library", false);
