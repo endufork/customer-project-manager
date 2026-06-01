@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>客户项目资料管理</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>客户项目资料管理</h1>
+        <p>新项目入口 · 文件归档 · 项目跟进</p>
+      </div>
+      <div class="settings">
+        <label>
+          项目根目录
+          <input id="projectRootPath" type="text" />
+        </label>
+        <button id="saveSettingsButton" type="button">保存配置</button>
+      </div>
+    </header>
+
+    <nav class="view-tabs" aria-label="主要页面">
+      <button id="navLibraryButton" type="button" class="tab-button active" data-view="library">项目库</button>
+      <button id="navCreateButton" type="button" class="tab-button" data-view="create">新建项目</button>
+    </nav>
+
+    <main class="workspace">
+      <section id="entryView" class="entry-panel page-view" aria-labelledby="entry-title" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 id="entry-title">新建项目</h2>
+            <span id="formStatus" class="muted">能归属客户产品时，优先填写客户产品/生产线</span>
+          </div>
+          <button id="backToLibraryButton" type="button" class="secondary">返回项目库</button>
+        </div>
+
+        <form id="projectForm" class="project-form">
+          <div class="grid two">
+            <label>
+              客户集团
+              <input name="customer_group_name" list="customerGroupOptions" placeholder="例如 ABC Global" />
+              <datalist id="customerGroupOptions"></datalist>
+            </label>
+            <label>
+              客户公司/法人主体 *
+              <input name="customer_name" list="customerOptions" required />
+              <datalist id="customerOptions"></datalist>
+            </label>
+          </div>
+
+          <div class="grid three">
+            <label>
+              工厂/站点
+              <input name="site_name" list="siteOptions" placeholder="例如 Suzhou Plant" />
+              <datalist id="siteOptions"></datalist>
+            </label>
+            <label>
+              客户产品/生产线
+              <input name="project_group_name" list="projectGroupOptions" placeholder="例如 18ga Narrow Crown Stapler" />
+              <datalist id="projectGroupOptions"></datalist>
+            </label>
+            <label>
+              部门/业务单元
+              <input name="department" placeholder="Engineering / Maintenance / NPI" />
+            </label>
+          </div>
+
+          <div class="grid three">
+            <label>
+              项目来源角色
+              <select name="origin_role">
+                <option value="">未选择</option>
+                <option value="工程师">工程师</option>
+                <option value="项目经理">项目经理</option>
+                <option value="采购">采购</option>
+                <option value="维护">维护</option>
+                <option value="NPI">NPI</option>
+                <option value="其他">其他</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="grid two">
+            <label>
+              联系人
+              <input name="contact_name" list="contactOptions" />
+              <datalist id="contactOptions"></datalist>
+            </label>
+            <label>
+              PO/采购主体
+              <input name="po_customer_name" list="customerOptions" placeholder="默认同客户公司/法人主体" />
+            </label>
+          </div>
+
+          <div class="grid two">
+            <label>
+              项目/设备/夹具名称 *
+              <input name="equipment_name" required />
+            </label>
+            <label>
+              项目性质
+              <select name="project_nature" id="projectNatureSelect"></select>
+            </label>
+          </div>
+
+          <div class="grid two">
+            <label>
+              关联原项目/原设备号
+              <input name="related_legacy_no" placeholder="改造、夹具、备件时填写旧项目或旧设备号" />
+            </label>
+            <label>
+              内部设备号
+              <input name="equipment_no" placeholder="本次项目有新设备号时填写，可后补" />
+            </label>
+          </div>
+
+          <div class="grid three">
+            <label>
+              状态
+              <select name="status_code" id="statusSelect"></select>
+            </label>
+            <label>
+              币种
+              <select name="currency_code" id="currencySelect"></select>
+            </label>
+            <label>
+              询价日期
+              <input name="inquiry_date" type="date" />
+            </label>
+          </div>
+
+          <div class="grid two">
+            <label>
+              报价截止
+              <input name="quote_due_date" type="date" />
+            </label>
+            <label>
+              预计交期
+              <input name="expected_delivery_date" type="date" />
+            </label>
+          </div>
+
+          <label>
+            已有资料包路径（可选）
+            <input name="source_path" placeholder="有完整资料包时填写；散乱文件可先留空" />
+          </label>
+          <p class="form-hint">推荐先创建项目文件夹，再把邮件、微信、桌面上的散乱文件放进去，最后在项目详情顶部点击“扫描项目文件”。</p>
+
+          <label>
+            备注
+            <textarea name="notes" rows="3"></textarea>
+          </label>
+
+          <div class="actions">
+            <button type="submit">创建项目</button>
+            <button type="reset" class="secondary">清空</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="libraryView" class="list-panel page-view active" aria-labelledby="list-title">
+        <div class="section-heading">
+          <h2 id="list-title">项目库</h2>
+          <div class="heading-actions">
+            <button id="listCreateButton" type="button">新建项目</button>
+            <button id="refreshButton" type="button" class="secondary">刷新</button>
+          </div>
+        </div>
+
+        <div class="kpis">
+          <div><span id="kpiTotal">0</span><small>项目</small></div>
+          <div><span id="kpiNoEquipment">0</span><small>待补内部设备号</small></div>
+          <div><span id="kpiPo">0</span><small>已有 PO</small></div>
+          <div><span id="kpiModel">0</span><small>有模型</small></div>
+        </div>
+
+        <div class="filters">
+          <input id="searchInput" placeholder="搜索临时号、设备号、客户、项目、原设备号" />
+          <select id="filterGroup"></select>
+          <select id="filterSite"></select>
+          <select id="filterStatus"></select>
+          <label class="checkline">
+            <input id="filterNeedsEquipment" type="checkbox" />
+            待补内部设备号
+          </label>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-sort="intake_no">编号<span class="sort-indicator"></span></th>
+                <th data-sort="customer_group_name">客户集团<span class="sort-indicator"></span></th>
+                <th data-sort="customer_name">法人主体<span class="sort-indicator"></span></th>
+                <th data-sort="site_name">工厂/站点<span class="sort-indicator"></span></th>
+                <th data-sort="project_group_name">客户产品/生产线<span class="sort-indicator"></span></th>
+                <th data-sort="department">部门<span class="sort-indicator"></span></th>
+                <th data-sort="contact_name">联系人<span class="sort-indicator"></span></th>
+                <th data-sort="project_nature">性质<span class="sort-indicator"></span></th>
+                <th data-sort="equipment_name">项目/设备/夹具<span class="sort-indicator"></span></th>
+                <th data-sort="status_name">状态<span class="sort-indicator"></span></th>
+                <th data-sort="inquiry_date">询价日期<span class="sort-indicator"></span></th>
+                <th data-sort="currency_code">币种<span class="sort-indicator"></span></th>
+                <th data-sort="file_count">文件<span class="sort-indicator"></span></th>
+                <th data-sort="markers">标记<span class="sort-indicator"></span></th>
+              </tr>
+            </thead>
+            <tbody id="projectRows">
+              <tr>
+                <td colspan="14" class="empty">正在加载...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <aside id="detailPane" class="detail-pane" hidden>
+      <div class="section-heading">
+        <h2>项目详情</h2>
+        <button id="closeDetailButton" type="button" class="secondary">关闭</button>
+      </div>
+      <div id="detailContent"></div>
+    </aside>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

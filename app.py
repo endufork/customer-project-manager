@@ -1,0 +1,5 @@
+from customer_m.server import main
+
+
+if __name__ == "__main__":
+    main()
