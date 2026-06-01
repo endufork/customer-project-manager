@@ -33,7 +33,25 @@ customer_m/modules/customers.py
 customer_m/modules/projects.py
 ```
 
-项目记录与项目流程模块。负责项目列表、详情、创建、修改、删除、内部设备号校验、项目性质规范化，以及项目共享资料扫描的流程编排。
+项目模块门面。对 API 层和旧兼容层暴露统一入口，内部转发到项目规则、查询和写入流程模块。
+
+```text
+customer_m/modules/project_rules.py
+```
+
+项目基础规则模块。负责内部设备号校验、项目性质规范化。
+
+```text
+customer_m/modules/project_queries.py
+```
+
+项目查询模块。负责项目列表、详情、项目文件夹路径、共享资料路径等只读数据。
+
+```text
+customer_m/modules/project_commands.py
+```
+
+项目写入流程模块。负责项目创建、修改、删除、共享资料扫描等会改变数据库或文件系统状态的流程编排。
 
 ```text
 customer_m/modules/lookups.py
