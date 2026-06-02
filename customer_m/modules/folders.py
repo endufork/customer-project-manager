@@ -242,6 +242,35 @@ def move_project_folder_if_needed(
     create_event(conn, project_id, "folder_moved", "项目文件夹已迁移到标准目录", new_prefix)
     return target
 
+def _project_folder_row_for_path(conn: sqlite3.Connection, target: Path) -> sqlite3.Row | None:
+    rows = conn.execute(
+        """
+        SELECT id, intake_no, equipment_no, project_folder_path
+        FROM projects
+        WHERE project_folder_path IS NOT NULL AND trim(project_folder_path) <> ''
+        """
+    ).fetchall()
+    for row in rows:
+        try:
+            candidate = Path(row["project_folder_path"]).resolve(strict=False)
+        except OSError:
+            continue
+        if candidate == target:
+            return row
+    return None
+
+def _is_project_leaf_path(relative: Path) -> bool:
+    parts = relative.parts
+    return (
+        len(parts) >= 3 and parts[-2] == SINGLE_DEVICE_CONTAINER
+    ) or (
+        len(parts) >= 4 and parts[-3] == PROJECT_GROUP_CONTAINER
+    )
+
+def _folder_name_contains_project_no(project: sqlite3.Row, target: Path) -> bool:
+    markers = [project["equipment_no"], project["intake_no"]]
+    return any(marker and marker in target.name for marker in markers)
+
 def delete_project_folder_if_requested(conn: sqlite3.Connection, folder_path: str) -> bool:
     if not folder_path:
         raise ValueError("项目文件夹路径为空，无法删除资料")
@@ -253,8 +282,13 @@ def delete_project_folder_if_requested(conn: sqlite3.Connection, folder_path: st
     except ValueError as exc:
         raise ValueError("为安全起见，只能删除项目根目录下的项目文件夹") from exc
 
-    if target == root or len(relative.parts) < 2:
-        raise ValueError("为安全起见，不能删除项目根目录或客户级目录")
+    if target == root or not _is_project_leaf_path(relative):
+        raise ValueError("为安全起见，只能删除系统标准结构下的项目文件夹")
+    project = _project_folder_row_for_path(conn, target)
+    if project is None:
+        raise ValueError("为安全起见，只能删除数据库中登记的项目文件夹")
+    if not _folder_name_contains_project_no(project, target):
+        raise ValueError("为安全起见，项目文件夹名称必须包含临时项目号或内部设备号")
     if not target.exists():
         return False
     if not target.is_dir():

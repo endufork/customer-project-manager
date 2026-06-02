@@ -1,3 +1,9 @@
 @echo off
-cd /d E:\Codex\Customer_M
-"C:\Users\Lenovo\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" app.py > server.log 2> server.err
+setlocal
+cd /d "%~dp0"
+set "PYTHON_EXE=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+if exist "%PYTHON_EXE%" (
+  "%PYTHON_EXE%" app.py > server.log 2> server.err
+) else (
+  python app.py > server.log 2> server.err
+)
