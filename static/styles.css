@@ -126,6 +126,66 @@ h2 {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  position: relative;
+}
+
+.column-picker {
+  position: relative;
+}
+
+.column-picker summary {
+  min-height: 36px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--text);
+  padding: 7px 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+}
+
+.column-picker summary::-webkit-details-marker {
+  display: none;
+}
+
+.column-picker[open] summary {
+  background: #eef2f6;
+}
+
+.column-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 220px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  z-index: 5;
+}
+
+.column-options {
+  display: grid;
+  gap: 8px;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.column-option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.column-option input {
+  width: 16px;
+  min-height: 16px;
 }
 
 .project-form {
@@ -215,6 +275,14 @@ button.secondary {
 
 button.secondary:hover {
   background: #eef2f6;
+}
+
+button.slim {
+  width: 100%;
+  min-height: 30px;
+  margin-top: 10px;
+  padding: 4px 8px;
+  font-size: 12px;
 }
 
 button.danger {
@@ -495,6 +563,20 @@ tr.project-row:hover {
 
   .scan-buttons button {
     width: 100%;
+  }
+
+  .section-heading {
+    align-items: stretch;
+  }
+
+  .heading-actions {
+    justify-content: flex-start;
+  }
+
+  .column-menu {
+    left: 0;
+    right: auto;
+    width: min(260px, calc(100vw - 56px));
   }
 
   .workspace {

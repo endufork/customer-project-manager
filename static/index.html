@@ -166,6 +166,13 @@
           <div class="heading-actions">
             <button id="listCreateButton" type="button">新建项目</button>
             <button id="refreshButton" type="button" class="secondary">刷新</button>
+            <details class="column-picker">
+              <summary>显示列</summary>
+              <div class="column-menu">
+                <div id="columnOptions" class="column-options"></div>
+                <button id="resetColumnsButton" type="button" class="secondary slim">默认列</button>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -190,22 +197,7 @@
         <div class="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th data-sort="intake_no">编号<span class="sort-indicator"></span></th>
-                <th data-sort="customer_group_name">客户集团<span class="sort-indicator"></span></th>
-                <th data-sort="customer_name">法人主体<span class="sort-indicator"></span></th>
-                <th data-sort="site_name">工厂/站点<span class="sort-indicator"></span></th>
-                <th data-sort="project_group_name">客户产品/生产线<span class="sort-indicator"></span></th>
-                <th data-sort="department">部门<span class="sort-indicator"></span></th>
-                <th data-sort="contact_name">联系人<span class="sort-indicator"></span></th>
-                <th data-sort="project_nature">性质<span class="sort-indicator"></span></th>
-                <th data-sort="equipment_name">项目/设备/夹具<span class="sort-indicator"></span></th>
-                <th data-sort="status_name">状态<span class="sort-indicator"></span></th>
-                <th data-sort="current_status_date">状态日期<span class="sort-indicator"></span></th>
-                <th data-sort="currency_code">币种<span class="sort-indicator"></span></th>
-                <th data-sort="file_count">文件<span class="sort-indicator"></span></th>
-                <th data-sort="markers">标记<span class="sort-indicator"></span></th>
-              </tr>
+              <tr id="projectTableHead"></tr>
             </thead>
             <tbody id="projectRows">
               <tr>

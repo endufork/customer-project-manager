@@ -1,6 +1,7 @@
 const state = {
   bootstrap: null,
   projects: [],
+  visibleColumns: [],
   sort: { key: "created_at", direction: "desc" },
 };
 
@@ -17,6 +18,35 @@ const AUTO_CAPITALIZE_FIELDS = new Set([
   "project_name",
 ]);
 const ACRONYMS = new Set(["abc", "dcps", "eolt", "fat", "mty", "npi", "po", "qa", "rfq", "sbd"]);
+const COLUMN_STORAGE_KEY = "customerProject.visibleColumns.v1";
+const DEFAULT_PROJECT_COLUMNS = [
+  "intake_no",
+  "customer_name",
+  "site_name",
+  "project_group_name",
+  "contact_name",
+  "project_nature",
+  "project_name",
+  "status_name",
+  "current_status_date",
+  "markers",
+];
+const PROJECT_COLUMNS = [
+  { key: "intake_no", label: "编号", sort: "intake_no", render: projectIdentifierHtml },
+  { key: "customer_group_name", label: "客户集团", sort: "customer_group_name", render: (project) => escapeHtml(project.customer_group_name || "") },
+  { key: "customer_name", label: "法人主体", sort: "customer_name", render: (project) => escapeHtml(project.customer_name || "") },
+  { key: "site_name", label: "工厂", sort: "site_name", render: (project) => escapeHtml(project.site_name || "") },
+  { key: "project_group_name", label: "产品", sort: "project_group_name", render: (project) => escapeHtml(project.project_group_name || "") },
+  { key: "department", label: "部门", sort: "department", render: (project) => escapeHtml(project.department || "") },
+  { key: "contact_name", label: "联系人", sort: "contact_name", render: (project) => escapeHtml(project.contact_name || "") },
+  { key: "project_nature", label: "性质", sort: "project_nature", render: (project) => escapeHtml(project.project_nature || "新设备") },
+  { key: "project_name", label: "项目名", sort: "project_name", render: projectNameHtml },
+  { key: "status_name", label: "状态", sort: "status_name", render: (project) => escapeHtml(project.status_name || "") },
+  { key: "current_status_date", label: "日期", sort: "current_status_date", render: (project) => escapeHtml(statusDateValue(project)) },
+  { key: "currency_code", label: "币种", sort: "currency_code", render: (project) => escapeHtml(project.currency_code || "") },
+  { key: "file_count", label: "文件", sort: "file_count", render: (project) => escapeHtml(project.file_count || 0) },
+  { key: "markers", label: "标记", sort: "markers", render: markersHtml },
+];
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -66,6 +96,42 @@ function normalizeTextInputs(form) {
       input.value = smartCapitalize(input.value.trim());
     }
   });
+}
+
+function loadVisibleColumns() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || "[]");
+    const validKeys = new Set(PROJECT_COLUMNS.map((column) => column.key));
+    const visible = Array.isArray(saved) ? saved.filter((key) => validKeys.has(key)) : [];
+    if (visible.length) return visible;
+  } catch (error) {
+    console.warn("Column preference ignored", error);
+  }
+  return [...DEFAULT_PROJECT_COLUMNS];
+}
+
+function saveVisibleColumns() {
+  localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(state.visibleColumns));
+}
+
+function visibleProjectColumns() {
+  const visible = state.visibleColumns.length ? state.visibleColumns : DEFAULT_PROJECT_COLUMNS;
+  const visibleSet = new Set(visible);
+  return PROJECT_COLUMNS.filter((column) => visibleSet.has(column.key));
+}
+
+function renderColumnPicker() {
+  const options = $("#columnOptions");
+  if (!options) return;
+  const visibleSet = new Set(state.visibleColumns.length ? state.visibleColumns : DEFAULT_PROJECT_COLUMNS);
+  options.innerHTML = PROJECT_COLUMNS.map(
+    (column) => `
+      <label class="column-option">
+        <input type="checkbox" name="project_column" value="${escapeHtml(column.key)}"${visibleSet.has(column.key) ? " checked" : ""} />
+        ${escapeHtml(column.label)}
+      </label>
+    `,
+  ).join("");
 }
 
 function switchView(view, refresh = true) {
@@ -150,6 +216,8 @@ function renderKpis(kpis) {
 
 function sortableValue(project, key) {
   if (key === "file_count") return Number(project.file_count || 0);
+  if (key === "project_name") return [project.equipment_name || "", project.project_name || ""].join(" ");
+  if (key === "current_status_date") return statusDateValue(project);
   if (key === "markers") {
     return [project.has_po ? "PO" : "", project.has_3d_model ? "模型" : "", !project.equipment_no ? "待补内部设备号" : ""].join(" ");
   }
@@ -177,43 +245,56 @@ function updateSortHeaders() {
   });
 }
 
+function renderTableHead(columns) {
+  $("#projectTableHead").innerHTML = columns
+    .map(
+      (column) => `
+        <th data-sort="${escapeHtml(column.sort || column.key)}">
+          ${escapeHtml(column.label)}<span class="sort-indicator"></span>
+        </th>
+      `,
+    )
+    .join("");
+  updateSortHeaders();
+}
+
+function projectIdentifierHtml(project) {
+  const equipment = project.equipment_no
+    ? `<small>设备号 ${escapeHtml(project.equipment_no)}</small>`
+    : `<small class="subtext">待补内部设备号</small>`;
+  return `<div class="identifier">${escapeHtml(project.intake_no)}${equipment}</div>`;
+}
+
+function projectNameHtml(project) {
+  const related = project.related_legacy_no
+    ? `<div class="subtext">关联 ${escapeHtml(project.related_legacy_no)}</div>`
+    : "";
+  return `${escapeHtml(project.equipment_name)}<div class="subtext">${escapeHtml(project.project_name || "")}</div>${related}`;
+}
+
+function markersHtml(project) {
+  const markers = [
+    project.has_po ? `<span class="tag">PO</span>` : "",
+    project.has_3d_model ? `<span class="tag">模型</span>` : "",
+    project.project_nature && project.project_nature !== "新设备" ? `<span class="tag neutral">${escapeHtml(project.project_nature)}</span>` : "",
+    !project.equipment_no ? `<span class="tag warn">待补内部设备号</span>` : "",
+  ].join(" ");
+  return markers || `<span class="tag neutral">普通</span>`;
+}
+
 function renderProjects(projects = sortedProjects()) {
   const tbody = $("#projectRows");
-  updateSortHeaders();
+  const columns = visibleProjectColumns();
+  renderTableHead(columns);
   if (!projects.length) {
-    tbody.innerHTML = `<tr><td colspan="14" class="empty">暂无项目</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${columns.length || 1}" class="empty">暂无项目</td></tr>`;
     return;
   }
   tbody.innerHTML = projects
     .map((project) => {
-      const equipment = project.equipment_no
-        ? `<small>设备号 ${escapeHtml(project.equipment_no)}</small>`
-        : `<small class="subtext">待补内部设备号</small>`;
-      const related = project.related_legacy_no
-        ? `<div class="subtext">关联 ${escapeHtml(project.related_legacy_no)}</div>`
-        : "";
-      const markers = [
-        project.has_po ? `<span class="tag">PO</span>` : "",
-        project.has_3d_model ? `<span class="tag">模型</span>` : "",
-        project.project_nature && project.project_nature !== "新设备" ? `<span class="tag neutral">${escapeHtml(project.project_nature)}</span>` : "",
-        !project.equipment_no ? `<span class="tag warn">待补内部设备号</span>` : "",
-      ].join(" ");
       return `
         <tr class="project-row" data-id="${escapeHtml(project.id)}">
-          <td><div class="identifier">${escapeHtml(project.intake_no)}${equipment}</div></td>
-          <td>${escapeHtml(project.customer_group_name || "")}</td>
-          <td>${escapeHtml(project.customer_name || "")}</td>
-          <td>${escapeHtml(project.site_name || "")}</td>
-          <td>${escapeHtml(project.project_group_name || "")}</td>
-          <td>${escapeHtml(project.department || "")}</td>
-          <td>${escapeHtml(project.contact_name || "")}</td>
-          <td>${escapeHtml(project.project_nature || "新设备")}</td>
-          <td>${escapeHtml(project.equipment_name)}<div class="subtext">${escapeHtml(project.project_name || "")}</div>${related}</td>
-          <td>${escapeHtml(project.status_name)}<div class="subtext">${escapeHtml(project.status_date_label || "状态日期")}</div></td>
-          <td>${escapeHtml(statusDateValue(project))}</td>
-          <td>${escapeHtml(project.currency_code)}</td>
-          <td>${project.file_count || 0}</td>
-          <td>${markers || `<span class="tag neutral">普通</span>`}</td>
+          ${columns.map((column) => `<td data-column="${escapeHtml(column.key)}">${column.render(project)}</td>`).join("")}
         </tr>
       `;
     })
@@ -619,16 +700,34 @@ function bindEvents() {
       target.value = smartCapitalize(target.value.trim());
     }
   });
-  document.querySelectorAll("th[data-sort]").forEach((th) => {
-    th.addEventListener("click", () => {
-      const key = th.dataset.sort;
-      if (state.sort.key === key) {
-        state.sort.direction = state.sort.direction === "asc" ? "desc" : "asc";
-      } else {
-        state.sort = { key, direction: "asc" };
-      }
-      renderProjects();
-    });
+  $("#projectTableHead").addEventListener("click", (event) => {
+    const th = event.target.closest("th[data-sort]");
+    if (!th) return;
+    const key = th.dataset.sort;
+    if (state.sort.key === key) {
+      state.sort.direction = state.sort.direction === "asc" ? "desc" : "asc";
+    } else {
+      state.sort = { key, direction: "asc" };
+    }
+    renderProjects();
+  });
+  $("#columnOptions").addEventListener("change", (event) => {
+    if (event.target.name !== "project_column") return;
+    const checked = Array.from($("#columnOptions").querySelectorAll("input:checked")).map((input) => input.value);
+    if (!checked.length) {
+      event.target.checked = true;
+      showToast("至少保留一列");
+      return;
+    }
+    state.visibleColumns = checked;
+    saveVisibleColumns();
+    renderProjects();
+  });
+  $("#resetColumnsButton").addEventListener("click", () => {
+    state.visibleColumns = [...DEFAULT_PROJECT_COLUMNS];
+    saveVisibleColumns();
+    renderColumnPicker();
+    renderProjects();
   });
   $("#navLibraryButton").addEventListener("click", () => switchView("library"));
   $("#navCreateButton").addEventListener("click", () => switchView("create"));
@@ -647,6 +746,8 @@ function bindEvents() {
 }
 
 async function boot() {
+  state.visibleColumns = loadVisibleColumns();
+  renderColumnPicker();
   bindEvents();
   await loadBootstrap();
   await loadProjects();
