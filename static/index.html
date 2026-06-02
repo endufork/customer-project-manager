@@ -31,7 +31,7 @@
         <div class="section-heading">
           <div>
             <h2 id="entry-title">新建项目</h2>
-            <span id="formStatus" class="muted">能归属客户产品时，优先填写客户产品/生产线</span>
+            <span id="formStatus" class="muted">一条项目对应一台设备/夹具/具体工程对象；能归属客户产品时，优先填写客户产品/生产线</span>
           </div>
           <button id="backToLibraryButton" type="button" class="secondary">返回项目库</button>
         </div>
@@ -107,12 +107,12 @@
 
           <div class="grid two">
             <label>
-              关联原项目/原设备号
-              <input name="related_legacy_no" placeholder="改造、夹具、备件时填写旧项目或旧设备号" />
+              关联原项目/原WO号
+              <input name="related_legacy_no" placeholder="改造、夹具、备件时填写旧项目或旧WO号" />
             </label>
             <label>
-              内部设备号
-              <input name="equipment_no" placeholder="本次项目有新设备号时填写，可后补" />
+              WO号/内部设备号
+              <input name="equipment_no" placeholder="正式开 WO 后填写，可后补" />
             </label>
           </div>
 
@@ -178,19 +178,19 @@
 
         <div class="kpis">
           <div><span id="kpiTotal">0</span><small>项目</small></div>
-          <div><span id="kpiNoEquipment">0</span><small>待补内部设备号</small></div>
+          <div><span id="kpiNoEquipment">0</span><small>待补WO号</small></div>
           <div><span id="kpiPo">0</span><small>已有 PO</small></div>
           <div><span id="kpiModel">0</span><small>有模型</small></div>
         </div>
 
         <div class="filters">
-          <input id="searchInput" placeholder="搜索临时号、设备号、客户、项目、原设备号" />
+          <input id="searchInput" placeholder="搜索INQ号、WO号、客户、项目、原WO号" />
           <select id="filterGroup"></select>
           <select id="filterSite"></select>
           <select id="filterStatus"></select>
           <label class="checkline">
             <input id="filterNeedsEquipment" type="checkbox" />
-            待补内部设备号
+            待补WO号
           </label>
         </div>
 

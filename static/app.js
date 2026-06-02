@@ -295,7 +295,7 @@ function sortableValue(project, key) {
   if (key === "project_name") return [project.equipment_name || "", project.project_name || ""].join(" ");
   if (key === "current_status_date") return statusDateValue(project);
   if (key === "markers") {
-    return [project.has_po ? "PO" : "", project.has_3d_model ? "模型" : "", !project.equipment_no ? "待补内部设备号" : ""].join(" ");
+    return [project.has_po ? "PO" : "", project.has_3d_model ? "模型" : "", !project.equipment_no ? "待补WO号" : ""].join(" ");
   }
   return String(project[key] ?? "").toLocaleLowerCase("zh-CN");
 }
@@ -336,9 +336,9 @@ function renderTableHead(columns) {
 
 function projectIdentifierHtml(project) {
   const equipment = project.equipment_no
-    ? `<small>设备号 ${escapeHtml(project.equipment_no)}</small>`
-    : `<small class="subtext">待补内部设备号</small>`;
-  return `<div class="identifier">${escapeHtml(project.intake_no)}${equipment}</div>`;
+    ? `<small>WO ${escapeHtml(project.equipment_no)}</small>`
+    : `<small class="subtext">待补WO号</small>`;
+  return `<div class="identifier"><span>INQ ${escapeHtml(project.intake_no)}</span>${equipment}</div>`;
 }
 
 function projectNameHtml(project) {
@@ -353,7 +353,7 @@ function markersHtml(project) {
     project.has_po ? `<span class="tag">PO</span>` : "",
     project.has_3d_model ? `<span class="tag">模型</span>` : "",
     project.project_nature && project.project_nature !== "新设备" ? `<span class="tag neutral">${escapeHtml(project.project_nature)}</span>` : "",
-    !project.equipment_no ? `<span class="tag warn">待补内部设备号</span>` : "",
+    !project.equipment_no ? `<span class="tag warn">待补WO号</span>` : "",
   ].join(" ");
   return markers || `<span class="tag neutral">普通</span>`;
 }
@@ -471,10 +471,10 @@ async function openDetail(projectId) {
       </div>
     </div>
     <dl class="detail-grid">
-      <dt>临时项目号</dt><dd>${escapeHtml(project.intake_no)}</dd>
-      <dt>内部设备号</dt><dd>${escapeHtml(project.equipment_no || "待补充")}</dd>
+      <dt>INQ号</dt><dd>${escapeHtml(project.intake_no)}</dd>
+      <dt>WO号/内部设备号</dt><dd>${escapeHtml(project.equipment_no || "未开WO")}</dd>
       <dt>项目性质</dt><dd>${escapeHtml(project.project_nature || "新设备")}</dd>
-      <dt>关联原项目/原设备号</dt><dd>${escapeHtml(project.related_legacy_no || "未填写")}</dd>
+      <dt>关联原项目/原WO号</dt><dd>${escapeHtml(project.related_legacy_no || "未填写")}</dd>
       <dt>客户集团</dt><dd>${escapeHtml(project.customer_group_name || "未填写")}</dd>
       <dt>客户公司/法人主体</dt><dd>${escapeHtml(project.customer_name)}</dd>
       <dt>工厂/站点</dt><dd>${escapeHtml(project.site_name || "未填写")}</dd>
@@ -550,11 +550,11 @@ async function openDetail(projectId) {
         </div>
         <div class="grid two">
           <label>
-            关联原项目/原设备号
+            关联原项目/原WO号
             <input name="related_legacy_no" value="${escapeHtml(project.related_legacy_no || "")}" />
           </label>
           <label>
-            内部设备号
+            WO号/内部设备号
             <input name="equipment_no" value="${escapeHtml(project.equipment_no || "")}" />
           </label>
         </div>
@@ -742,14 +742,14 @@ async function createProject(event) {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    showToast(`项目已创建：${result.intake_no}`);
+    showToast(`项目已创建：INQ ${result.intake_no}`);
     form.reset();
     bindStatusDateControl(form, true);
     await loadBootstrap();
     await loadProjects();
     switchView("library", false);
     await openDetail(result.id);
-    $("#formStatus").textContent = "能归属客户产品时，优先填写客户产品/生产线";
+    $("#formStatus").textContent = "一条项目对应一台设备/夹具/具体工程对象；能归属客户产品时，优先填写客户产品/生产线";
   } catch (error) {
     $("#formStatus").textContent = error.message;
     showToast(error.message);

@@ -13,7 +13,7 @@ def validate_equipment_no(
     if not value:
         return None
     if not EQUIPMENT_NO_RE.fullmatch(value):
-        raise ValueError("内部设备号只能包含英文字母、数字、横杠和下划线")
+        raise ValueError("WO号只能包含英文字母、数字、横杠和下划线")
     if exclude_project_id:
         existing = conn.execute(
             "SELECT id FROM projects WHERE equipment_no = ? COLLATE NOCASE AND id <> ?",
@@ -25,7 +25,7 @@ def validate_equipment_no(
             (value,),
         ).fetchone()
     if existing:
-        raise ValueError("内部设备号已存在")
+        raise ValueError("WO号已存在")
     return value
 
 def normalize_project_nature(value: str) -> str:

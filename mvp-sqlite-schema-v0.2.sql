@@ -314,7 +314,7 @@ INSERT OR IGNORE INTO currencies (code, name, symbol, is_active) VALUES
 
 INSERT OR IGNORE INTO project_statuses (code, name, sort_order, is_active) VALUES
 ('inquiry', '询价录入', 10, 1),
-('no_equipment_no', '待补内部设备号', 15, 1),
+('no_equipment_no', '待补WO号', 15, 1),
 ('clarification', '需求澄清', 20, 1),
 ('solution_design', '方案设计', 30, 1),
 ('cost_review', '内部评估/成本核算', 40, 1),
@@ -349,6 +349,6 @@ INSERT OR IGNORE INTO todo_types (code, name, sort_order, is_active) VALUES
 ('delivery', '交期提醒', 40, 1),
 ('acceptance', '验收提醒', 50, 1),
 ('shipment', '发货提醒', 60, 1),
-('equipment_no_assignment', '补充内部设备号', 65, 1),
+('equipment_no_assignment', '补充WO号', 65, 1),
 ('historical_cleanup', '历史资料补全', 70, 1),
 ('other', '其他', 80, 1);

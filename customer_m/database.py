@@ -18,11 +18,11 @@ def init_db() -> None:
         migrate_db(conn)
         conn.execute(
             "UPDATE project_statuses SET name = ? WHERE code = ?",
-            ("待补内部设备号", "no_equipment_no"),
+            ("待补WO号", "no_equipment_no"),
         )
         conn.execute(
             "UPDATE todo_types SET name = ? WHERE code = ?",
-            ("补充内部设备号", "equipment_no_assignment"),
+            ("补充WO号", "equipment_no_assignment"),
         )
         sync_file_category_defaults(conn)
         conn.commit()

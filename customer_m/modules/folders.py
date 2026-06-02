@@ -288,7 +288,7 @@ def delete_project_folder_if_requested(conn: sqlite3.Connection, folder_path: st
     if project is None:
         raise ValueError("为安全起见，只能删除数据库中登记的项目文件夹")
     if not _folder_name_contains_project_no(project, target):
-        raise ValueError("为安全起见，项目文件夹名称必须包含临时项目号或内部设备号")
+        raise ValueError("为安全起见，项目文件夹名称必须包含INQ号或WO号")
     if not target.exists():
         return False
     if not target.is_dir():

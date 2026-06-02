@@ -57,7 +57,7 @@ def create_default_project_todos(
             conn,
             project_id,
             "equipment_no_assignment",
-            "补充内部设备号",
+            "补充WO号",
             inquiry_date or datetime.now().date().isoformat(),
         )
     if quote_due_date:

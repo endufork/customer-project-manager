@@ -39,7 +39,7 @@ customer_m/modules/projects.py
 customer_m/modules/project_rules.py
 ```
 
-项目基础规则模块。负责内部设备号校验、项目性质规范化。
+项目基础规则模块。负责 WO号/内部设备号校验、项目性质规范化。
 
 ```text
 customer_m/modules/project_queries.py
@@ -63,7 +63,7 @@ customer_m/modules/lookups.py
 customer_m/modules/lifecycle.py
 ```
 
-项目生命周期辅助模块。当前负责临时项目号生成、项目事件记录、默认待办创建，后续可扩展状态流转、提醒、交期逻辑。
+项目生命周期辅助模块。当前负责 INQ号生成、项目事件记录、默认待办创建，后续可扩展状态流转、提醒、交期逻辑。
 
 ```text
 customer_m/modules/folders.py
