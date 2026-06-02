@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ..config import SHARED_FOLDER_NAME, STATUS_DATE_FIELD_BY_STATUS
 from .customers import (
+    cleanup_orphan_customer_context,
     get_or_create_contact,
     get_or_create_customer,
     get_or_create_customer_group,
@@ -13,6 +14,7 @@ from .customers import (
 from .file_import import import_source_path
 from .folders import (
     delete_project_folder_if_requested,
+    cleanup_orphan_project_group,
     ensure_standard_dirs,
     get_or_create_project_group,
     move_project_folder_if_needed,
@@ -244,7 +246,14 @@ def update_project_record(conn: sqlite3.Connection, project_id: str, data: dict)
     payload = _project_input(data)
     _sync_status_dates(payload)
     _validate_project_input(conn, payload)
-    existing = conn.execute("SELECT id, project_folder_path, intake_no FROM projects WHERE id = ?", (project_id,)).fetchone()
+    existing = conn.execute(
+        """
+        SELECT id, project_folder_path, intake_no, customer_id, site_id, project_group_id
+        FROM projects
+        WHERE id = ?
+        """,
+        (project_id,),
+    ).fetchone()
     if existing is None:
         raise ValueError("项目不存在")
 
@@ -342,6 +351,8 @@ def update_project_record(conn: sqlite3.Connection, project_id: str, data: dict)
             project_id,
         ),
     )
+    cleanup_orphan_project_group(conn, existing["project_group_id"])
+    cleanup_orphan_customer_context(conn, existing["customer_id"], existing["site_id"])
     create_event(conn, project_id, "project_updated", "修改项目基础信息")
     return {"id": project_id, "updated": True}
 

@@ -192,6 +192,39 @@ def unique_directory_destination(path: Path) -> Path:
             return candidate
         index += 1
 
+def cleanup_empty_parent_dirs(conn: sqlite3.Connection, start_path: Path) -> list[str]:
+    root = Path(get_setting(conn, "project_root_path", r"D:\01_CustomerProject")).resolve(strict=False)
+    cleaned: list[str] = []
+    current = start_path.resolve(strict=False)
+    while current != root:
+        try:
+            current.relative_to(root)
+        except ValueError:
+            break
+        try:
+            current.rmdir()
+        except OSError:
+            break
+        cleaned.append(str(current))
+        current = current.parent.resolve(strict=False)
+    return cleaned
+
+def cleanup_orphan_project_group(conn: sqlite3.Connection, project_group_id: str | None) -> bool:
+    if not project_group_id:
+        return False
+    referenced = conn.execute(
+        """
+        SELECT 1
+        WHERE EXISTS (SELECT 1 FROM projects WHERE project_group_id = ?)
+           OR EXISTS (SELECT 1 FROM project_group_files WHERE project_group_id = ?)
+        """,
+        (project_group_id, project_group_id),
+    ).fetchone()
+    if referenced:
+        return False
+    conn.execute("DELETE FROM project_groups WHERE id = ?", (project_group_id,))
+    return True
+
 def move_project_folder_if_needed(
     conn: sqlite3.Connection,
     project_id: str,
@@ -213,11 +246,13 @@ def move_project_folder_if_needed(
     except OSError:
         pass
 
+    old_parent = current.parent
     target = target_folder
     if current.exists() and current.is_dir():
         if target.exists():
             target = unique_directory_destination(target)
         shutil.move(str(current), str(target))
+        cleanup_empty_parent_dirs(conn, old_parent)
     else:
         ensure_standard_dirs(target, conn)
 

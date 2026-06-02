@@ -104,8 +104,8 @@ def get_or_create_contact(
             conn.execute(
                 """
                 UPDATE contacts
-                SET site_id = COALESCE(site_id, ?),
-                    department = COALESCE(NULLIF(department, ''), ?),
+                SET site_id = COALESCE(?, site_id),
+                    department = COALESCE(NULLIF(?, ''), department),
                     updated_at = ?
                 WHERE id = ?
                 """,
@@ -123,8 +123,8 @@ def get_or_create_contact(
         conn.execute(
             """
             UPDATE contacts
-            SET site_id = COALESCE(site_id, ?),
-                department = COALESCE(NULLIF(department, ''), ?),
+            SET site_id = COALESCE(?, site_id),
+                department = COALESCE(NULLIF(?, ''), department),
                 updated_at = ?
             WHERE id = ?
             """,
@@ -149,3 +149,49 @@ def get_or_create_contact(
         ),
     )
     return new_id
+
+
+def cleanup_orphan_site(conn: sqlite3.Connection, site_id: str | None) -> bool:
+    if not site_id:
+        return False
+    referenced = conn.execute(
+        """
+        SELECT 1
+        WHERE EXISTS (SELECT 1 FROM projects WHERE site_id = ?)
+           OR EXISTS (SELECT 1 FROM contacts WHERE site_id = ?)
+           OR EXISTS (SELECT 1 FROM project_groups WHERE site_id = ?)
+        """,
+        (site_id, site_id, site_id),
+    ).fetchone()
+    if referenced:
+        return False
+    conn.execute("DELETE FROM customer_sites WHERE id = ?", (site_id,))
+    return True
+
+
+def cleanup_orphan_customer(conn: sqlite3.Connection, customer_id: str | None) -> bool:
+    if not customer_id:
+        return False
+    referenced = conn.execute(
+        """
+        SELECT 1
+        WHERE EXISTS (SELECT 1 FROM projects WHERE customer_id = ? OR po_customer_id = ?)
+           OR EXISTS (SELECT 1 FROM contacts WHERE customer_id = ?)
+           OR EXISTS (SELECT 1 FROM customer_sites WHERE customer_id = ?)
+           OR EXISTS (SELECT 1 FROM project_groups WHERE customer_id = ?)
+        """,
+        (customer_id, customer_id, customer_id, customer_id, customer_id),
+    ).fetchone()
+    if referenced:
+        return False
+    conn.execute("DELETE FROM customers WHERE id = ?", (customer_id,))
+    return True
+
+
+def cleanup_orphan_customer_context(
+    conn: sqlite3.Connection,
+    customer_id: str | None,
+    site_id: str | None,
+) -> None:
+    cleanup_orphan_site(conn, site_id)
+    cleanup_orphan_customer(conn, customer_id)
