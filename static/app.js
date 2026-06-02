@@ -3,6 +3,7 @@ const state = {
   projects: [],
   visibleColumns: [],
   sort: { key: "created_at", direction: "desc" },
+  detailLastFocused: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -58,11 +59,86 @@ function escapeHtml(value) {
 }
 
 function showToast(message) {
+  const region = $("#toastRegion") || document.body;
   const node = document.createElement("div");
   node.className = "toast";
+  node.setAttribute("role", "status");
   node.textContent = message;
-  document.body.appendChild(node);
+  region.appendChild(node);
   setTimeout(() => node.remove(), 2600);
+}
+
+function debounce(callback, delay = 300) {
+  let timer = null;
+  return (...args) => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => callback(...args), delay);
+  };
+}
+
+function closeDetailPane({ restoreFocus = true } = {}) {
+  const pane = $("#detailPane");
+  pane.hidden = true;
+  pane.setAttribute("aria-modal", "false");
+  if (restoreFocus && state.detailLastFocused instanceof HTMLElement && document.contains(state.detailLastFocused)) {
+    state.detailLastFocused.focus();
+  }
+}
+
+function showDetailPane() {
+  const pane = $("#detailPane");
+  state.detailLastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  pane.hidden = false;
+  pane.setAttribute("aria-modal", "true");
+  pane.focus();
+}
+
+function confirmProjectDeletion() {
+  const dialog = $("#deleteProjectDialog");
+  if (!dialog || typeof dialog.showModal !== "function") {
+    const keepFiles = confirm("是否保留项目资料文件夹？\n\n确定：保留资料，只删除系统记录。\n取消：不保留资料，继续确认删除项目文件夹。");
+    if (keepFiles) return Promise.resolve({ confirmed: true, deleteFiles: false });
+    const deleteFiles = confirm("你选择不保留资料。确认永久删除这个项目文件夹吗？");
+    return Promise.resolve({ confirmed: deleteFiles, deleteFiles });
+  }
+
+  return new Promise((resolve) => {
+    let result = { confirmed: false, deleteFiles: false };
+    const cancelButton = $("#deleteCancelButton");
+    const keepButton = $("#deleteKeepFilesButton");
+    const deleteButton = $("#deleteWithFilesButton");
+    const cleanup = () => {
+      cancelButton.removeEventListener("click", onCancel);
+      keepButton.removeEventListener("click", onKeep);
+      deleteButton.removeEventListener("click", onDelete);
+      dialog.removeEventListener("close", onClose);
+      dialog.removeEventListener("cancel", onCancel);
+    };
+    const closeWith = (nextResult) => {
+      result = nextResult;
+      if (dialog.open) dialog.close();
+    };
+    const onCancel = (event) => {
+      event?.preventDefault();
+      closeWith({ confirmed: false, deleteFiles: false });
+    };
+    const onKeep = () => {
+      closeWith({ confirmed: true, deleteFiles: false });
+    };
+    const onDelete = () => {
+      closeWith({ confirmed: true, deleteFiles: true });
+    };
+    const onClose = () => {
+      cleanup();
+      resolve(result);
+    };
+    cancelButton.addEventListener("click", onCancel);
+    keepButton.addEventListener("click", onKeep);
+    deleteButton.addEventListener("click", onDelete);
+    dialog.addEventListener("cancel", onCancel);
+    dialog.addEventListener("close", onClose);
+    dialog.showModal();
+  });
 }
 
 async function api(path, options = {}) {
@@ -293,7 +369,7 @@ function renderProjects(projects = sortedProjects()) {
   tbody.innerHTML = projects
     .map((project) => {
       return `
-        <tr class="project-row" data-id="${escapeHtml(project.id)}">
+        <tr class="project-row" data-id="${escapeHtml(project.id)}" tabindex="0">
           ${columns.map((column) => `<td data-column="${escapeHtml(column.key)}">${column.render(project)}</td>`).join("")}
         </tr>
       `;
@@ -302,6 +378,12 @@ function renderProjects(projects = sortedProjects()) {
 
   tbody.querySelectorAll(".project-row").forEach((row) => {
     row.addEventListener("click", () => openDetail(row.dataset.id));
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openDetail(row.dataset.id);
+      }
+    });
   });
 }
 
@@ -565,7 +647,7 @@ async function openDetail(projectId) {
     </div>
   `;
   bindDetailActions(project.id);
-  $("#detailPane").hidden = false;
+  showDetailPane();
 }
 
 function bindDetailActions(projectId) {
@@ -622,20 +704,14 @@ function bindDetailActions(projectId) {
           showToast("项目路径已复制");
         }
         if (action === "delete-project") {
-          const ok = confirm("确定删除这个项目记录吗？");
-          if (!ok) return;
-          const keepFiles = confirm("是否保留项目资料文件夹？\n\n确定：保留资料，只删除系统记录。\n取消：不保留资料，继续确认删除项目文件夹。");
-          let deleteFiles = false;
-          if (!keepFiles) {
-            deleteFiles = confirm("你选择不保留资料。确认永久删除这个项目文件夹吗？");
-            if (!deleteFiles) return;
-          }
+          const decision = await confirmProjectDeletion();
+          if (!decision.confirmed) return;
           const result = await api(`/api/projects/${encodeURIComponent(projectId)}`, {
             method: "DELETE",
-            body: JSON.stringify({ delete_files: deleteFiles }),
+            body: JSON.stringify({ delete_files: decision.deleteFiles }),
           });
           showToast(result.folder_deleted ? "项目记录和资料文件夹已删除" : "项目记录已删除，资料已保留");
-          $("#detailPane").hidden = true;
+          closeDetailPane({ restoreFocus: false });
           await loadBootstrap();
           await loadProjects();
         }
@@ -693,6 +769,7 @@ async function saveSettings() {
 }
 
 function bindEvents() {
+  const debouncedLoadProjects = debounce(() => loadProjects().catch(console.error), 300);
   $("#projectForm").addEventListener("submit", createProject);
   document.addEventListener("focusout", (event) => {
     const target = event.target;
@@ -700,8 +777,25 @@ function bindEvents() {
       target.value = smartCapitalize(target.value.trim());
     }
   });
+  document.addEventListener("keydown", (event) => {
+    const deleteDialog = $("#deleteProjectDialog");
+    const columnPicker = document.querySelector(".column-picker");
+    if (event.key === "Escape" && columnPicker?.open) {
+      columnPicker.open = false;
+      return;
+    }
+    if (event.key === "Escape" && !$("#detailPane").hidden && !deleteDialog?.open) {
+      closeDetailPane();
+    }
+  });
+  document.addEventListener("click", (event) => {
+    const columnPicker = document.querySelector(".column-picker");
+    if (!columnPicker?.open) return;
+    if (event.target instanceof Element && columnPicker.contains(event.target)) return;
+    columnPicker.open = false;
+  });
   $("#projectTableHead").addEventListener("click", (event) => {
-    const th = event.target.closest("th[data-sort]");
+    const th = event.target instanceof Element ? event.target.closest("th[data-sort]") : null;
     if (!th) return;
     const key = th.dataset.sort;
     if (state.sort.key === key) {
@@ -735,13 +829,13 @@ function bindEvents() {
   $("#backToLibraryButton").addEventListener("click", () => switchView("library"));
   $("#refreshButton").addEventListener("click", loadProjects);
   $("#saveSettingsButton").addEventListener("click", saveSettings);
-  $("#searchInput").addEventListener("input", () => loadProjects().catch(console.error));
+  $("#searchInput").addEventListener("input", debouncedLoadProjects);
   $("#filterGroup").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterSite").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterStatus").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterNeedsEquipment").addEventListener("change", () => loadProjects().catch(console.error));
   $("#closeDetailButton").addEventListener("click", () => {
-    $("#detailPane").hidden = true;
+    closeDetailPane();
   });
 }
 

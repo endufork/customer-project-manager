@@ -451,6 +451,12 @@ tr.project-row:hover {
   background: #f7faf9;
 }
 
+tr.project-row:focus {
+  outline: 2px solid rgba(31, 111, 91, 0.22);
+  outline-offset: -2px;
+  background: #f7faf9;
+}
+
 .identifier {
   display: grid;
   gap: 3px;
@@ -501,6 +507,11 @@ tr.project-row:hover {
   z-index: 10;
 }
 
+.detail-pane:focus {
+  outline: 2px solid rgba(31, 111, 91, 0.22);
+  outline-offset: 2px;
+}
+
 #detailContent {
   padding: 16px;
   display: grid;
@@ -532,17 +543,60 @@ tr.project-row:hover {
   border-radius: 6px;
 }
 
-.toast {
+.toast-region {
   position: fixed;
   left: 50%;
   bottom: 24px;
   transform: translateX(-50%);
+  display: grid;
+  gap: 8px;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.toast {
   padding: 10px 14px;
   border: 1px solid var(--line-strong);
   background: #fff;
   box-shadow: var(--shadow);
   border-radius: 6px;
-  z-index: 20;
+  pointer-events: auto;
+}
+
+.confirm-dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.confirm-dialog::backdrop {
+  background: rgba(20, 31, 43, 0.28);
+}
+
+.confirm-dialog form {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.confirm-dialog h2 {
+  font-size: 16px;
+}
+
+.confirm-dialog p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 960px) {
@@ -597,5 +651,10 @@ tr.project-row:hover {
     right: 14px;
     width: calc(100vw - 28px);
     max-height: calc(100vh - 28px);
+  }
+
+  .confirm-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }

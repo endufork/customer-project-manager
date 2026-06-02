@@ -209,13 +209,27 @@
       </section>
     </main>
 
-    <aside id="detailPane" class="detail-pane" hidden>
+    <aside id="detailPane" class="detail-pane" role="dialog" aria-modal="false" aria-labelledby="detailTitle" tabindex="-1" hidden>
       <div class="section-heading">
-        <h2>项目详情</h2>
+        <h2 id="detailTitle">项目详情</h2>
         <button id="closeDetailButton" type="button" class="secondary">关闭</button>
       </div>
       <div id="detailContent"></div>
     </aside>
+
+    <dialog id="deleteProjectDialog" class="confirm-dialog" aria-labelledby="deleteProjectTitle">
+      <form method="dialog">
+        <h2 id="deleteProjectTitle">删除项目记录</h2>
+        <p id="deleteProjectMessage">请选择是否保留项目资料文件夹。</p>
+        <div class="confirm-actions">
+          <button id="deleteCancelButton" type="button" class="secondary">取消</button>
+          <button id="deleteKeepFilesButton" type="button">只删除记录</button>
+          <button id="deleteWithFilesButton" type="button" class="danger">记录和资料都删除</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="false"></div>
 
     <script src="/static/app.js"></script>
   </body>
