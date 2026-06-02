@@ -33,7 +33,7 @@ const DEFAULT_PROJECT_COLUMNS = [
   "markers",
 ];
 const PROJECT_COLUMNS = [
-  { key: "intake_no", label: "编号", sort: "intake_no", render: projectIdentifierHtml },
+  { key: "intake_no", label: "编号", sort: "current_number", render: projectIdentifierHtml },
   { key: "customer_group_name", label: "客户集团", sort: "customer_group_name", render: (project) => escapeHtml(project.customer_group_name || "") },
   { key: "customer_name", label: "法人主体", sort: "customer_name", render: (project) => escapeHtml(project.customer_name || "") },
   { key: "site_name", label: "工厂", sort: "site_name", render: (project) => escapeHtml(project.site_name || "") },
@@ -292,6 +292,7 @@ function renderKpis(kpis) {
 
 function sortableValue(project, key) {
   if (key === "file_count") return Number(project.file_count || 0);
+  if (key === "current_number") return projectCurrentNumber(project);
   if (key === "project_name") return [project.equipment_name || "", project.project_name || ""].join(" ");
   if (key === "current_status_date") return statusDateValue(project);
   if (key === "markers") {
@@ -335,10 +336,17 @@ function renderTableHead(columns) {
 }
 
 function projectIdentifierHtml(project) {
-  const equipment = project.equipment_no
-    ? `<small>WO ${escapeHtml(project.equipment_no)}</small>`
-    : `<small class="subtext">待补WO号</small>`;
-  return `<div class="identifier"><span>INQ ${escapeHtml(project.intake_no)}</span>${equipment}</div>`;
+  const label = project.equipment_no ? "WO" : "INQ";
+  const phase = project.equipment_no ? "WO工程执行" : "前期支持 · 待开WO";
+  return `<div class="identifier"><span>${label} ${escapeHtml(projectCurrentNumber(project))}</span><small class="subtext">${phase}</small></div>`;
+}
+
+function projectCurrentNumber(project) {
+  return project.equipment_no || project.intake_no || "";
+}
+
+function projectNumberStage(project) {
+  return project.equipment_no ? "WO工程执行" : "INQ前期支持";
 }
 
 function projectNameHtml(project) {
@@ -471,8 +479,8 @@ async function openDetail(projectId) {
       </div>
     </div>
     <dl class="detail-grid">
-      <dt>INQ号</dt><dd>${escapeHtml(project.intake_no)}</dd>
-      <dt>WO号/内部设备号</dt><dd>${escapeHtml(project.equipment_no || "未开WO")}</dd>
+      <dt>当前编号</dt><dd>${escapeHtml(project.equipment_no ? `WO ${project.equipment_no}` : `INQ ${project.intake_no}`)}</dd>
+      <dt>编号阶段</dt><dd>${escapeHtml(projectNumberStage(project))}</dd>
       <dt>项目性质</dt><dd>${escapeHtml(project.project_nature || "新设备")}</dd>
       <dt>关联原项目/原WO号</dt><dd>${escapeHtml(project.related_legacy_no || "未填写")}</dd>
       <dt>客户集团</dt><dd>${escapeHtml(project.customer_group_name || "未填写")}</dd>
