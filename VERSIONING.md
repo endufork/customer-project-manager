@@ -10,6 +10,20 @@
 .\tools\version.cmd status
 ```
 
+运行提交前检查：
+
+```powershell
+.\tools\check.cmd
+```
+
+安装自动提交前检查：
+
+```powershell
+.\tools\install-hooks.cmd
+```
+
+安装后，每次 `git commit` 前都会自动运行 `tools/check.ps1`。如果检查失败，commit 会被拦下。
+
 保存一次改动并提交：
 
 ```powershell
@@ -68,7 +82,31 @@ chore     配置和杂项
 
 确认功能稳定后，再合并回 `main`。
 
-## 脚本会做什么
+## main、分支和 PR
+
+```text
+main      当前稳定版本
+codex/*   新功能、实验功能、较大调整
+commit    本地保存点
+push      上传到 GitHub
+PR        请求把分支合并回 main
+```
+
+建议：
+
+- 文档、小修复、明确 bug 可以直接提交到 `main`。
+- 工程工作台、导出、备份、权限等较大功能先开 `codex/*` 分支。
+- 功能分支推到 GitHub 后，通过 PR 检查改动，再合并到 `main`。
+- PR 合并前至少运行 `.\tools\check.cmd`。
+
+## 自动检查会做什么
+
+- 检查数据库、日志、缓存、客户资料等风险文件是否被 Git 跟踪或暂存。
+- 运行 Python 编译检查：`app.py` 和 `customer_m/`。
+- 运行 JavaScript 语法检查：`static/app.js`。
+- 在 `main` 上提交时提醒保持主分支稳定。
+
+## 版本脚本会做什么
 
 - 检查数据库、日志、缓存文件是否被 Git 跟踪。
 - 尝试运行 Python 语法编译检查。

@@ -1,0 +1,9 @@
+#!/bin/sh
+if command -v powershell.exe >/dev/null 2>&1; then
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/check.ps1 -Mode PreCommit
+elif command -v pwsh >/dev/null 2>&1; then
+  pwsh -NoProfile -ExecutionPolicy Bypass -File tools/check.ps1 -Mode PreCommit
+else
+  echo "PowerShell was not found; cannot run repository pre-commit checks."
+  exit 1
+fi
