@@ -356,6 +356,50 @@ def update_project_record(conn: sqlite3.Connection, project_id: str, data: dict)
     create_event(conn, project_id, "project_updated", "修改项目基础信息")
     return {"id": project_id, "updated": True}
 
+def rename_project_folder_to_wo(conn: sqlite3.Connection, project_id: str) -> dict:
+    project = conn.execute(
+        """
+        SELECT id, intake_no, equipment_no, project_folder_path
+        FROM projects
+        WHERE id = ?
+        """,
+        (project_id,),
+    ).fetchone()
+    if project is None:
+        raise ValueError("项目不存在")
+    if not project["equipment_no"]:
+        raise ValueError("请先填写WO号")
+    if not project["project_folder_path"]:
+        raise ValueError("项目文件夹路径为空，无法重命名")
+
+    current = Path(project["project_folder_path"])
+    equipment_no = project["equipment_no"]
+    if current.name.startswith(equipment_no):
+        return {
+            "renamed": False,
+            "project_folder_path": str(current),
+            "message": "项目文件夹已使用WO号命名",
+        }
+
+    if project["intake_no"] and current.name.startswith(project["intake_no"]):
+        target_leaf = equipment_no + current.name[len(project["intake_no"]):]
+    else:
+        suffix = current.name.split("_", 1)[1] if "_" in current.name else ""
+        target_leaf = f"{equipment_no}_{suffix}" if suffix else equipment_no
+
+    target = move_project_folder_if_needed(
+        conn,
+        project_id,
+        current.with_name(target_leaf),
+        event_type="folder_renamed",
+        event_title="项目文件夹已重命名为WO号",
+    )
+    return {
+        "renamed": target is not None and str(target) != str(current),
+        "project_folder_path": str(target or current),
+        "message": "项目文件夹已重命名为WO号",
+    }
+
 def delete_project_record(conn: sqlite3.Connection, project_id: str, delete_files: bool) -> dict:
     folder_deleted = False
     project = conn.execute(

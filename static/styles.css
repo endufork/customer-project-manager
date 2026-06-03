@@ -497,6 +497,13 @@ tr.project-row:focus {
   padding: 34px 12px;
 }
 
+.detail-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 31, 43, 0.18);
+  z-index: 9;
+}
+
 .detail-pane {
   position: fixed;
   top: 78px;

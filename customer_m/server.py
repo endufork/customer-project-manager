@@ -17,6 +17,7 @@ from .modules.projects import (
     get_project_folder_path,
     get_project_shared_folder_path,
     list_project_records,
+    rename_project_folder_to_wo,
     scan_project_shared_folder,
     update_project_record,
 )
@@ -25,6 +26,14 @@ from .utils import safe_print
 
 class AppHandler(SimpleHTTPRequestHandler):
     server_version = "CustomerProjectPrototype/0.1"
+
+    def end_headers(self) -> None:
+        parsed = urlparse(self.path)
+        if not parsed.path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+        super().end_headers()
 
     def translate_path(self, path: str) -> str:
         parsed = urlparse(path)
@@ -39,6 +48,9 @@ class AppHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path.startswith("/api/"):
             self.handle_api_get(parsed.path, parse_qs(parsed.query))
+            return
+        if parsed.path in ("", "/", "/index.html"):
+            self.send_index()
             return
         return super().do_GET()
 
@@ -78,6 +90,23 @@ class AppHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
+    def send_index(self) -> None:
+        index_path = STATIC_DIR / "index.html"
+        html = index_path.read_text(encoding="utf-8")
+        version = self.static_asset_version()
+        html = html.replace('/static/styles.css"', f'/static/styles.css?v={version}"')
+        html = html.replace('/static/app.js"', f'/static/app.js?v={version}"')
+        encoded = html.encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def static_asset_version(self) -> int:
+        paths = [STATIC_DIR / "index.html", STATIC_DIR / "styles.css", STATIC_DIR / "app.js"]
+        return max(int(path.stat().st_mtime) for path in paths if path.exists())
+
     def send_error_json(self, message: str, status: int = 400) -> None:
         self.send_json({"error": message}, status)
 
@@ -101,6 +130,9 @@ class AppHandler(SimpleHTTPRequestHandler):
             if path.startswith("/api/projects/") and path.endswith("/scan"):
                 project_id = path.split("/")[-2]
                 return self.api_scan_project(project_id)
+            if path.startswith("/api/projects/") and path.endswith("/rename-folder"):
+                project_id = path.split("/")[-2]
+                return self.api_rename_project_folder(project_id)
             if path.startswith("/api/projects/") and path.endswith("/open-folder"):
                 project_id = path.split("/")[-2]
                 return self.api_open_project_folder(project_id)
@@ -171,6 +203,12 @@ class AppHandler(SimpleHTTPRequestHandler):
     def api_scan_project(self, project_id: str) -> None:
         with db_connect() as conn:
             result = scan_project_folder(conn, project_id)
+            conn.commit()
+        self.send_json(result)
+
+    def api_rename_project_folder(self, project_id: str) -> None:
+        with db_connect() as conn:
+            result = rename_project_folder_to_wo(conn, project_id)
             conn.commit()
         self.send_json(result)
 

@@ -139,11 +139,11 @@ def get_project_detail_payload(conn: sqlite3.Connection, project_id: str) -> dic
         row_to_dict(row)
         for row in conn.execute(
             """
-            SELECT f.*, fc.name AS category_name
+            SELECT f.*, fc.name AS category_name, fc.default_folder AS category_folder
             FROM project_files f
             JOIN file_categories fc ON fc.code = f.category_code
             WHERE f.project_id = ?
-            ORDER BY fc.sort_order, f.original_name
+            ORDER BY fc.default_folder, f.file_path, f.original_name
             """,
             (project_id,),
         )
@@ -154,11 +154,11 @@ def get_project_detail_payload(conn: sqlite3.Connection, project_id: str) -> dic
             row_to_dict(row)
             for row in conn.execute(
                 """
-                SELECT f.*, fc.name AS category_name
+                SELECT f.*, fc.name AS category_name, fc.default_folder AS category_folder
                 FROM project_group_files f
                 JOIN file_categories fc ON fc.code = f.category_code
                 WHERE f.project_group_id = ?
-                ORDER BY fc.sort_order, f.original_name
+                ORDER BY fc.default_folder, f.file_path, f.original_name
                 """,
                 (project["project_group_id"],),
             )

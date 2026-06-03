@@ -201,6 +201,12 @@ def cleanup_empty_parent_dirs(conn: sqlite3.Connection, start_path: Path) -> lis
             current.relative_to(root)
         except ValueError:
             break
+        if current.exists() and current.is_dir():
+            for child in sorted((path for path in current.rglob("*") if path.is_dir()), key=lambda path: len(path.parts), reverse=True):
+                try:
+                    child.rmdir()
+                except OSError:
+                    pass
         try:
             current.rmdir()
         except OSError:
@@ -229,6 +235,8 @@ def move_project_folder_if_needed(
     conn: sqlite3.Connection,
     project_id: str,
     target_folder: Path,
+    event_type: str = "folder_moved",
+    event_title: str = "项目文件夹已迁移到标准目录",
 ) -> Path | None:
     row = conn.execute(
         "SELECT project_folder_path FROM projects WHERE id = ?",
@@ -274,7 +282,7 @@ def move_project_folder_if_needed(
                 "UPDATE project_files SET file_path = ?, updated_at = ? WHERE id = ?",
                 (updated_path, now_iso(), file_row["id"]),
             )
-    create_event(conn, project_id, "folder_moved", "项目文件夹已迁移到标准目录", new_prefix)
+    create_event(conn, project_id, event_type, event_title, new_prefix)
     return target
 
 def _project_folder_row_for_path(conn: sqlite3.Connection, target: Path) -> sqlite3.Row | None:

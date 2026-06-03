@@ -8,6 +8,7 @@ legacy service callers.
 from .project_commands import (
     create_project_record,
     delete_project_record,
+    rename_project_folder_to_wo,
     scan_project_shared_folder,
     update_project_record,
 )
@@ -27,6 +28,7 @@ __all__ = [
     "get_project_detail_payload",
     "create_project_record",
     "update_project_record",
+    "rename_project_folder_to_wo",
     "delete_project_record",
     "get_project_folder_path",
     "project_group_for_project",

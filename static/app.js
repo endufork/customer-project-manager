@@ -78,7 +78,9 @@ function debounce(callback, delay = 300) {
 
 function closeDetailPane({ restoreFocus = true } = {}) {
   const pane = $("#detailPane");
+  const backdrop = $("#detailBackdrop");
   pane.hidden = true;
+  if (backdrop) backdrop.hidden = true;
   pane.setAttribute("aria-modal", "false");
   if (restoreFocus && state.detailLastFocused instanceof HTMLElement && document.contains(state.detailLastFocused)) {
     state.detailLastFocused.focus();
@@ -87,7 +89,9 @@ function closeDetailPane({ restoreFocus = true } = {}) {
 
 function showDetailPane() {
   const pane = $("#detailPane");
+  const backdrop = $("#detailBackdrop");
   state.detailLastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (backdrop) backdrop.hidden = false;
   pane.hidden = false;
   pane.setAttribute("aria-modal", "true");
   pane.focus();
@@ -336,9 +340,8 @@ function renderTableHead(columns) {
 }
 
 function projectIdentifierHtml(project) {
-  const label = project.equipment_no ? "WO" : "INQ";
   const phase = project.equipment_no ? "WO工程执行" : "前期支持 · 待开WO";
-  return `<div class="identifier"><span>${label} ${escapeHtml(projectCurrentNumber(project))}</span><small class="subtext">${phase}</small></div>`;
+  return `<div class="identifier"><span>${escapeHtml(projectCurrentNumber(project))}</span><small class="subtext">${phase}</small></div>`;
 }
 
 function projectCurrentNumber(project) {
@@ -479,7 +482,7 @@ async function openDetail(projectId) {
       </div>
     </div>
     <dl class="detail-grid">
-      <dt>当前编号</dt><dd>${escapeHtml(project.equipment_no ? `WO ${project.equipment_no}` : `INQ ${project.intake_no}`)}</dd>
+      <dt>当前编号</dt><dd>${escapeHtml(projectCurrentNumber(project))}</dd>
       <dt>编号阶段</dt><dd>${escapeHtml(projectNumberStage(project))}</dd>
       <dt>项目性质</dt><dd>${escapeHtml(project.project_nature || "新设备")}</dd>
       <dt>关联原项目/原WO号</dt><dd>${escapeHtml(project.related_legacy_no || "未填写")}</dd>
@@ -610,7 +613,6 @@ async function openDetail(projectId) {
                   (file) => `
                     <div class="file-item">
                       <strong>${escapeHtml(file.current_name)}</strong>
-                      <div class="subtext">${escapeHtml(file.category_name)} · ${escapeHtml(file.extension || "")} · ${escapeHtml(file.file_path)}</div>
                     </div>
                   `,
                 )
@@ -628,7 +630,6 @@ async function openDetail(projectId) {
                 (file) => `
                   <div class="file-item">
                     <strong>${escapeHtml(file.current_name)}</strong>
-                    <div class="subtext">${escapeHtml(file.category_name)} · ${escapeHtml(file.extension || "")} · ${escapeHtml(file.file_path)}</div>
                   </div>
                 `,
               )
@@ -654,11 +655,12 @@ async function openDetail(projectId) {
       }
     </div>
   `;
-  bindDetailActions(project.id);
+  bindDetailActions(project);
   showDetailPane();
 }
 
-function bindDetailActions(projectId) {
+function bindDetailActions(project) {
+  const projectId = project.id;
   const editForm = $("#detailEditForm");
   if (editForm) {
     bindStatusDateControl(editForm);
@@ -667,11 +669,27 @@ function bindDetailActions(projectId) {
       const button = event.submitter;
       button.disabled = true;
       try {
+        const previousEquipmentNo = (project.equipment_no || "").trim();
+        const payload = formToPayload(editForm);
+        const nextEquipmentNo = (payload.equipment_no || "").trim();
         await api(`/api/projects/${encodeURIComponent(projectId)}`, {
           method: "PATCH",
-          body: JSON.stringify(formToPayload(editForm)),
+          body: JSON.stringify(payload),
         });
-        showToast("项目已更新");
+        if (nextEquipmentNo && nextEquipmentNo !== previousEquipmentNo) {
+          const shouldRename = confirm(`已填写 WO号 ${nextEquipmentNo}，是否将项目文件夹重命名为 WO号？`);
+          if (shouldRename) {
+            const result = await api(`/api/projects/${encodeURIComponent(projectId)}/rename-folder`, {
+              method: "POST",
+              body: "{}",
+            });
+            showToast(result.renamed ? "项目已更新，文件夹已重命名为WO号" : result.message || "项目已更新");
+          } else {
+            showToast("项目已更新，文件夹名称保留不变");
+          }
+        } else {
+          showToast("项目已更新");
+        }
         await loadBootstrap();
         await loadProjects();
         await openDetail(projectId);
@@ -843,6 +861,9 @@ function bindEvents() {
   $("#filterStatus").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterNeedsEquipment").addEventListener("change", () => loadProjects().catch(console.error));
   $("#closeDetailButton").addEventListener("click", () => {
+    closeDetailPane();
+  });
+  $("#detailBackdrop").addEventListener("click", () => {
     closeDetailPane();
   });
 }
