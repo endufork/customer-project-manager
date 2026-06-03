@@ -1,9 +1,4 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-set "PYTHON_EXE=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
-if exist "%PYTHON_EXE%" (
-  "%PYTHON_EXE%" app.py > server.log 2> server.err
-) else (
-  python app.py > server.log 2> server.err
-)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\start-server.ps1" > server.log 2> server.err

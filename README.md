@@ -134,12 +134,18 @@ http://127.0.0.1:8765
 run_server.cmd
 ```
 
-`run_server.cmd` 会自动切到脚本所在目录，优先使用 Codex bundled Python；如果找不到 bundled Python，则回退到系统 `python`。
+`run_server.cmd` 会自动切到脚本所在目录，并通过 `tools\runtime.ps1` 查找 Python。默认优先使用 Codex bundled Python，也可以通过 `CUSTOMER_PROJECT_PYTHON` 指定 Python 路径，找不到时回退到系统 `python`/`py`。
+
+第一次在新电脑运行时，先安装依赖：
+
+```bat
+python -m pip install -r requirements.txt
+```
 
 也可以手动使用 Python：
 
 ```bat
-C:\Users\Lenovo\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe app.py
+python app.py
 ```
 
 运行后会在本工作区生成本地数据库：

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sqlite3
 import cgi
 from datetime import datetime
@@ -37,6 +38,27 @@ from .modules.workbench import (
     update_task,
 )
 from .utils import safe_print
+
+
+PROJECT_ROUTE_RE = re.compile(r"^/api/projects/([^/]+)$")
+PROJECT_ACTION_ROUTE_RE = re.compile(
+    r"^/api/projects/([^/]+)/(scan|rename-folder|open-folder|open-shared-folder|scan-shared)$"
+)
+
+
+def match_project_id(path: str) -> str | None:
+    match = PROJECT_ROUTE_RE.fullmatch(path)
+    if match is None:
+        return None
+    return match.group(1)
+
+
+def match_project_action(path: str) -> tuple[str, str] | None:
+    match = PROJECT_ACTION_ROUTE_RE.fullmatch(path)
+    if match is None:
+        return None
+    return match.group(1), match.group(2)
+
 
 class AppHandler(SimpleHTTPRequestHandler):
     server_version = "CustomerProjectPrototype/0.1"
@@ -161,8 +183,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return self.api_workbench_project(project_id)
             if path == "/api/projects":
                 return self.api_projects(query)
-            if path.startswith("/api/projects/"):
-                project_id = path.rsplit("/", 1)[1]
+            project_id = match_project_id(path)
+            if project_id is not None:
                 return self.api_project_detail(project_id)
             self.send_error_json("接口不存在", 404)
         except Exception as exc:
@@ -174,20 +196,19 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return self.handle_workbench_post(path)
             if path == "/api/projects":
                 return self.api_create_project()
-            if path.startswith("/api/projects/") and path.endswith("/scan"):
-                project_id = path.split("/")[-2]
+            action_match = match_project_action(path)
+            if action_match is None:
+                return self.send_error_json("接口不存在", 404)
+            project_id, action = action_match
+            if action == "scan":
                 return self.api_scan_project(project_id)
-            if path.startswith("/api/projects/") and path.endswith("/rename-folder"):
-                project_id = path.split("/")[-2]
+            if action == "rename-folder":
                 return self.api_rename_project_folder(project_id)
-            if path.startswith("/api/projects/") and path.endswith("/open-folder"):
-                project_id = path.split("/")[-2]
+            if action == "open-folder":
                 return self.api_open_project_folder(project_id)
-            if path.startswith("/api/projects/") and path.endswith("/open-shared-folder"):
-                project_id = path.split("/")[-2]
+            if action == "open-shared-folder":
                 return self.api_open_shared_folder(project_id)
-            if path.startswith("/api/projects/") and path.endswith("/scan-shared"):
-                project_id = path.split("/")[-2]
+            if action == "scan-shared":
                 return self.api_scan_shared_folder(project_id)
             self.send_error_json("接口不存在", 404)
         except ValueError as exc:
@@ -203,8 +224,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return self.handle_workbench_patch(path)
             if path == "/api/settings":
                 return self.api_update_settings()
-            if path.startswith("/api/projects/"):
-                project_id = path.rsplit("/", 1)[1]
+            project_id = match_project_id(path)
+            if project_id is not None:
                 return self.api_update_project(project_id)
             self.send_error_json("接口不存在", 404)
         except ValueError as exc:
@@ -218,8 +239,8 @@ class AppHandler(SimpleHTTPRequestHandler):
         try:
             if path.startswith("/api/workbench/"):
                 return self.handle_workbench_delete(path)
-            if path.startswith("/api/projects/"):
-                project_id = path.rsplit("/", 1)[1]
+            project_id = match_project_id(path)
+            if project_id is not None:
                 return self.api_delete_project(project_id)
             self.send_error_json("接口不存在", 404)
         except ValueError as exc:
