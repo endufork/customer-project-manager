@@ -1,10 +1,15 @@
 """parsers module."""
 
+import logging
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
 from ..config import TEXT_EXTENSIONS
+
+
+logger = logging.getLogger(__name__)
+
 
 def extract_text(path: Path) -> tuple[int, str]:
     ext = path.suffix.lower()
@@ -18,6 +23,7 @@ def extract_text(path: Path) -> tuple[int, str]:
         if ext == ".pdf":
             return 1, extract_pdf_text(path)[:200_000]
     except Exception:
+        logger.exception("Failed to extract text from file: %s", path)
         return 0, ""
     return 0, ""
 

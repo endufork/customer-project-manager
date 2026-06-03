@@ -17,37 +17,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $RepoRoot
-
-function Resolve-Git {
-    $cmd = Get-Command git -ErrorAction SilentlyContinue
-    if ($cmd) {
-        return $cmd.Source
-    }
-
-    $fallback = "C:\Program Files\Git\cmd\git.exe"
-    if (Test-Path $fallback) {
-        return $fallback
-    }
-
-    throw "Git was not found. Install Git or add it to PATH."
-}
-
-function Resolve-Python {
-    $fallback = "C:\Users\Lenovo\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
-    if (Test-Path $fallback) {
-        return $fallback
-    }
-
-    $commands = @("python")
-    foreach ($item in $commands) {
-        $cmd = Get-Command $item -ErrorAction SilentlyContinue
-        if ($cmd) {
-            return $cmd.Source
-        }
-    }
-
-    return ""
-}
+. (Join-Path $PSScriptRoot "runtime.ps1")
 
 $Git = Resolve-Git
 
