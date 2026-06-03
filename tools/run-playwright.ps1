@@ -6,29 +6,12 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $RepoRoot
-
-function Resolve-Node {
-    $candidates = @(
-        "C:\Program Files\nodejs\node.exe",
-        "C:\Program Files (x86)\nodejs\node.exe",
-        "C:\Users\Lenovo\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
-    )
-
-    foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) {
-            return $candidate
-        }
-    }
-
-    $node = Get-Command node -ErrorAction SilentlyContinue
-    if ($node) {
-        return $node.Source
-    }
-
-    throw "Node.js was not found. Install Node.js LTS first."
-}
+. (Join-Path $PSScriptRoot "runtime.ps1")
 
 $Node = Resolve-Node
+if ([string]::IsNullOrWhiteSpace($Node)) {
+    throw "Node.js was not found. Install Node.js LTS, add it to PATH, or set CUSTOMER_PROJECT_NODE."
+}
 
 switch ($Command) {
     "install" {

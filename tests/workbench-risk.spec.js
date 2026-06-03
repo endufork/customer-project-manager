@@ -22,6 +22,10 @@ test("workbench action windows open from the task action row", async ({ page }) 
   const checkboxBox = await firstTemplateCheckbox.boundingBox();
   expect(checkboxBox.width).toBeLessThanOrEqual(20);
   expect(checkboxBox.height).toBeLessThanOrEqual(20);
+  const firstTemplateDueDate = taskDialog.locator(".template-checklist:not([hidden]) input[type='date']").first();
+  await expect(firstTemplateDueDate).toBeVisible();
+  await firstTemplateDueDate.fill("2026-06-20");
+  await expect(firstTemplateDueDate).toHaveValue("2026-06-20");
   await taskDialog.locator("#taskTemplateSelect").selectOption("wo");
   const visibleTemplateItems = taskDialog.locator(".template-checklist:not([hidden]) .template-task-row");
   await expect(visibleTemplateItems.filter({ hasText: "机械设计" })).toBeVisible();
@@ -54,4 +58,9 @@ test("workbench action windows open from the task action row", async ({ page }) 
   await expect(logDrawer.getByRole("heading", { name: "执行日志" })).toBeVisible();
   await logDrawer.getByRole("button", { name: "关闭" }).click();
   await expect(logDrawer).not.toBeVisible();
+
+  await page.getByRole("button", { name: "我的任务" }).click();
+  await expect(page.locator("#workbenchWorkspace")).toContainText("请输入负责人后查看我的任务");
+  await expect(page.locator("#workbenchKpiTotalLabel")).toHaveText("我的任务");
+  await expect(page.locator("#workbenchView")).toHaveClass(/workbench-task-mode/);
 });

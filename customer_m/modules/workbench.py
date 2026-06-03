@@ -410,6 +410,142 @@ def list_workbench_projects(conn: sqlite3.Connection, query: dict[str, list[str]
     return {"projects": rows, "kpis": kpis}
 
 
+def list_workbench_tasks(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
+    done_sql = _done_sql()
+    filters = [f"t.status NOT IN ({done_sql})"]
+    params: list[str] = []
+    search = (query.get("search", [""])[0] or "").strip()
+    owner = (query.get("owner", [""])[0] or "").strip()
+    view = (query.get("view", [""])[0] or "all").strip()
+
+    if owner:
+        filters.append("t.owner_name LIKE ?")
+        params.append(f"%{owner}%")
+    if search:
+        like = f"%{search}%"
+        filters.append(
+            """
+            (
+              t.title LIKE ?
+              OR t.work_package LIKE ?
+              OR t.owner_name LIKE ?
+              OR p.intake_no LIKE ?
+              OR p.equipment_no LIKE ?
+              OR p.equipment_name LIKE ?
+              OR p.project_name LIKE ?
+              OR c.name LIKE ?
+              OR cs.name LIKE ?
+              OR pg.name LIKE ?
+            )
+            """
+        )
+        params.extend([like, like, like, like, like, like, like, like, like, like])
+    if view == "overdue":
+        filters.append("t.due_date < ?")
+        params.append(_today())
+    elif view == "due_soon":
+        filters.append("t.due_date >= ? AND t.due_date <= ?")
+        params.extend([_today(), _soon()])
+    elif view == "blocked":
+        filters.append("t.status IN ('blocked', 'waiting_info', 'rework')")
+    elif view == "submitted":
+        filters.append("t.status = 'submitted'")
+
+    where = "WHERE " + " AND ".join(filters)
+    rows = []
+    for row in conn.execute(
+        f"""
+        SELECT
+          t.*,
+          p.intake_no,
+          p.equipment_no,
+          p.equipment_name,
+          p.project_name,
+          p.project_nature,
+          p.status_code,
+          p.expected_delivery_date,
+          p.project_folder_path,
+          p.created_at AS project_created_at,
+          p.updated_at AS project_updated_at,
+          c.name AS customer_name,
+          cg.name AS customer_group_name,
+          cs.name AS site_name,
+          pg.name AS project_group_name,
+          co.name AS contact_name
+        FROM execution_tasks t
+        JOIN projects p ON p.id = t.project_id
+        JOIN customers c ON c.id = p.customer_id
+        LEFT JOIN customer_groups cg ON cg.id = p.customer_group_id
+        LEFT JOIN customer_sites cs ON cs.id = p.site_id
+        LEFT JOIN project_groups pg ON pg.id = p.project_group_id
+        LEFT JOIN contacts co ON co.id = p.contact_id
+        {where}
+        ORDER BY
+          CASE t.status
+            WHEN 'blocked' THEN 0
+            WHEN 'rework' THEN 1
+            WHEN 'waiting_info' THEN 2
+            WHEN 'submitted' THEN 3
+            WHEN 'in_progress' THEN 4
+            WHEN 'not_started' THEN 5
+            ELSE 6
+          END,
+          COALESCE(t.due_date, '9999-12-31'),
+          t.created_at
+        LIMIT 500
+        """,
+        params,
+    ):
+        task = row_to_dict(row)
+        project = _enrich_project_summary(
+            conn,
+            {
+                "id": task["project_id"],
+                "intake_no": task.get("intake_no"),
+                "equipment_no": task.get("equipment_no"),
+                "equipment_name": task.get("equipment_name"),
+                "project_name": task.get("project_name"),
+                "project_nature": task.get("project_nature"),
+                "status_code": task.get("status_code"),
+                "expected_delivery_date": task.get("expected_delivery_date"),
+                "project_folder_path": task.get("project_folder_path"),
+                "created_at": task.get("project_created_at"),
+                "updated_at": task.get("project_updated_at"),
+                "customer_name": task.get("customer_name"),
+                "customer_group_name": task.get("customer_group_name"),
+                "site_name": task.get("site_name"),
+                "project_group_name": task.get("project_group_name"),
+                "contact_name": task.get("contact_name"),
+            },
+        )
+        task["current_number"] = project["current_number"]
+        task["workbench_area"] = project["workbench_area"]
+        task["project_open_issues"] = project.get("open_issues", 0)
+        task["project_high_issues"] = project.get("high_issues", 0)
+        rows.append(task)
+
+    if view == "inq":
+        rows = [task for task in rows if task["workbench_area"] == "inq"]
+    elif view == "wo":
+        rows = [task for task in rows if task["workbench_area"] == "wo"]
+    elif view == "closed":
+        rows = [task for task in rows if task["workbench_area"] == "closed"]
+    elif view == "high_risk":
+        rows = [task for task in rows if task.get("project_high_issues", 0)]
+
+    kpis = {
+        "total": len(rows),
+        "blocked": sum(1 for task in rows if task.get("status") in {"blocked", "waiting_info", "rework"}),
+        "submitted": sum(1 for task in rows if task.get("status") == "submitted"),
+        "overdue": sum(
+            1
+            for task in rows
+            if task.get("due_date") and task["due_date"] < _today() and task.get("status") not in DONE_STATUSES
+        ),
+    }
+    return {"tasks": rows, "kpis": kpis}
+
+
 def _deliverables_for_project(conn: sqlite3.Connection, project_id: str) -> list[dict]:
     return [
         row_to_dict(row)

@@ -2,6 +2,8 @@ const state = {
   bootstrap: null,
   projects: [],
   workbenchProjects: [],
+  workbenchTasks: [],
+  workbenchMode: "projects",
   workbenchProjectId: null,
   visibleColumns: [],
   sort: { key: "created_at", direction: "desc" },
@@ -299,7 +301,7 @@ function switchView(view, refresh = true) {
     loadProjects().catch(console.error);
   }
   if (isWorkbench && refresh) {
-    loadWorkbenchProjects().catch(console.error);
+    loadWorkbench().catch(console.error);
   }
 }
 
@@ -920,6 +922,35 @@ function formDataFromContainer(container) {
   return data;
 }
 
+function renderWorkbenchMode() {
+  const isTaskMode = state.workbenchMode === "tasks";
+  $("#workbenchView").classList.toggle("workbench-task-mode", isTaskMode);
+  $("#workbenchProjectsModeButton").classList.toggle("active", !isTaskMode);
+  $("#workbenchTasksModeButton").classList.toggle("active", isTaskMode);
+  $("#workbenchKpiTotalLabel").textContent = isTaskMode ? "我的任务" : "执行项目";
+  $("#workbenchKpiBlockedLabel").textContent = isTaskMode ? "阻塞/待资料" : "阻塞/风险";
+  $("#workbenchKpiSubmittedLabel").textContent = isTaskMode ? "已提交" : "待PM确认";
+}
+
+async function loadWorkbench(selectProjectId = state.workbenchProjectId) {
+  if (state.workbenchMode === "tasks") {
+    await loadWorkbenchTasks();
+    return;
+  }
+  await loadWorkbenchProjects(selectProjectId);
+}
+
+function workbenchQueryParams() {
+  const params = new URLSearchParams();
+  const search = $("#workbenchSearchInput").value.trim();
+  const owner = $("#workbenchOwnerInput").value.trim();
+  const view = $("#workbenchViewFilter").value;
+  if (search) params.set("search", search);
+  if (owner) params.set("owner", owner);
+  if (view) params.set("view", view);
+  return params;
+}
+
 function renderWorkbenchKpis(kpis = {}) {
   $("#workbenchKpiTotal").textContent = kpis.total || 0;
   $("#workbenchKpiOverdue").textContent = kpis.overdue || 0;
@@ -928,13 +959,8 @@ function renderWorkbenchKpis(kpis = {}) {
 }
 
 async function loadWorkbenchProjects(selectProjectId = state.workbenchProjectId) {
-  const params = new URLSearchParams();
-  const search = $("#workbenchSearchInput").value.trim();
-  const owner = $("#workbenchOwnerInput").value.trim();
-  const view = $("#workbenchViewFilter").value;
-  if (search) params.set("search", search);
-  if (owner) params.set("owner", owner);
-  if (view) params.set("view", view);
+  renderWorkbenchMode();
+  const params = workbenchQueryParams();
   const payload = await api(`/api/workbench/projects?${params.toString()}`);
   state.workbenchProjects = payload.projects || [];
   renderWorkbenchKpis(payload.kpis || {});
@@ -947,6 +973,25 @@ async function loadWorkbenchProjects(selectProjectId = state.workbenchProjectId)
     state.workbenchProjectId = null;
     $("#workbenchWorkspace").innerHTML = `<div class="empty">暂无匹配的执行项目</div>`;
   }
+}
+
+async function loadWorkbenchTasks() {
+  renderWorkbenchMode();
+  state.workbenchProjectId = null;
+  state.workbenchProjects = [];
+  renderWorkbenchProjectList("");
+  const owner = $("#workbenchOwnerInput").value.trim();
+  if (!owner) {
+    state.workbenchTasks = [];
+    renderWorkbenchKpis({});
+    renderMyTasksWorkspace([], { ownerRequired: true });
+    return;
+  }
+  const params = workbenchQueryParams();
+  const payload = await api(`/api/workbench/tasks?${params.toString()}`);
+  state.workbenchTasks = payload.tasks || [];
+  renderWorkbenchKpis(payload.kpis || {});
+  renderMyTasksWorkspace(state.workbenchTasks);
 }
 
 function renderWorkbenchProjectList(selectedId = state.workbenchProjectId) {
@@ -1051,6 +1096,96 @@ function renderWorkbenchWorkspace(payload) {
   bindWorkbenchWorkspaceActions(project.id);
 }
 
+function renderMyTasksWorkspace(tasks = [], options = {}) {
+  const owner = $("#workbenchOwnerInput").value.trim();
+  if (options.ownerRequired) {
+    $("#workbenchWorkspace").innerHTML = `
+      <div class="workbench-header">
+        <div>
+          <h3>我的任务</h3>
+          <p>先在顶部输入“我的名字/负责人”，系统会按负责人筛出未完成任务。</p>
+        </div>
+      </div>
+      <div class="empty">请输入负责人后查看我的任务</div>
+    `;
+    return;
+  }
+  const overdueCount = tasks.filter((task) => dueClass(task.due_date || "") === "danger").length;
+  $("#workbenchWorkspace").innerHTML = `
+    <div class="workbench-header">
+      <div>
+        <h3>我的任务${owner ? ` · ${escapeHtml(owner)}` : ""}</h3>
+        <p>按 Due Date、阻塞和状态排序；需要提交文件的任务进入项目后上传交付物。</p>
+      </div>
+    </div>
+    <div class="workbench-summary-grid">
+      <div><span>${escapeHtml(tasks.length)}</span><small>未完成任务</small></div>
+      <div><span>${escapeHtml(overdueCount)}</span><small>已超期</small></div>
+      <div><span>${escapeHtml(tasks.filter((task) => ["blocked", "waiting_info", "rework"].includes(task.status)).length)}</span><small>阻塞/待资料/返工</small></div>
+      <div><span>${escapeHtml(tasks.filter((task) => task.requires_deliverable).length)}</span><small>需要文件</small></div>
+    </div>
+    <section class="workbench-main my-task-surface">
+      <div class="workbench-section-title">
+        <h3>任务列表</h3>
+        <span>${escapeHtml(tasks.length)} 个</span>
+      </div>
+      <div class="my-task-list">
+        ${tasks.length ? tasks.map((task) => renderMyTaskCard(task)).join("") : `<div class="empty small-empty">暂无我的任务</div>`}
+      </div>
+    </section>
+  `;
+  bindMyTaskActions();
+}
+
+function renderMyTaskCard(task) {
+  const due = task.due_date || "未设置Due Date";
+  const projectName = task.equipment_name || task.project_name || "";
+  const customerLine = [
+    task.customer_name || "",
+    task.site_name || "",
+    task.project_group_name || "",
+  ].filter(Boolean).join(" · ");
+  const projectMeta = [
+    task.current_number || task.intake_no || "",
+    workbenchAreaName(task.workbench_area),
+    task.work_package || "未分组",
+  ].filter(Boolean).join(" · ");
+  return `
+    <article class="my-task-card ${escapeHtml(task.status)}" data-task-id="${escapeHtml(task.id)}">
+      <div class="my-task-main">
+        <div>
+          <strong>${escapeHtml(task.title)}</strong>
+          <span class="subtext">${escapeHtml(projectMeta)}</span>
+          <span class="subtext">${escapeHtml(customerLine)}${projectName ? ` · ${escapeHtml(projectName)}` : ""}</span>
+        </div>
+        <div class="my-task-status">
+          <span class="task-status ${escapeHtml(task.status)}">${escapeHtml(workbenchTaskStatusName(task.status))}</span>
+          <span class="${dueClass(task.due_date || "")}">${escapeHtml(due)}</span>
+        </div>
+      </div>
+      <div class="my-task-foot">
+        <span class="tag-row">
+          ${task.requires_deliverable ? `<span class="tag">需要文件</span>` : ""}
+          ${task.status === "submitted" ? `<span class="tag warn">待确认</span>` : ""}
+          ${task.status === "blocked" ? `<span class="tag danger">阻塞</span>` : ""}
+          ${task.status === "waiting_info" ? `<span class="tag warn">等待资料</span>` : ""}
+        </span>
+        <button type="button" class="secondary slim-inline" data-action="open-my-task-project" data-project-id="${escapeHtml(task.project_id)}">打开项目处理</button>
+      </div>
+      ${task.notes ? `<p class="my-task-note">${escapeHtml(task.notes)}</p>` : ""}
+    </article>
+  `;
+}
+
+function bindMyTaskActions() {
+  $("#workbenchWorkspace").querySelectorAll("[data-action='open-my-task-project']").forEach((button) => {
+    button.addEventListener("click", async () => {
+      state.workbenchMode = "projects";
+      await loadWorkbenchProjects(button.dataset.projectId);
+    });
+  });
+}
+
 function renderTaskDialog(tasks = []) {
   return `
     <dialog id="taskDialog" class="workbench-dialog task-dialog">
@@ -1103,13 +1238,17 @@ function renderTaskTemplateChecklist(templateCode, tasks) {
       ${template.items.map((item, index) => {
         const exists = existingTitles.has(item.title);
         return `
-          <label class="template-task-row${exists ? " disabled" : ""}">
+          <div class="template-task-row${exists ? " disabled" : ""}">
             <input type="checkbox" data-template-code="${escapeHtml(templateCode)}" data-template-index="${escapeHtml(index)}"${exists ? " disabled" : " checked"} />
-            <span>
+            <span class="template-task-main">
               <strong>${escapeHtml(item.title)}</strong>
-              <small>${escapeHtml(item.work_package)} · D+${escapeHtml(item.offset_days)}${item.requires_deliverable ? " · 需要文件" : ""}${exists ? " · 已存在" : ""}</small>
+              <small>${escapeHtml(item.work_package)}${item.requires_deliverable ? " · 需要文件" : ""}${exists ? " · 已存在" : ""}</small>
             </span>
-          </label>
+            <label class="template-task-due">
+              Due Date
+              <input type="date" data-template-due value="${escapeHtml(addDays(item.offset_days))}"${exists ? " disabled" : ""} />
+            </label>
+          </div>
         `;
       }).join("")}
     </div>
@@ -1460,13 +1599,15 @@ function bindWorkbenchWorkspaceActions(projectId) {
           const template = WORKBENCH_TASK_TEMPLATES[checkbox.dataset.templateCode];
           const item = template?.items[Number(checkbox.dataset.templateIndex)];
           if (!item) continue;
+          const row = checkbox.closest(".template-task-row");
+          const dueDate = row?.querySelector("[data-template-due]")?.value || "";
           await api(`/api/workbench/projects/${encodeURIComponent(projectId)}/tasks`, {
             method: "POST",
             body: JSON.stringify({
               title: item.title,
               work_package: item.work_package,
               phase_code: item.phase_code,
-              due_date: addDays(item.offset_days),
+              due_date: dueDate,
               requires_deliverable: item.requires_deliverable,
             }),
           });
@@ -1783,19 +1924,27 @@ function bindEvents() {
   $("#listCreateButton").addEventListener("click", () => switchView("create"));
   $("#backToLibraryButton").addEventListener("click", () => switchView("library"));
   $("#refreshButton").addEventListener("click", loadProjects);
-  $("#workbenchRefreshButton").addEventListener("click", () => loadWorkbenchProjects().catch(console.error));
+  $("#workbenchRefreshButton").addEventListener("click", () => loadWorkbench().catch(console.error));
+  $("#workbenchProjectsModeButton").addEventListener("click", () => {
+    state.workbenchMode = "projects";
+    loadWorkbench().catch(console.error);
+  });
+  $("#workbenchTasksModeButton").addEventListener("click", () => {
+    state.workbenchMode = "tasks";
+    loadWorkbench().catch(console.error);
+  });
   $("#saveSettingsButton").addEventListener("click", saveSettings);
   $("#searchInput").addEventListener("input", debouncedLoadProjects);
   $("#filterGroup").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterSite").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterStatus").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterNeedsEquipment").addEventListener("change", () => loadProjects().catch(console.error));
-  $("#workbenchSearchInput").addEventListener("input", debounce(() => loadWorkbenchProjects().catch(console.error), 300));
+  $("#workbenchSearchInput").addEventListener("input", debounce(() => loadWorkbench().catch(console.error), 300));
   $("#workbenchOwnerInput").addEventListener("input", debounce(() => {
     localStorage.setItem(WORKBENCH_OWNER_STORAGE_KEY, $("#workbenchOwnerInput").value.trim());
-    loadWorkbenchProjects().catch(console.error);
+    loadWorkbench().catch(console.error);
   }, 300));
-  $("#workbenchViewFilter").addEventListener("change", () => loadWorkbenchProjects().catch(console.error));
+  $("#workbenchViewFilter").addEventListener("change", () => loadWorkbench().catch(console.error));
   $("#closeDetailButton").addEventListener("click", () => {
     closeDetailPane();
   });
@@ -1815,7 +1964,7 @@ async function boot() {
   await loadBootstrap();
   if (isWorkbenchFocusMode()) {
     switchView("workbench", false);
-    await loadWorkbenchProjects(initialWorkbenchProjectId());
+    await loadWorkbench(initialWorkbenchProjectId());
   } else {
     await loadProjects();
   }

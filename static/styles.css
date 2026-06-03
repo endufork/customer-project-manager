@@ -547,10 +547,40 @@ tr.project-row:focus {
 
 .workbench-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1.5fr) minmax(160px, 0.7fr) minmax(180px, 0.8fr);
+  grid-template-columns: auto minmax(220px, 1.5fr) minmax(160px, 0.7fr) minmax(180px, 0.8fr);
   gap: 8px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--line);
+}
+
+.workbench-mode-tabs {
+  display: inline-flex;
+  align-items: stretch;
+  width: max-content;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.workbench-mode-tabs button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.workbench-mode-tabs button:last-child {
+  border-right: 0;
+}
+
+.workbench-mode-tabs button.active {
+  background: #eef5f2;
+  color: var(--text);
 }
 
 .workbench-kpis,
@@ -595,6 +625,14 @@ tr.project-row:focus {
   display: grid;
   grid-template-columns: 270px minmax(0, 1fr);
   min-height: calc(100vh - 254px);
+}
+
+.workbench-task-mode .workbench-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workbench-task-mode .workbench-sidebar {
+  display: none;
 }
 
 .workbench-sidebar {
@@ -986,15 +1024,14 @@ tr.project-row:focus {
 
 .template-task-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr) 150px;
   gap: 10px;
-  align-items: start;
+  align-items: center;
   min-height: 52px;
   padding: 9px 11px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
-  cursor: pointer;
 }
 
 .template-task-row:hover {
@@ -1004,20 +1041,19 @@ tr.project-row:focus {
 .template-task-row.disabled {
   color: var(--muted);
   background: #f6f8fa;
-  cursor: not-allowed;
 }
 
-.template-task-row input {
+.template-task-row > input {
   width: 16px;
   height: 16px;
   min-height: 16px;
-  margin: 3px 0 0;
+  margin: 0;
   padding: 0;
   accent-color: var(--accent);
   justify-self: center;
 }
 
-.template-task-row span {
+.template-task-main {
   display: grid;
   gap: 2px;
 }
@@ -1028,6 +1064,17 @@ tr.project-row:focus {
 
 .template-task-row small {
   color: var(--muted);
+}
+
+.template-task-due {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.template-task-due input {
+  min-height: 32px;
 }
 
 .template-form-actions {
@@ -1068,6 +1115,7 @@ tr.project-row:focus {
 }
 
 .workbench-task-list,
+.my-task-list,
 .issue-list,
 .deliverable-list,
 .log-list {
@@ -1076,6 +1124,7 @@ tr.project-row:focus {
 }
 
 .workbench-task,
+.my-task-card,
 .workbench-panel,
 .issue-item,
 .deliverable-item,
@@ -1087,6 +1136,53 @@ tr.project-row:focus {
 
 .workbench-task {
   padding: 10px;
+}
+
+.my-task-surface {
+  border-right: 0;
+}
+
+.my-task-card {
+  display: grid;
+  gap: 9px;
+  padding: 11px 12px;
+}
+
+.my-task-card.blocked {
+  border-color: #f7c78d;
+  background: #fffaf2;
+}
+
+.my-task-card.rework {
+  border-color: #f3aaa5;
+  background: #fff7f6;
+}
+
+.my-task-main,
+.my-task-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.my-task-main > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.my-task-status {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  min-width: 112px;
+}
+
+.my-task-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .task-readable {
@@ -1462,6 +1558,7 @@ tr.project-row:focus {
   .workbench-action-row,
   .template-action-grid,
   .template-picker-row,
+  .template-task-row,
   .workbench-create-form,
   .issue-create-form,
   .workbench-task-form,
@@ -1553,5 +1650,22 @@ tr.project-row:focus {
   .template-form-actions {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .workbench-mode-tabs {
+    width: 100%;
+  }
+
+  .workbench-mode-tabs button {
+    flex: 1;
+  }
+
+  .my-task-main,
+  .my-task-foot {
+    display: grid;
+  }
+
+  .my-task-status {
+    justify-items: start;
   }
 }
