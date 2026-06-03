@@ -1,0 +1,187 @@
+"""Workbench task commands and templates."""
+
+import sqlite3
+from datetime import date, timedelta
+
+from ..database import row_to_dict
+from ..utils import make_id, now_iso
+from .lifecycle import create_event
+from .workbench_common import (
+    _bool_value,
+    _clean_task_status,
+    _clean_work_package,
+    _date_or_none,
+    _nullable_text,
+    _project_row,
+    record_activity,
+)
+
+
+TEMPLATES = {
+    "inq": [
+        ("澄清客户需求", "前期方案", "clarification", 2, 0),
+        ("输出大致方案", "前期方案", "rough_solution", 3, 1),
+        ("评估技术风险", "前期方案", "rough_solution", 3, 0),
+        ("提供内部报价输入", "报价支持", "quote_support", 4, 1),
+        ("确认客户报价资料", "报价支持", "quote_support", 5, 1),
+    ],
+    "wo": [
+        ("细化方案确认", "项目管理", "wo_kickoff", 2, 1),
+        ("机械设计", "机械设计", "detailed_design", 7, 1),
+        ("电气设计", "电气设计", "detailed_design", 7, 1),
+        ("BOM输出与确认", "BOM/采购", "bom_purchase", 10, 1),
+        ("采购/来料跟进", "BOM/采购", "bom_purchase", 14, 0),
+        ("装配", "装配", "assembly", 18, 0),
+        ("接线", "接线", "wiring_debug", 20, 0),
+        ("调试", "调试", "wiring_debug", 23, 1),
+        ("验收资料", "验收", "acceptance_delivery", 26, 1),
+        ("发货资料", "发货", "acceptance_delivery", 28, 1),
+        ("项目关闭归档", "关闭归档", "closed", 30, 0),
+    ],
+}
+
+def create_task(conn: sqlite3.Connection, project_id: str, data: dict) -> dict:
+    _project_row(conn, project_id)
+    title = (data.get("title") or "").strip()
+    if not title:
+        raise ValueError("任务名称不能为空")
+    status = _clean_task_status(data.get("status"))
+    task_id = make_id()
+    now = now_iso()
+    completed_at = now if status in {"confirmed", "completed"} else None
+    conn.execute(
+        """
+        INSERT INTO execution_tasks (
+          id, project_id, work_package, phase_code, title, description,
+          owner_name, status, due_date, completed_at, is_required,
+          requires_deliverable, blocked_reason, notes, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            task_id,
+            project_id,
+            _clean_work_package(data.get("work_package")),
+            _nullable_text(data.get("phase_code")),
+            title,
+            _nullable_text(data.get("description")),
+            _nullable_text(data.get("owner_name")),
+            status,
+            _date_or_none(data.get("due_date")),
+            completed_at,
+            0 if data.get("is_required") == "0" else 1,
+            _bool_value(data.get("requires_deliverable")),
+            _nullable_text(data.get("blocked_reason")),
+            _nullable_text(data.get("notes")),
+            now,
+            now,
+        ),
+    )
+    record_activity(conn, project_id, "task_created", "新增任务", title, task_id=task_id)
+    create_event(conn, project_id, "workbench_task_created", "新增执行任务", title)
+    return {"id": task_id, "created": True}
+
+def update_task(conn: sqlite3.Connection, task_id: str, data: dict) -> dict:
+    row = conn.execute("SELECT * FROM execution_tasks WHERE id = ?", (task_id,)).fetchone()
+    if row is None:
+        raise ValueError("任务不存在")
+    title = (data.get("title") or row["title"] or "").strip()
+    if not title:
+        raise ValueError("任务名称不能为空")
+    status = _clean_task_status(data.get("status") or row["status"])
+    now = now_iso()
+    started_at = row["started_at"]
+    submitted_at = row["submitted_at"]
+    confirmed_at = row["confirmed_at"]
+    completed_at = row["completed_at"]
+    if status == "in_progress" and not started_at:
+        started_at = now
+    if status == "submitted" and not submitted_at:
+        submitted_at = now
+    if status == "confirmed" and not confirmed_at:
+        confirmed_at = now
+        completed_at = now
+    if status == "completed" and not completed_at:
+        completed_at = now
+    if status not in {"confirmed", "completed"}:
+        completed_at = None
+    conn.execute(
+        """
+        UPDATE execution_tasks
+        SET work_package = ?,
+            phase_code = ?,
+            title = ?,
+            description = ?,
+            owner_name = ?,
+            status = ?,
+            due_date = ?,
+            started_at = ?,
+            submitted_at = ?,
+            confirmed_at = ?,
+            completed_at = ?,
+            is_required = ?,
+            requires_deliverable = ?,
+            blocked_reason = ?,
+            notes = ?,
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            _clean_work_package(data.get("work_package")),
+            _nullable_text(data.get("phase_code")),
+            title,
+            _nullable_text(data.get("description")),
+            _nullable_text(data.get("owner_name")),
+            status,
+            _date_or_none(data.get("due_date")),
+            started_at,
+            submitted_at,
+            confirmed_at,
+            completed_at,
+            0 if data.get("is_required") == "0" else 1,
+            _bool_value(data.get("requires_deliverable")),
+            _nullable_text(data.get("blocked_reason")),
+            _nullable_text(data.get("notes")),
+            now,
+            task_id,
+        ),
+    )
+    record_activity(conn, row["project_id"], "task_updated", "更新任务", title, task_id=task_id)
+    return {"id": task_id, "updated": True}
+
+def delete_task(conn: sqlite3.Connection, task_id: str) -> dict:
+    row = conn.execute("SELECT project_id, title FROM execution_tasks WHERE id = ?", (task_id,)).fetchone()
+    if row is None:
+        raise ValueError("任务不存在")
+    conn.execute("DELETE FROM execution_tasks WHERE id = ?", (task_id,))
+    record_activity(conn, row["project_id"], "task_deleted", "删除任务", row["title"])
+    return {"deleted": True}
+
+def apply_template(conn: sqlite3.Connection, project_id: str, template_code: str) -> dict:
+    project = row_to_dict(_project_row(conn, project_id))
+    template = (template_code or "").strip() or ("wo" if project.get("equipment_no") else "inq")
+    if template not in TEMPLATES:
+        raise ValueError("任务模板不存在")
+    created = 0
+    base = date.today()
+    for title, work_package, phase_code, offset_days, requires_deliverable in TEMPLATES[template]:
+        exists = conn.execute(
+            "SELECT 1 FROM execution_tasks WHERE project_id = ? AND title = ?",
+            (project_id, title),
+        ).fetchone()
+        if exists:
+            continue
+        create_task(
+            conn,
+            project_id,
+            {
+                "title": title,
+                "work_package": work_package,
+                "phase_code": phase_code,
+                "due_date": (base + timedelta(days=offset_days)).isoformat(),
+                "requires_deliverable": requires_deliverable,
+            },
+        )
+        created += 1
+    record_activity(conn, project_id, "template_applied", "生成任务模板", f"{template} · 新增 {created} 个任务")
+    return {"created": created, "template": template}
