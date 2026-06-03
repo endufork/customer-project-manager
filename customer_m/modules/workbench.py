@@ -546,6 +546,108 @@ def list_workbench_tasks(conn: sqlite3.Connection, query: dict[str, list[str]]) 
     return {"tasks": rows, "kpis": kpis}
 
 
+def list_pending_deliverables(conn: sqlite3.Connection, query: dict[str, list[str]]) -> list[dict]:
+    filters = ["d.status = 'submitted'"]
+    params: list[str] = []
+    search = (query.get("search", [""])[0] or "").strip()
+    view = (query.get("view", [""])[0] or "all").strip()
+
+    if view not in {"", "all", "submitted"}:
+        return []
+    if search:
+        like = f"%{search}%"
+        filters.append(
+            """
+            (
+              pf.current_name LIKE ?
+              OR t.title LIKE ?
+              OR p.intake_no LIKE ?
+              OR p.equipment_no LIKE ?
+              OR p.equipment_name LIKE ?
+              OR p.project_name LIKE ?
+              OR c.name LIKE ?
+              OR cs.name LIKE ?
+              OR pg.name LIKE ?
+            )
+            """
+        )
+        params.extend([like, like, like, like, like, like, like, like, like])
+
+    where = "WHERE " + " AND ".join(filters)
+    rows = []
+    for row in conn.execute(
+        f"""
+        SELECT
+          d.*,
+          t.title AS task_title,
+          t.owner_name AS task_owner_name,
+          pf.current_name AS file_name,
+          pf.file_path,
+          fc.name AS category_name,
+          p.intake_no,
+          p.equipment_no,
+          p.equipment_name,
+          p.project_name,
+          p.project_nature,
+          p.status_code,
+          p.expected_delivery_date,
+          p.project_folder_path,
+          p.created_at AS project_created_at,
+          p.updated_at AS project_updated_at,
+          c.name AS customer_name,
+          cg.name AS customer_group_name,
+          cs.name AS site_name,
+          pg.name AS project_group_name,
+          co.name AS contact_name
+        FROM task_deliverables d
+        JOIN execution_tasks t ON t.id = d.task_id
+        JOIN projects p ON p.id = d.project_id
+        JOIN customers c ON c.id = p.customer_id
+        LEFT JOIN customer_groups cg ON cg.id = p.customer_group_id
+        LEFT JOIN customer_sites cs ON cs.id = p.site_id
+        LEFT JOIN project_groups pg ON pg.id = p.project_group_id
+        LEFT JOIN contacts co ON co.id = p.contact_id
+        LEFT JOIN project_files pf ON pf.id = d.file_id
+        LEFT JOIN file_categories fc ON fc.code = pf.category_code
+        {where}
+        ORDER BY d.submitted_at DESC, d.created_at DESC
+        LIMIT 300
+        """,
+        params,
+    ):
+        deliverable = row_to_dict(row)
+        deliverable["current_number"] = _project_number(deliverable)
+        deliverable["workbench_area"] = _project_area(deliverable)
+        rows.append(deliverable)
+    return rows
+
+
+def list_workbench_inbox(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
+    role = (query.get("role", ["engineer"])[0] or "engineer").strip().lower()
+    if role not in {"engineer", "pm"}:
+        role = "engineer"
+
+    owner = (query.get("owner", [""])[0] or "").strip()
+    if role == "pm" and not owner:
+        task_payload = {"tasks": [], "kpis": {"blocked": 0, "submitted": 0, "overdue": 0}}
+    else:
+        task_payload = list_workbench_tasks(conn, query)
+    tasks = task_payload["tasks"]
+    deliverables = list_pending_deliverables(conn, query) if role == "pm" else []
+    kpis = {
+        "total": len(tasks) + len(deliverables),
+        "blocked": task_payload["kpis"].get("blocked", 0),
+        "submitted": len(deliverables) if role == "pm" else task_payload["kpis"].get("submitted", 0),
+        "overdue": task_payload["kpis"].get("overdue", 0),
+    }
+    return {
+        "role": role,
+        "tasks": tasks,
+        "deliverables": deliverables,
+        "kpis": kpis,
+    }
+
+
 def _deliverables_for_project(conn: sqlite3.Connection, project_id: str) -> list[dict]:
     return [
         row_to_dict(row)

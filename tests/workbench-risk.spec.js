@@ -59,8 +59,11 @@ test("workbench action windows open from the task action row", async ({ page }) 
   await logDrawer.getByRole("button", { name: "关闭" }).click();
   await expect(logDrawer).not.toBeVisible();
 
-  await page.getByRole("button", { name: "我的任务" }).click();
-  await expect(page.locator("#workbenchWorkspace")).toContainText("请输入负责人后查看我的任务");
-  await expect(page.locator("#workbenchKpiTotalLabel")).toHaveText("我的任务");
+  await page.getByRole("button", { name: "我的待办" }).click();
+  await expect(page.locator("#workbenchWorkspace")).toContainText("请输入负责人后查看我的待办");
+  await expect(page.locator("#workbenchKpiTotalLabel")).toHaveText("我的待办");
   await expect(page.locator("#workbenchView")).toHaveClass(/workbench-task-mode/);
+  await page.locator("#workbenchRoleSelect").selectOption("pm");
+  await expect(page.locator("#workbenchWorkspace")).toContainText("待确认文件");
+  await expect(page.locator("#workbenchKpiSubmittedLabel")).toHaveText("待确认文件");
 });

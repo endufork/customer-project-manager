@@ -223,9 +223,13 @@
         <div class="workbench-toolbar">
           <div class="workbench-mode-tabs" aria-label="工作台视图">
             <button id="workbenchProjectsModeButton" type="button" class="active" data-workbench-mode="projects">项目视图</button>
-            <button id="workbenchTasksModeButton" type="button" data-workbench-mode="tasks">我的任务</button>
+            <button id="workbenchTasksModeButton" type="button" data-workbench-mode="tasks">我的待办</button>
           </div>
           <input id="workbenchSearchInput" placeholder="搜索编号、客户、产品、设备" />
+          <select id="workbenchRoleSelect" aria-label="工作台角色">
+            <option value="engineer">工程师</option>
+            <option value="pm">PM</option>
+          </select>
           <input id="workbenchOwnerInput" placeholder="我的名字/负责人" />
           <select id="workbenchViewFilter">
             <option value="all">全部执行项目</option>

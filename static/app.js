@@ -3,6 +3,7 @@ const state = {
   projects: [],
   workbenchProjects: [],
   workbenchTasks: [],
+  workbenchInbox: null,
   workbenchMode: "projects",
   workbenchProjectId: null,
   visibleColumns: [],
@@ -25,6 +26,7 @@ const AUTO_CAPITALIZE_FIELDS = new Set([
 const ACRONYMS = new Set(["abc", "dcps", "eolt", "fat", "mty", "npi", "po", "qa", "rfq", "sbd"]);
 const COLUMN_STORAGE_KEY = "customerProject.visibleColumns.v1";
 const WORKBENCH_OWNER_STORAGE_KEY = "customerProject.workbenchOwner.v1";
+const WORKBENCH_ROLE_STORAGE_KEY = "customerProject.workbenchRole.v1";
 const WORKBENCH_TASK_TEMPLATES = {
   inq: {
     name: "INQ前期支持",
@@ -875,11 +877,13 @@ function workbenchAreaName(areaCode) {
 }
 
 function workbenchRole() {
-  return (new URLSearchParams(window.location.search).get("role") || "").trim().toLowerCase();
+  const selected = $("#workbenchRoleSelect")?.value;
+  if (selected) return selected.trim().toLowerCase();
+  const urlRole = new URLSearchParams(window.location.search).get("role");
+  return (urlRole || localStorage.getItem(WORKBENCH_ROLE_STORAGE_KEY) || "engineer").trim().toLowerCase();
 }
 
 function canReviewDeliverables() {
-  // Temporary hook until login/permission management is connected.
   return workbenchRole() === "pm";
 }
 
@@ -924,12 +928,13 @@ function formDataFromContainer(container) {
 
 function renderWorkbenchMode() {
   const isTaskMode = state.workbenchMode === "tasks";
+  const role = workbenchRole();
   $("#workbenchView").classList.toggle("workbench-task-mode", isTaskMode);
   $("#workbenchProjectsModeButton").classList.toggle("active", !isTaskMode);
   $("#workbenchTasksModeButton").classList.toggle("active", isTaskMode);
-  $("#workbenchKpiTotalLabel").textContent = isTaskMode ? "我的任务" : "执行项目";
+  $("#workbenchKpiTotalLabel").textContent = isTaskMode ? "我的待办" : "执行项目";
   $("#workbenchKpiBlockedLabel").textContent = isTaskMode ? "阻塞/待资料" : "阻塞/风险";
-  $("#workbenchKpiSubmittedLabel").textContent = isTaskMode ? "已提交" : "待PM确认";
+  $("#workbenchKpiSubmittedLabel").textContent = isTaskMode && role === "pm" ? "待确认文件" : isTaskMode ? "已提交" : "待PM确认";
 }
 
 async function loadWorkbench(selectProjectId = state.workbenchProjectId) {
@@ -944,9 +949,11 @@ function workbenchQueryParams() {
   const params = new URLSearchParams();
   const search = $("#workbenchSearchInput").value.trim();
   const owner = $("#workbenchOwnerInput").value.trim();
+  const role = workbenchRole();
   const view = $("#workbenchViewFilter").value;
   if (search) params.set("search", search);
   if (owner) params.set("owner", owner);
+  if (role) params.set("role", role);
   if (view) params.set("view", view);
   return params;
 }
@@ -981,17 +988,20 @@ async function loadWorkbenchTasks() {
   state.workbenchProjects = [];
   renderWorkbenchProjectList("");
   const owner = $("#workbenchOwnerInput").value.trim();
-  if (!owner) {
+  const role = workbenchRole();
+  if (role !== "pm" && !owner) {
     state.workbenchTasks = [];
+    state.workbenchInbox = null;
     renderWorkbenchKpis({});
-    renderMyTasksWorkspace([], { ownerRequired: true });
+    renderMyTodoWorkspace({ tasks: [], deliverables: [], role }, { ownerRequired: true });
     return;
   }
   const params = workbenchQueryParams();
-  const payload = await api(`/api/workbench/tasks?${params.toString()}`);
+  const payload = await api(`/api/workbench/inbox?${params.toString()}`);
   state.workbenchTasks = payload.tasks || [];
+  state.workbenchInbox = payload;
   renderWorkbenchKpis(payload.kpis || {});
-  renderMyTasksWorkspace(state.workbenchTasks);
+  renderMyTodoWorkspace(payload);
 }
 
 function renderWorkbenchProjectList(selectedId = state.workbenchProjectId) {
@@ -1096,45 +1106,101 @@ function renderWorkbenchWorkspace(payload) {
   bindWorkbenchWorkspaceActions(project.id);
 }
 
-function renderMyTasksWorkspace(tasks = [], options = {}) {
+function renderMyTodoWorkspace(payload = {}, options = {}) {
+  const tasks = payload.tasks || [];
+  const deliverables = payload.deliverables || [];
+  const role = payload.role || workbenchRole();
   const owner = $("#workbenchOwnerInput").value.trim();
   if (options.ownerRequired) {
     $("#workbenchWorkspace").innerHTML = `
       <div class="workbench-header">
         <div>
-          <h3>我的任务</h3>
+          <h3>我的待办</h3>
           <p>先在顶部输入“我的名字/负责人”，系统会按负责人筛出未完成任务。</p>
         </div>
       </div>
-      <div class="empty">请输入负责人后查看我的任务</div>
+      <div class="empty">请输入负责人后查看我的待办</div>
     `;
     return;
   }
   const overdueCount = tasks.filter((task) => dueClass(task.due_date || "") === "danger").length;
+  const isPm = role === "pm";
   $("#workbenchWorkspace").innerHTML = `
     <div class="workbench-header">
       <div>
-        <h3>我的任务${owner ? ` · ${escapeHtml(owner)}` : ""}</h3>
-        <p>按 Due Date、阻塞和状态排序；需要提交文件的任务进入项目后上传交付物。</p>
+        <h3>我的待办 · ${isPm ? "PM" : "工程师"}${owner ? ` · ${escapeHtml(owner)}` : ""}</h3>
+        <p>${isPm ? "优先处理待确认交付文件；填写负责人后，也会显示自己负责的未完成任务。" : "按 Due Date、阻塞和状态排序；需要提交文件的任务进入项目后上传交付物。"}</p>
       </div>
     </div>
     <div class="workbench-summary-grid">
-      <div><span>${escapeHtml(tasks.length)}</span><small>未完成任务</small></div>
+      <div><span>${escapeHtml(isPm ? deliverables.length : tasks.length)}</span><small>${isPm ? "待确认文件" : "未完成任务"}</small></div>
       <div><span>${escapeHtml(overdueCount)}</span><small>已超期</small></div>
       <div><span>${escapeHtml(tasks.filter((task) => ["blocked", "waiting_info", "rework"].includes(task.status)).length)}</span><small>阻塞/待资料/返工</small></div>
-      <div><span>${escapeHtml(tasks.filter((task) => task.requires_deliverable).length)}</span><small>需要文件</small></div>
+      <div><span>${escapeHtml(isPm ? tasks.length : tasks.filter((task) => task.requires_deliverable).length)}</span><small>${isPm ? "我的任务" : "需要文件"}</small></div>
     </div>
     <section class="workbench-main my-task-surface">
+      ${isPm ? renderInboxDeliverablesSection(deliverables) : ""}
       <div class="workbench-section-title">
-        <h3>任务列表</h3>
+        <h3>${isPm ? "我负责的任务" : "任务列表"}</h3>
         <span>${escapeHtml(tasks.length)} 个</span>
       </div>
       <div class="my-task-list">
-        ${tasks.length ? tasks.map((task) => renderMyTaskCard(task)).join("") : `<div class="empty small-empty">暂无我的任务</div>`}
+        ${tasks.length ? tasks.map((task) => renderMyTaskCard(task)).join("") : `<div class="empty small-empty">${isPm && !owner ? "填写负责人后显示我负责的任务" : "暂无我的待办任务"}</div>`}
       </div>
     </section>
   `;
-  bindMyTaskActions();
+  bindMyTodoActions();
+}
+
+function renderInboxDeliverablesSection(deliverables) {
+  return `
+    <div class="workbench-section-title inbox-section-title">
+      <h3>待确认文件</h3>
+      <span>${escapeHtml(deliverables.length)} 个</span>
+    </div>
+    <div class="my-task-list inbox-deliverable-list">
+      ${deliverables.length ? deliverables.map((item) => renderInboxDeliverableCard(item)).join("") : `<div class="empty small-empty">暂无待确认文件</div>`}
+    </div>
+  `;
+}
+
+function renderInboxDeliverableCard(item) {
+  const projectName = item.equipment_name || item.project_name || "";
+  const customerLine = [
+    item.customer_name || "",
+    item.site_name || "",
+    item.project_group_name || "",
+  ].filter(Boolean).join(" · ");
+  const projectMeta = [
+    item.current_number || item.intake_no || "",
+    item.task_title || "",
+    item.category_name || item.deliverable_type || "",
+  ].filter(Boolean).join(" · ");
+  return `
+    <article class="my-task-card submitted" data-deliverable-id="${escapeHtml(item.id)}">
+      <div class="my-task-main">
+        <div>
+          <strong>${escapeHtml(item.file_name || "交付文件")}</strong>
+          <span class="subtext">${escapeHtml(projectMeta)}</span>
+          <span class="subtext">${escapeHtml(customerLine)}${projectName ? ` · ${escapeHtml(projectName)}` : ""}</span>
+        </div>
+        <div class="my-task-status">
+          <span class="task-status submitted">待确认</span>
+          <span class="subtext">${escapeHtml(item.submitted_by || "提交人未填")}${item.submitted_at ? ` · ${escapeHtml(item.submitted_at)}` : ""}</span>
+        </div>
+      </div>
+      <div class="my-task-foot">
+        <span class="tag-row">
+          ${item.version_note ? `<span class="tag">${escapeHtml(item.version_note)}</span>` : ""}
+        </span>
+        <span class="inline-actions">
+          <button type="button" class="secondary slim-inline" data-action="open-inbox-project" data-project-id="${escapeHtml(item.project_id)}">打开项目</button>
+          <button type="button" class="secondary slim-inline" data-action="confirm-inbox-deliverable" data-deliverable-id="${escapeHtml(item.id)}">确认</button>
+          <button type="button" class="danger slim-inline" data-action="reject-inbox-deliverable" data-deliverable-id="${escapeHtml(item.id)}">驳回</button>
+        </span>
+      </div>
+    </article>
+  `;
 }
 
 function renderMyTaskCard(task) {
@@ -1177,11 +1243,41 @@ function renderMyTaskCard(task) {
   `;
 }
 
-function bindMyTaskActions() {
-  $("#workbenchWorkspace").querySelectorAll("[data-action='open-my-task-project']").forEach((button) => {
+function bindMyTodoActions() {
+  $("#workbenchWorkspace").querySelectorAll("[data-action='open-my-task-project'], [data-action='open-inbox-project']").forEach((button) => {
     button.addEventListener("click", async () => {
       state.workbenchMode = "projects";
       await loadWorkbenchProjects(button.dataset.projectId);
+    });
+  });
+  $("#workbenchWorkspace").querySelectorAll("[data-action='confirm-inbox-deliverable']").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        await api(`/api/workbench/deliverables/${encodeURIComponent(button.dataset.deliverableId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "confirmed", confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM" }),
+        });
+        showToast("交付物已确认");
+        await loadWorkbenchTasks();
+      } catch (error) {
+        showToast(error.message);
+      }
+    });
+  });
+  $("#workbenchWorkspace").querySelectorAll("[data-action='reject-inbox-deliverable']").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const reason = prompt("请输入驳回原因");
+      if (!reason) return;
+      try {
+        await api(`/api/workbench/deliverables/${encodeURIComponent(button.dataset.deliverableId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "rejected", confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM", reject_reason: reason }),
+        });
+        showToast("交付物已驳回");
+        await loadWorkbenchTasks();
+      } catch (error) {
+        showToast(error.message);
+      }
     });
   });
 }
@@ -1944,6 +2040,10 @@ function bindEvents() {
     localStorage.setItem(WORKBENCH_OWNER_STORAGE_KEY, $("#workbenchOwnerInput").value.trim());
     loadWorkbench().catch(console.error);
   }, 300));
+  $("#workbenchRoleSelect").addEventListener("change", () => {
+    localStorage.setItem(WORKBENCH_ROLE_STORAGE_KEY, $("#workbenchRoleSelect").value);
+    loadWorkbench().catch(console.error);
+  });
   $("#workbenchViewFilter").addEventListener("change", () => loadWorkbench().catch(console.error));
   $("#closeDetailButton").addEventListener("click", () => {
     closeDetailPane();
@@ -1956,6 +2056,8 @@ function bindEvents() {
 async function boot() {
   state.visibleColumns = loadVisibleColumns();
   $("#workbenchOwnerInput").value = localStorage.getItem(WORKBENCH_OWNER_STORAGE_KEY) || "";
+  const initialRole = new URLSearchParams(window.location.search).get("role") || localStorage.getItem(WORKBENCH_ROLE_STORAGE_KEY) || "engineer";
+  $("#workbenchRoleSelect").value = initialRole === "pm" ? "pm" : "engineer";
   if (isWorkbenchFocusMode()) {
     document.body.classList.add("workbench-focus");
   }

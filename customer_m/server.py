@@ -31,6 +31,7 @@ from .modules.workbench import (
     delete_issue,
     delete_task,
     get_workbench_project,
+    list_workbench_inbox,
     list_workbench_projects,
     list_workbench_tasks,
     review_deliverable,
@@ -179,6 +180,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return self.api_bootstrap()
             if path == "/api/workbench/projects":
                 return self.api_workbench_projects(query)
+            if path == "/api/workbench/inbox":
+                return self.api_workbench_inbox(query)
             if path == "/api/workbench/tasks":
                 return self.api_workbench_tasks(query)
             if path.startswith("/api/workbench/projects/"):
@@ -264,6 +267,11 @@ class AppHandler(SimpleHTTPRequestHandler):
     def api_workbench_projects(self, query: dict[str, list[str]]) -> None:
         with db_connect() as conn:
             payload = list_workbench_projects(conn, query)
+        self.send_json(payload)
+
+    def api_workbench_inbox(self, query: dict[str, list[str]]) -> None:
+        with db_connect() as conn:
+            payload = list_workbench_inbox(conn, query)
         self.send_json(payload)
 
     def api_workbench_tasks(self, query: dict[str, list[str]]) -> None:
