@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+import cgi
 from datetime import datetime
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -22,6 +23,19 @@ from .modules.projects import (
     update_project_record,
 )
 from .modules.scanner import scan_project_folder
+from .modules.workbench import (
+    apply_template,
+    create_issue,
+    create_task,
+    delete_issue,
+    delete_task,
+    get_workbench_project,
+    list_workbench_projects,
+    review_deliverable,
+    submit_task_file,
+    update_issue,
+    update_task,
+)
 from .utils import safe_print
 
 class AppHandler(SimpleHTTPRequestHandler):
@@ -82,6 +96,32 @@ class AppHandler(SimpleHTTPRequestHandler):
         raw = self.rfile.read(length)
         return json.loads(raw.decode("utf-8"))
 
+    def read_multipart(self) -> tuple[dict, str, bytes]:
+        form = cgi.FieldStorage(
+            fp=self.rfile,
+            headers=self.headers,
+            environ={
+                "REQUEST_METHOD": "POST",
+                "CONTENT_TYPE": self.headers.get("Content-Type", ""),
+                "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
+            },
+        )
+        fields: dict[str, str] = {}
+        for key in form.keys():
+            item = form[key]
+            if key == "file":
+                continue
+            if isinstance(item, list):
+                fields[key] = item[0].value if item else ""
+            else:
+                fields[key] = item.value
+        file_item = form["file"] if "file" in form else None
+        if isinstance(file_item, list):
+            file_item = file_item[0] if file_item else None
+        if file_item is None or not getattr(file_item, "filename", ""):
+            raise ValueError("请选择要上传的文件")
+        return fields, Path(file_item.filename).name, file_item.file.read()
+
     def send_json(self, payload: dict | list, status: int = 200) -> None:
         encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -114,6 +154,11 @@ class AppHandler(SimpleHTTPRequestHandler):
         try:
             if path == "/api/bootstrap":
                 return self.api_bootstrap()
+            if path == "/api/workbench/projects":
+                return self.api_workbench_projects(query)
+            if path.startswith("/api/workbench/projects/"):
+                project_id = path.rsplit("/", 1)[1]
+                return self.api_workbench_project(project_id)
             if path == "/api/projects":
                 return self.api_projects(query)
             if path.startswith("/api/projects/"):
@@ -125,6 +170,8 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def handle_api_post(self, path: str) -> None:
         try:
+            if path.startswith("/api/workbench/"):
+                return self.handle_workbench_post(path)
             if path == "/api/projects":
                 return self.api_create_project()
             if path.startswith("/api/projects/") and path.endswith("/scan"):
@@ -152,6 +199,8 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def handle_api_patch(self, path: str) -> None:
         try:
+            if path.startswith("/api/workbench/"):
+                return self.handle_workbench_patch(path)
             if path == "/api/settings":
                 return self.api_update_settings()
             if path.startswith("/api/projects/"):
@@ -167,6 +216,8 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def handle_api_delete(self, path: str) -> None:
         try:
+            if path.startswith("/api/workbench/"):
+                return self.handle_workbench_delete(path)
             if path.startswith("/api/projects/"):
                 project_id = path.rsplit("/", 1)[1]
                 return self.api_delete_project(project_id)
@@ -185,6 +236,78 @@ class AppHandler(SimpleHTTPRequestHandler):
         with db_connect() as conn:
             payload = list_project_records(conn, query)
         self.send_json(payload)
+
+    def api_workbench_projects(self, query: dict[str, list[str]]) -> None:
+        with db_connect() as conn:
+            payload = list_workbench_projects(conn, query)
+        self.send_json(payload)
+
+    def api_workbench_project(self, project_id: str) -> None:
+        with db_connect() as conn:
+            payload = get_workbench_project(conn, project_id)
+        self.send_json(payload)
+
+    def handle_workbench_post(self, path: str) -> None:
+        parts = path.strip("/").split("/")
+        if len(parts) == 5 and parts[2] == "projects" and parts[4] == "tasks":
+            data = self.read_json()
+            with db_connect() as conn:
+                payload = create_task(conn, parts[3], data)
+                conn.commit()
+            return self.send_json(payload, 201)
+        if len(parts) == 5 and parts[2] == "projects" and parts[4] == "issues":
+            data = self.read_json()
+            with db_connect() as conn:
+                payload = create_issue(conn, parts[3], data)
+                conn.commit()
+            return self.send_json(payload, 201)
+        if len(parts) == 5 and parts[2] == "projects" and parts[4] == "templates":
+            data = self.read_json()
+            with db_connect() as conn:
+                payload = apply_template(conn, parts[3], data.get("template"))
+                conn.commit()
+            return self.send_json(payload)
+        if len(parts) == 5 and parts[2] == "tasks" and parts[4] == "deliverables":
+            fields, filename, content = self.read_multipart()
+            with db_connect() as conn:
+                payload = submit_task_file(conn, parts[3], filename, content, fields)
+                conn.commit()
+            return self.send_json(payload, 201)
+        return self.send_error_json("接口不存在", 404)
+
+    def handle_workbench_patch(self, path: str) -> None:
+        parts = path.strip("/").split("/")
+        data = self.read_json()
+        if len(parts) == 4 and parts[2] == "tasks":
+            with db_connect() as conn:
+                payload = update_task(conn, parts[3], data)
+                conn.commit()
+            return self.send_json(payload)
+        if len(parts) == 4 and parts[2] == "issues":
+            with db_connect() as conn:
+                payload = update_issue(conn, parts[3], data)
+                conn.commit()
+            return self.send_json(payload)
+        if len(parts) == 4 and parts[2] == "deliverables":
+            with db_connect() as conn:
+                payload = review_deliverable(conn, parts[3], data)
+                conn.commit()
+            return self.send_json(payload)
+        return self.send_error_json("接口不存在", 404)
+
+    def handle_workbench_delete(self, path: str) -> None:
+        parts = path.strip("/").split("/")
+        if len(parts) == 4 and parts[2] == "tasks":
+            with db_connect() as conn:
+                payload = delete_task(conn, parts[3])
+                conn.commit()
+            return self.send_json(payload)
+        if len(parts) == 4 and parts[2] == "issues":
+            with db_connect() as conn:
+                payload = delete_issue(conn, parts[3])
+                conn.commit()
+            return self.send_json(payload)
+        return self.send_error_json("接口不存在", 404)
 
     def api_project_detail(self, project_id: str) -> None:
         with db_connect() as conn:

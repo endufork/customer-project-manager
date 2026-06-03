@@ -24,6 +24,7 @@
     <nav class="view-tabs" aria-label="主要页面">
       <button id="navLibraryButton" type="button" class="tab-button active" data-view="library">项目库</button>
       <button id="navCreateButton" type="button" class="tab-button" data-view="create">新建项目</button>
+      <button id="navWorkbenchButton" type="button" class="tab-button" data-view="workbench">项目执行</button>
     </nav>
 
     <main class="workspace">
@@ -205,6 +206,53 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section id="workbenchView" class="workbench-page page-view" aria-labelledby="workbench-title" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 id="workbench-title">项目执行</h2>
+            <span class="muted">任务 · Due Date · 风险问题 · 文件归档</span>
+          </div>
+          <div class="heading-actions">
+            <button id="workbenchRefreshButton" type="button" class="secondary">刷新</button>
+          </div>
+        </div>
+
+        <div class="workbench-toolbar">
+          <input id="workbenchSearchInput" placeholder="搜索编号、客户、产品、设备" />
+          <input id="workbenchOwnerInput" placeholder="我的名字/负责人" />
+          <select id="workbenchViewFilter">
+            <option value="all">全部执行项目</option>
+            <option value="due_soon">7天内到期</option>
+            <option value="overdue">已超期</option>
+            <option value="blocked">阻塞/有打开风险</option>
+            <option value="submitted">待PM确认文件</option>
+            <option value="high_risk">高风险</option>
+            <option value="inq">INQ前期支持</option>
+            <option value="wo">WO执行</option>
+            <option value="closed">已关闭</option>
+          </select>
+        </div>
+
+        <div class="workbench-kpis">
+          <div><span id="workbenchKpiTotal">0</span><small>执行项目</small></div>
+          <div><span id="workbenchKpiOverdue">0</span><small>超期</small></div>
+          <div><span id="workbenchKpiBlocked">0</span><small>阻塞/风险</small></div>
+          <div><span id="workbenchKpiSubmitted">0</span><small>待PM确认</small></div>
+        </div>
+
+        <div class="workbench-layout">
+          <aside class="workbench-sidebar" aria-label="执行项目列表">
+            <div id="workbenchProjectList" class="workbench-project-list">
+              <div class="empty small-empty">正在加载...</div>
+            </div>
+          </aside>
+
+          <section id="workbenchWorkspace" class="workbench-workspace">
+            <div class="empty">请选择左侧项目</div>
+          </section>
         </div>
       </section>
     </main>

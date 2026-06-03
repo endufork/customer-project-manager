@@ -199,6 +199,83 @@ CREATE TABLE IF NOT EXISTS project_files (
   UNIQUE (project_id, file_path)
 );
 
+CREATE TABLE IF NOT EXISTS execution_tasks (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  work_package TEXT,
+  phase_code TEXT,
+  title TEXT NOT NULL,
+  description TEXT,
+  owner_name TEXT,
+  status TEXT NOT NULL DEFAULT 'not_started',
+  due_date TEXT,
+  started_at TEXT,
+  submitted_at TEXT,
+  confirmed_at TEXT,
+  completed_at TEXT,
+  is_required INTEGER NOT NULL DEFAULT 1 CHECK (is_required IN (0, 1)),
+  requires_deliverable INTEGER NOT NULL DEFAULT 0 CHECK (requires_deliverable IN (0, 1)),
+  blocked_reason TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS task_deliverables (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  file_id TEXT,
+  deliverable_type TEXT,
+  version_note TEXT,
+  status TEXT NOT NULL DEFAULT 'submitted',
+  submitted_by TEXT,
+  submitted_at TEXT NOT NULL,
+  confirmed_by TEXT,
+  confirmed_at TEXT,
+  reject_reason TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES execution_tasks(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (file_id) REFERENCES project_files(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS execution_issues (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  task_id TEXT,
+  scope TEXT NOT NULL DEFAULT 'equipment',
+  title TEXT NOT NULL,
+  issue_type TEXT,
+  source TEXT,
+  severity TEXT NOT NULL DEFAULT 'medium',
+  owner_name TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  due_date TEXT,
+  resolution TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  closed_at TEXT,
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (task_id) REFERENCES execution_tasks(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS execution_activity_logs (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  task_id TEXT,
+  issue_id TEXT,
+  activity_type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  detail TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (task_id) REFERENCES execution_tasks(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  FOREIGN KEY (issue_id) REFERENCES execution_issues(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS quotes (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
@@ -296,6 +373,17 @@ CREATE INDEX IF NOT EXISTS idx_project_files_category_code ON project_files(cate
 CREATE INDEX IF NOT EXISTS idx_project_files_extension ON project_files(extension);
 CREATE INDEX IF NOT EXISTS idx_project_files_content_hash ON project_files(content_hash);
 CREATE INDEX IF NOT EXISTS idx_project_files_import_method ON project_files(import_method);
+CREATE INDEX IF NOT EXISTS idx_execution_tasks_project_id ON execution_tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_execution_tasks_owner_name ON execution_tasks(owner_name);
+CREATE INDEX IF NOT EXISTS idx_execution_tasks_status ON execution_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_execution_tasks_due_date ON execution_tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_task_deliverables_task_id ON task_deliverables(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_deliverables_project_id ON task_deliverables(project_id);
+CREATE INDEX IF NOT EXISTS idx_task_deliverables_status ON task_deliverables(status);
+CREATE INDEX IF NOT EXISTS idx_execution_issues_project_id ON execution_issues(project_id);
+CREATE INDEX IF NOT EXISTS idx_execution_issues_status ON execution_issues(status);
+CREATE INDEX IF NOT EXISTS idx_execution_issues_severity ON execution_issues(severity);
+CREATE INDEX IF NOT EXISTS idx_execution_logs_project_id ON execution_activity_logs(project_id);
 CREATE INDEX IF NOT EXISTS idx_quotes_project_id ON quotes(project_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_orders_project_id ON purchase_orders(project_id);
 CREATE INDEX IF NOT EXISTS idx_todos_project_id ON todos(project_id);

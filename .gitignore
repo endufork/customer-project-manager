@@ -5,4 +5,8 @@ data/*.db-*
 server.log
 server.err
 server.pid
+node_modules/
+playwright-report/
+test-results/
+.playwright-cache/
 

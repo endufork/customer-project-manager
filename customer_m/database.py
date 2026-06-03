@@ -118,6 +118,95 @@ def migrate_db(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS execution_tasks (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          work_package TEXT,
+          phase_code TEXT,
+          title TEXT NOT NULL,
+          description TEXT,
+          owner_name TEXT,
+          status TEXT NOT NULL DEFAULT 'not_started',
+          due_date TEXT,
+          started_at TEXT,
+          submitted_at TEXT,
+          confirmed_at TEXT,
+          completed_at TEXT,
+          is_required INTEGER NOT NULL DEFAULT 1 CHECK (is_required IN (0, 1)),
+          requires_deliverable INTEGER NOT NULL DEFAULT 0 CHECK (requires_deliverable IN (0, 1)),
+          blocked_reason TEXT,
+          notes TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE CASCADE ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS task_deliverables (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          file_id TEXT,
+          deliverable_type TEXT,
+          version_note TEXT,
+          status TEXT NOT NULL DEFAULT 'submitted',
+          submitted_by TEXT,
+          submitted_at TEXT NOT NULL,
+          confirmed_by TEXT,
+          confirmed_at TEXT,
+          reject_reason TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (task_id) REFERENCES execution_tasks(id) ON UPDATE CASCADE ON DELETE CASCADE,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE CASCADE ON DELETE CASCADE,
+          FOREIGN KEY (file_id) REFERENCES project_files(id) ON UPDATE CASCADE ON DELETE SET NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS execution_issues (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          task_id TEXT,
+          scope TEXT NOT NULL DEFAULT 'equipment',
+          title TEXT NOT NULL,
+          issue_type TEXT,
+          source TEXT,
+          severity TEXT NOT NULL DEFAULT 'medium',
+          owner_name TEXT,
+          status TEXT NOT NULL DEFAULT 'open',
+          due_date TEXT,
+          resolution TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          closed_at TEXT,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE CASCADE ON DELETE CASCADE,
+          FOREIGN KEY (task_id) REFERENCES execution_tasks(id) ON UPDATE CASCADE ON DELETE SET NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS execution_activity_logs (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          task_id TEXT,
+          issue_id TEXT,
+          activity_type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          detail TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE CASCADE ON DELETE CASCADE,
+          FOREIGN KEY (task_id) REFERENCES execution_tasks(id) ON UPDATE CASCADE ON DELETE SET NULL,
+          FOREIGN KEY (issue_id) REFERENCES execution_issues(id) ON UPDATE CASCADE ON DELETE SET NULL
+        )
+        """
+    )
     ensure_column(conn, "customers", "group_id", "group_id TEXT")
     ensure_column(conn, "contacts", "site_id", "site_id TEXT")
     ensure_column(conn, "contacts", "department", "department TEXT")
@@ -130,6 +219,9 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     ensure_column(conn, "projects", "project_nature", "project_nature TEXT")
     ensure_column(conn, "projects", "related_legacy_no", "related_legacy_no TEXT")
     ensure_column(conn, "projects", "status_date", "status_date TEXT")
+    ensure_column(conn, "execution_issues", "scope", "scope TEXT NOT NULL DEFAULT 'equipment'")
+    conn.execute("UPDATE execution_issues SET scope = 'task' WHERE task_id IS NOT NULL AND (scope IS NULL OR scope = 'equipment')")
+    conn.execute("UPDATE execution_issues SET scope = 'equipment' WHERE scope IS NULL OR trim(scope) = ''")
     conn.execute("UPDATE projects SET project_nature = ? WHERE project_nature IS NULL OR trim(project_nature) = ''", ("新设备",))
     conn.execute(
         """
@@ -158,6 +250,18 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_groups_site_id ON project_groups(site_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_group_files_group_id ON project_group_files(project_group_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_status_date ON projects(status_date)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_tasks_project_id ON execution_tasks(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_tasks_owner_name ON execution_tasks(owner_name)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_tasks_status ON execution_tasks(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_tasks_due_date ON execution_tasks(due_date)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_task_deliverables_task_id ON task_deliverables(task_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_task_deliverables_project_id ON task_deliverables(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_task_deliverables_status ON task_deliverables(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_project_id ON execution_issues(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_status ON execution_issues(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_severity ON execution_issues(severity)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_scope ON execution_issues(scope)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_logs_project_id ON execution_activity_logs(project_id)")
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict | None:

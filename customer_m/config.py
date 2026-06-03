@@ -95,3 +95,81 @@ MODEL_EXTENSIONS = {
 }
 
 TEXT_EXTENSIONS = {".txt", ".csv", ".md", ".log"}
+
+WORKBENCH_AREAS = (
+    {"code": "inq", "name": "INQ前期支持"},
+    {"code": "wo", "name": "WO执行"},
+    {"code": "closed", "name": "已关闭"},
+)
+WORKBENCH_WORK_PACKAGES = (
+    "项目管理",
+    "前期方案",
+    "报价支持",
+    "机械设计",
+    "电气设计",
+    "BOM/采购",
+    "装配",
+    "接线",
+    "调试",
+    "验收",
+    "发货",
+    "关闭归档",
+)
+WORKBENCH_TASK_STATUSES = (
+    {"code": "not_started", "name": "未开始"},
+    {"code": "in_progress", "name": "进行中"},
+    {"code": "waiting_info", "name": "等待资料"},
+    {"code": "blocked", "name": "阻塞"},
+    {"code": "submitted", "name": "已提交"},
+    {"code": "rework", "name": "需返工"},
+    {"code": "confirmed", "name": "已确认"},
+    {"code": "completed", "name": "已完成"},
+    {"code": "cancelled", "name": "已取消"},
+)
+WORKBENCH_DONE_TASK_STATUSES = {"confirmed", "completed", "cancelled"}
+WORKBENCH_PHASES = (
+    {"code": "inq_intake", "name": "询价录入"},
+    {"code": "clarification", "name": "需求澄清"},
+    {"code": "rough_solution", "name": "大致方案"},
+    {"code": "quote_support", "name": "报价支持"},
+    {"code": "waiting_feedback", "name": "等待客户反馈"},
+    {"code": "wo_kickoff", "name": "WO启动"},
+    {"code": "detailed_design", "name": "细化设计"},
+    {"code": "bom_purchase", "name": "BOM/采购"},
+    {"code": "assembly", "name": "装配"},
+    {"code": "wiring_debug", "name": "接线/调试"},
+    {"code": "acceptance_delivery", "name": "验收/发货"},
+    {"code": "closed", "name": "关闭"},
+)
+WORKBENCH_ISSUE_TYPES = (
+    "客户资料缺失",
+    "内部资源",
+    "设计风险",
+    "采购风险",
+    "交期风险",
+    "质量风险",
+    "其他",
+)
+WORKBENCH_ISSUE_SOURCES = ("客户", "内部", "供应商", "其他")
+WORKBENCH_ISSUE_SCOPES = (
+    {"code": "product", "name": "产品/产线"},
+    {"code": "equipment", "name": "当前设备"},
+    {"code": "task", "name": "具体任务"},
+)
+WORKBENCH_ISSUE_SEVERITIES = (
+    {"code": "low", "name": "低"},
+    {"code": "medium", "name": "中"},
+    {"code": "high", "name": "高"},
+)
+WORKBENCH_ISSUE_STATUSES = (
+    {"code": "open", "name": "打开"},
+    {"code": "following", "name": "跟进中"},
+    {"code": "resolved", "name": "已解决"},
+    {"code": "accepted", "name": "已接受风险"},
+    {"code": "closed", "name": "已关闭"},
+)
+WORKBENCH_DELIVERABLE_STATUSES = (
+    {"code": "submitted", "name": "待确认"},
+    {"code": "confirmed", "name": "已确认"},
+    {"code": "rejected", "name": "已驳回"},
+)

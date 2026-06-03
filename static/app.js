@@ -1,6 +1,8 @@
 const state = {
   bootstrap: null,
   projects: [],
+  workbenchProjects: [],
+  workbenchProjectId: null,
   visibleColumns: [],
   sort: { key: "created_at", direction: "desc" },
   detailLastFocused: null,
@@ -20,6 +22,37 @@ const AUTO_CAPITALIZE_FIELDS = new Set([
 ]);
 const ACRONYMS = new Set(["abc", "dcps", "eolt", "fat", "mty", "npi", "po", "qa", "rfq", "sbd"]);
 const COLUMN_STORAGE_KEY = "customerProject.visibleColumns.v1";
+const WORKBENCH_OWNER_STORAGE_KEY = "customerProject.workbenchOwner.v1";
+const WORKBENCH_TASK_TEMPLATES = {
+  inq: {
+    name: "INQ前期支持",
+    note: "方案、风险、报价前输入",
+    items: [
+      { title: "澄清客户需求", work_package: "前期方案", phase_code: "clarification", offset_days: 2, requires_deliverable: false },
+      { title: "输出大致方案", work_package: "前期方案", phase_code: "rough_solution", offset_days: 3, requires_deliverable: true },
+      { title: "评估技术风险", work_package: "前期方案", phase_code: "rough_solution", offset_days: 3, requires_deliverable: false },
+      { title: "提供内部报价输入", work_package: "报价支持", phase_code: "quote_support", offset_days: 4, requires_deliverable: true },
+      { title: "确认客户报价资料", work_package: "报价支持", phase_code: "quote_support", offset_days: 5, requires_deliverable: true },
+    ],
+  },
+  wo: {
+    name: "WO执行",
+    note: "设计、BOM、采购、装配、调试",
+    items: [
+      { title: "细化方案确认", work_package: "项目管理", phase_code: "wo_kickoff", offset_days: 2, requires_deliverable: true },
+      { title: "机械设计", work_package: "机械设计", phase_code: "detailed_design", offset_days: 7, requires_deliverable: true },
+      { title: "电气设计", work_package: "电气设计", phase_code: "detailed_design", offset_days: 7, requires_deliverable: true },
+      { title: "BOM输出与确认", work_package: "BOM/采购", phase_code: "bom_purchase", offset_days: 10, requires_deliverable: true },
+      { title: "采购/来料跟进", work_package: "BOM/采购", phase_code: "bom_purchase", offset_days: 14, requires_deliverable: false },
+      { title: "装配", work_package: "装配", phase_code: "assembly", offset_days: 18, requires_deliverable: false },
+      { title: "接线", work_package: "接线", phase_code: "wiring_debug", offset_days: 20, requires_deliverable: false },
+      { title: "调试", work_package: "调试", phase_code: "wiring_debug", offset_days: 23, requires_deliverable: true },
+      { title: "验收资料", work_package: "验收", phase_code: "acceptance_delivery", offset_days: 26, requires_deliverable: true },
+      { title: "发货资料", work_package: "发货", phase_code: "acceptance_delivery", offset_days: 28, requires_deliverable: true },
+      { title: "项目关闭归档", work_package: "关闭归档", phase_code: "closed", offset_days: 30, requires_deliverable: false },
+    ],
+  },
+};
 const DEFAULT_PROJECT_COLUMNS = [
   "intake_no",
   "customer_name",
@@ -157,6 +190,41 @@ async function api(path, options = {}) {
   return payload;
 }
 
+function isWorkbenchFocusMode() {
+  return new URLSearchParams(window.location.search).get("view") === "workbench";
+}
+
+function initialWorkbenchProjectId() {
+  return new URLSearchParams(window.location.search).get("project") || null;
+}
+
+function openWorkbenchWindow(projectId = "") {
+  const params = new URLSearchParams({ view: "workbench" });
+  if (projectId) params.set("project", projectId);
+  const popup = window.open(
+    `/?${params.toString()}`,
+    "customerProjectWorkbench",
+    "width=1480,height=920,menubar=no,toolbar=no,location=no,status=no",
+  );
+  if (popup) {
+    popup.focus();
+    return true;
+  }
+  return false;
+}
+
+async function uploadApi(path, formData) {
+  const response = await fetch(path, {
+    method: "POST",
+    body: formData,
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || "上传失败");
+  }
+  return payload;
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -216,12 +284,22 @@ function renderColumnPicker() {
 
 function switchView(view, refresh = true) {
   const isCreate = view === "create";
+  const isWorkbench = view === "workbench";
+  const isLibrary = view === "library";
   $("#entryView").hidden = !isCreate;
-  $("#libraryView").hidden = isCreate;
+  $("#libraryView").hidden = !isLibrary;
+  $("#workbenchView").hidden = !isWorkbench;
   $("#navCreateButton").classList.toggle("active", isCreate);
-  $("#navLibraryButton").classList.toggle("active", !isCreate);
-  if (!isCreate && refresh) {
+  $("#navLibraryButton").classList.toggle("active", isLibrary);
+  $("#navWorkbenchButton").classList.toggle("active", isWorkbench);
+  if (isWorkbench) {
+    closeDetailPane({ restoreFocus: false });
+  }
+  if (isLibrary && refresh) {
     loadProjects().catch(console.error);
+  }
+  if (isWorkbench && refresh) {
+    loadWorkbenchProjects().catch(console.error);
   }
 }
 
@@ -468,6 +546,7 @@ async function openDetail(projectId) {
   $("#detailContent").innerHTML = `
     <div class="detail-actions">
       <button type="button" data-action="open-folder" data-id="${escapeHtml(project.id)}">打开项目文件夹</button>
+      <button type="button" class="secondary" data-action="open-workbench" data-id="${escapeHtml(project.id)}">打开项目执行</button>
       <button type="button" class="secondary" data-action="copy-path" data-path="${escapeHtml(project.project_folder_path || "")}">复制路径</button>
       ${sharedButtons}
     </div>
@@ -741,6 +820,13 @@ function bindDetailActions(project) {
           await loadBootstrap();
           await loadProjects();
         }
+        if (action === "open-workbench") {
+          closeDetailPane({ restoreFocus: false });
+          if (isWorkbenchFocusMode() || !openWorkbenchWindow(projectId)) {
+            switchView("workbench", false);
+            await loadWorkbenchProjects(projectId);
+          }
+        }
       } catch (error) {
         showToast(error.message);
       } finally {
@@ -748,6 +834,844 @@ function bindDetailActions(project) {
       }
     });
   });
+}
+
+function optionItems(items, selectedValue = "", valueOf = (item) => item.code, labelOf = (item) => item.name) {
+  return (items || [])
+    .map((item) => {
+      const value = valueOf(item);
+      const selected = value === selectedValue ? " selected" : "";
+      return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(labelOf(item))}</option>`;
+    })
+    .join("");
+}
+
+function stringOptions(items, selectedValue = "") {
+  return (items || [])
+    .map((item) => `<option value="${escapeHtml(item)}"${item === selectedValue ? " selected" : ""}>${escapeHtml(item)}</option>`)
+    .join("");
+}
+
+function workbenchTaskStatusName(statusCode) {
+  return (state.bootstrap?.workbench_task_statuses || []).find((item) => item.code === statusCode)?.name || statusCode || "";
+}
+
+function workbenchIssueStatusName(statusCode) {
+  return (state.bootstrap?.workbench_issue_statuses || []).find((item) => item.code === statusCode)?.name || statusCode || "";
+}
+
+function workbenchSeverityName(severityCode) {
+  return (state.bootstrap?.workbench_issue_severities || []).find((item) => item.code === severityCode)?.name || severityCode || "";
+}
+
+function workbenchIssueScopeName(scopeCode) {
+  return (state.bootstrap?.workbench_issue_scopes || []).find((item) => item.code === scopeCode)?.name || scopeCode || "";
+}
+
+function workbenchAreaName(areaCode) {
+  return (state.bootstrap?.workbench_areas || []).find((item) => item.code === areaCode)?.name || areaCode || "";
+}
+
+function workbenchRole() {
+  return (new URLSearchParams(window.location.search).get("role") || "").trim().toLowerCase();
+}
+
+function canReviewDeliverables() {
+  // Temporary hook until login/permission management is connected.
+  return workbenchRole() === "pm";
+}
+
+function renderTaskSelectOptions(tasks, selectedId = "") {
+  return tasks
+    .map((task) => `<option value="${escapeHtml(task.id)}"${task.id === selectedId ? " selected" : ""}>${escapeHtml(task.title)}</option>`)
+    .join("");
+}
+
+function taskTitleById(tasks, taskId) {
+  return tasks.find((task) => task.id === taskId)?.title || "";
+}
+
+function taskDone(task) {
+  return ["confirmed", "completed", "cancelled"].includes(task.status);
+}
+
+function dueClass(dueDate) {
+  if (!dueDate) return "neutral";
+  if (dueDate < today()) return "danger";
+  if (dueDate <= addDays(7)) return "warn";
+  return "neutral";
+}
+
+function addDays(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function formDataFromContainer(container) {
+  const data = {};
+  container.querySelectorAll("[name]").forEach((input) => {
+    if (input.type === "checkbox") {
+      data[input.name] = input.checked ? "1" : "0";
+    } else {
+      data[input.name] = input.value;
+    }
+  });
+  return data;
+}
+
+function renderWorkbenchKpis(kpis = {}) {
+  $("#workbenchKpiTotal").textContent = kpis.total || 0;
+  $("#workbenchKpiOverdue").textContent = kpis.overdue || 0;
+  $("#workbenchKpiBlocked").textContent = kpis.blocked || 0;
+  $("#workbenchKpiSubmitted").textContent = kpis.submitted || 0;
+}
+
+async function loadWorkbenchProjects(selectProjectId = state.workbenchProjectId) {
+  const params = new URLSearchParams();
+  const search = $("#workbenchSearchInput").value.trim();
+  const owner = $("#workbenchOwnerInput").value.trim();
+  const view = $("#workbenchViewFilter").value;
+  if (search) params.set("search", search);
+  if (owner) params.set("owner", owner);
+  if (view) params.set("view", view);
+  const payload = await api(`/api/workbench/projects?${params.toString()}`);
+  state.workbenchProjects = payload.projects || [];
+  renderWorkbenchKpis(payload.kpis || {});
+  const selectedExists = state.workbenchProjects.some((project) => project.id === selectProjectId);
+  const selectedId = selectedExists ? selectProjectId : state.workbenchProjects[0]?.id;
+  renderWorkbenchProjectList(selectedId);
+  if (selectedId) {
+    await openWorkbenchProject(selectedId);
+  } else {
+    state.workbenchProjectId = null;
+    $("#workbenchWorkspace").innerHTML = `<div class="empty">暂无匹配的执行项目</div>`;
+  }
+}
+
+function renderWorkbenchProjectList(selectedId = state.workbenchProjectId) {
+  const list = $("#workbenchProjectList");
+  if (!state.workbenchProjects.length) {
+    list.innerHTML = `<div class="empty small-empty">暂无项目</div>`;
+    return;
+  }
+  list.innerHTML = state.workbenchProjects
+    .map((project) => {
+      const active = project.id === selectedId ? " active" : "";
+      const due = project.current_due_date || project.expected_delivery_date || "";
+      const tags = [
+        project.overdue_tasks ? `<span class="tag danger">超期 ${escapeHtml(project.overdue_tasks)}</span>` : "",
+        project.blocked_tasks ? `<span class="tag warn">阻塞 ${escapeHtml(project.blocked_tasks)}</span>` : "",
+        project.submitted_tasks ? `<span class="tag">待确认 ${escapeHtml(project.submitted_tasks)}</span>` : "",
+        project.high_issues ? `<span class="tag danger">高风险</span>` : "",
+      ].join(" ");
+      return `
+        <button type="button" class="workbench-project-card${active}" data-project-id="${escapeHtml(project.id)}">
+          <span class="workbench-card-top">
+            <strong>${escapeHtml(project.current_number || project.intake_no)}</strong>
+            <small>${escapeHtml(workbenchAreaName(project.workbench_area))}</small>
+          </span>
+          <span class="workbench-project-title">${escapeHtml(project.equipment_name || project.project_name || "")}</span>
+          <small>${escapeHtml(project.customer_name || "")}${project.site_name ? ` · ${escapeHtml(project.site_name)}` : ""}</small>
+          <span class="workbench-card-foot">
+            <small class="${dueClass(due)}">${escapeHtml(due || "未设置Due Date")}</small>
+            <small>${escapeHtml(project.task_done || 0)}/${escapeHtml(project.task_total || 0)} 任务</small>
+          </span>
+          <span class="tag-row">${tags}</span>
+        </button>
+      `;
+    })
+    .join("");
+  list.querySelectorAll("[data-project-id]").forEach((button) => {
+    button.addEventListener("click", () => openWorkbenchProject(button.dataset.projectId).catch(console.error));
+  });
+}
+
+async function openWorkbenchProject(projectId) {
+  state.workbenchProjectId = projectId;
+  renderWorkbenchProjectList(projectId);
+  const payload = await api(`/api/workbench/projects/${encodeURIComponent(projectId)}`);
+  renderWorkbenchWorkspace(payload);
+}
+
+function renderWorkbenchWorkspace(payload) {
+  const { project, tasks = [], deliverables = [], issues = [], logs = [] } = payload;
+  const pendingDeliverables = deliverables.filter((item) => item.status === "submitted");
+  const showPmDeliverables = canReviewDeliverables();
+  const openIssueCount = issues.filter((issue) => ["open", "following"].includes(issue.status)).length;
+  $("#workbenchWorkspace").innerHTML = `
+    <div class="workbench-header">
+      <div>
+        <h3>${escapeHtml(project.current_number || project.intake_no)} · ${escapeHtml(project.equipment_name || project.project_name || "")}</h3>
+        <p>${escapeHtml(project.customer_name || "")}${project.site_name ? ` · ${escapeHtml(project.site_name)}` : ""}${project.project_group_name ? ` · ${escapeHtml(project.project_group_name)}` : ""}</p>
+      </div>
+      <div class="workbench-header-actions">
+        <button type="button" class="secondary" data-action="open-folder">打开资料夹</button>
+        <button type="button" class="secondary" data-action="open-library-detail">资料库详情</button>
+      </div>
+    </div>
+    <div class="workbench-summary-grid">
+      <div><span>${escapeHtml(project.task_done || 0)}/${escapeHtml(project.task_total || 0)}</span><small>任务进度</small></div>
+      <div><span>${escapeHtml(project.current_due_date || "未设")}</span><small>最近Due Date</small></div>
+      ${showPmDeliverables ? `<div><span>${escapeHtml(project.submitted_tasks || 0)}</span><small>待确认交付物</small></div>` : ""}
+      <div><span>${escapeHtml(project.open_issues || 0)}</span><small>打开风险/问题</small></div>
+    </div>
+    <div class="workbench-columns${showPmDeliverables ? "" : " single"}">
+      <section class="workbench-main">
+        <div class="workbench-action-row">
+          <button type="button" class="secondary workbench-entry-button" data-action="open-task-dialog">
+            <span>新增任务</span>
+            <small>${escapeHtml(tasks.filter((task) => !taskDone(task)).length)} 未完成</small>
+          </button>
+          <button type="button" class="secondary workbench-entry-button" data-action="open-risk-dialog">
+            <span>风险/异常</span>
+            <small>${escapeHtml(openIssueCount)} 打开</small>
+          </button>
+          <button type="button" class="secondary workbench-entry-button" data-action="open-log-drawer">
+            <span>执行日志</span>
+            <small>${escapeHtml(logs.length)} 条</small>
+          </button>
+        </div>
+        ${renderTaskDialog(tasks)}
+        ${renderRiskDialog(issues, tasks)}
+        ${renderLogDrawer(logs)}
+        <div class="workbench-section-title">
+          <h3>任务</h3>
+          <span>${escapeHtml(tasks.filter((task) => !taskDone(task)).length)} 个未完成</span>
+        </div>
+        <div class="workbench-task-list">
+          ${tasks.length ? tasks.map((task) => renderWorkbenchTask(task)).join("") : `<div class="empty small-empty">暂无任务，先用模板或手动添加一个任务</div>`}
+        </div>
+      </section>
+      ${showPmDeliverables ? `<aside class="workbench-side">
+        ${showPmDeliverables ? renderPendingDeliverables(pendingDeliverables) : ""}
+      </aside>` : ""}
+    </div>
+  `;
+  bindWorkbenchWorkspaceActions(project.id);
+}
+
+function renderTaskDialog(tasks = []) {
+  return `
+    <dialog id="taskDialog" class="workbench-dialog task-dialog">
+      <div class="workbench-dialog-shell">
+        <div class="workbench-dialog-header">
+          <div>
+            <h3>新增任务</h3>
+            <span class="subtext">先手动添加；模板任务可按需勾选</span>
+          </div>
+          <button type="button" class="secondary slim-inline" data-action="close-task-dialog">关闭</button>
+        </div>
+        <section class="workbench-panel task-window-panel">
+          <div class="workbench-section-title">
+            <h3>手动新增</h3>
+          </div>
+          ${renderTaskCreateForm()}
+          <div class="workbench-section-title template-create-title">
+            <h3>从模板选择添加</h3>
+            <span>选择模板后显示条目</span>
+          </div>
+          <form id="templateTaskForm" class="template-task-form">
+            <div class="template-picker-row">
+              <label>
+                模板
+                <select id="taskTemplateSelect" name="template_code">
+                  <option value="">选择任务模板</option>
+                  ${Object.entries(WORKBENCH_TASK_TEMPLATES).map(([code, template]) => `<option value="${escapeHtml(code)}">${escapeHtml(template.name)}</option>`).join("")}
+                </select>
+              </label>
+              <p id="taskTemplateNote" class="template-selected-note">先选择模板，再勾选要添加的任务。</p>
+            </div>
+            ${Object.keys(WORKBENCH_TASK_TEMPLATES).map((code) => renderTaskTemplateChecklist(code, tasks)).join("")}
+            <div class="template-form-actions">
+              <button type="button" class="secondary slim-inline" data-action="select-visible-template">全选当前模板</button>
+              <button type="button" class="secondary slim-inline" data-action="clear-visible-template">清空</button>
+              <button type="submit" class="secondary compact-submit">添加所选任务</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </dialog>
+  `;
+}
+
+function renderTaskTemplateChecklist(templateCode, tasks) {
+  const template = WORKBENCH_TASK_TEMPLATES[templateCode];
+  const existingTitles = new Set(tasks.map((task) => task.title));
+  return `
+    <div class="template-checklist" data-template-panel="${escapeHtml(templateCode)}" hidden>
+      ${template.items.map((item, index) => {
+        const exists = existingTitles.has(item.title);
+        return `
+          <label class="template-task-row${exists ? " disabled" : ""}">
+            <input type="checkbox" data-template-code="${escapeHtml(templateCode)}" data-template-index="${escapeHtml(index)}"${exists ? " disabled" : " checked"} />
+            <span>
+              <strong>${escapeHtml(item.title)}</strong>
+              <small>${escapeHtml(item.work_package)} · D+${escapeHtml(item.offset_days)}${item.requires_deliverable ? " · 需要文件" : ""}${exists ? " · 已存在" : ""}</small>
+            </span>
+          </label>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderTaskCreateForm() {
+  const owner = $("#workbenchOwnerInput").value.trim();
+  return `
+    <form id="workbenchTaskForm" class="workbench-create-form">
+      <input name="title" placeholder="新增任务，例如 机械方案确认" required />
+      <select name="work_package">
+        <option value="">工作包</option>
+        ${stringOptions(state.bootstrap?.workbench_work_packages || [])}
+      </select>
+      <input name="owner_name" placeholder="负责人" value="${escapeHtml(owner)}" />
+      <input name="due_date" type="date" />
+      <label class="checkline compact-check">
+        <input name="requires_deliverable" type="checkbox" value="1" />
+        需要文件
+      </label>
+      <button type="submit" class="secondary compact-submit">+ 任务</button>
+    </form>
+  `;
+}
+
+function renderRiskDialog(issues, tasks) {
+  const openIssueCount = issues.filter((issue) => ["open", "following"].includes(issue.status)).length;
+  return `
+    <dialog id="riskDialog" class="workbench-dialog risk-dialog">
+      <div class="workbench-dialog-shell">
+        <div class="workbench-dialog-header">
+          <div>
+            <h3>风险/异常</h3>
+            <span class="subtext">${escapeHtml(openIssueCount)} 个打开 · ${escapeHtml(issues.length)} 条记录</span>
+          </div>
+          <button type="button" class="secondary slim-inline" data-action="close-risk-dialog">关闭</button>
+        </div>
+        ${renderIssuesPanel(issues, tasks)}
+      </div>
+    </dialog>
+  `;
+}
+
+function renderWorkbenchTask(task) {
+  const deliverables = task.deliverables || [];
+  const owner = task.owner_name || "未指派";
+  const due = task.due_date || "未设置Due Date";
+  const workPackage = task.work_package || "未分组";
+  return `
+    <article class="workbench-task ${escapeHtml(task.status)}" data-task-id="${escapeHtml(task.id)}">
+      <div class="task-readable">
+        <div class="task-readable-main">
+          <strong>${escapeHtml(task.title)}</strong>
+          <span class="subtext">${escapeHtml(workPackage)} · ${escapeHtml(owner)} · <span class="${dueClass(task.due_date || "")}">${escapeHtml(due)}</span>${task.requires_deliverable ? " · 需要文件" : ""}</span>
+        </div>
+        <div class="task-actions">
+          <span class="task-status ${escapeHtml(task.status)}">${escapeHtml(workbenchTaskStatusName(task.status))}</span>
+          <button type="button" class="danger slim-inline" data-action="delete-task" data-task-id="${escapeHtml(task.id)}">删除</button>
+        </div>
+      </div>
+      <details class="task-deliverable-panel">
+        <summary>编辑任务 / 提交文件 ${deliverables.length ? `(${escapeHtml(deliverables.length)} 个文件)` : ""}</summary>
+        <form class="workbench-task-form" data-task-id="${escapeHtml(task.id)}">
+          <label>
+            任务
+            <input name="title" value="${escapeHtml(task.title)}" />
+          </label>
+          <label>
+            工作包
+            <select name="work_package">
+              <option value="">工作包</option>
+              ${stringOptions(state.bootstrap?.workbench_work_packages || [], task.work_package || "")}
+            </select>
+          </label>
+          <label>
+            负责人
+            <input name="owner_name" value="${escapeHtml(task.owner_name || "")}" placeholder="负责人" />
+          </label>
+          <label>
+            状态
+            <select name="status">${optionItems(state.bootstrap?.workbench_task_statuses || [], task.status)}</select>
+          </label>
+          <label>
+            Due Date
+            <input name="due_date" type="date" value="${escapeHtml(task.due_date || "")}" />
+          </label>
+          <label class="checkline compact-check">
+            <input name="requires_deliverable" type="checkbox" value="1"${task.requires_deliverable ? " checked" : ""} />
+            需要文件
+          </label>
+          <label>
+            备注/阻塞说明
+            <input name="notes" value="${escapeHtml(task.notes || "")}" placeholder="备注/阻塞说明" />
+          </label>
+          <div class="task-actions">
+            <button type="button" class="secondary slim-inline" data-action="save-task" data-task-id="${escapeHtml(task.id)}">保存任务</button>
+          </div>
+        </form>
+        <form class="deliverable-upload-form" data-task-id="${escapeHtml(task.id)}">
+          <input type="file" name="file" required />
+          <select name="category_code">${optionItems(state.bootstrap?.file_categories || [], "solution", (item) => item.code, (item) => item.name)}</select>
+          <input name="version_note" placeholder="版本说明，可选" />
+          <input name="submitted_by" placeholder="提交人" value="${escapeHtml($("#workbenchOwnerInput").value.trim() || task.owner_name || "")}" />
+          <button type="submit">提交文件</button>
+        </form>
+        <div class="deliverable-list">
+          ${deliverables.length ? deliverables.map((item) => renderDeliverableItem(item)).join("") : `<div class="empty small-empty">暂无交付文件</div>`}
+        </div>
+      </details>
+    </article>
+  `;
+}
+
+function renderDeliverableItem(item) {
+  const actions = canReviewDeliverables() && item.status === "submitted"
+    ? `
+      <button type="button" class="secondary slim-inline" data-action="confirm-deliverable" data-deliverable-id="${escapeHtml(item.id)}">确认</button>
+      <button type="button" class="danger slim-inline" data-action="reject-deliverable" data-deliverable-id="${escapeHtml(item.id)}">驳回</button>
+    `
+    : "";
+  return `
+    <div class="deliverable-item">
+      <div>
+        <strong>${escapeHtml(item.file_name || "交付文件")}</strong>
+        <span class="subtext">${escapeHtml(item.category_name || item.deliverable_type || "")}${item.version_note ? ` · ${escapeHtml(item.version_note)}` : ""}${item.submitted_by ? ` · ${escapeHtml(item.submitted_by)}` : ""}</span>
+      </div>
+      <div class="inline-actions">
+        <span class="tag ${item.status === "rejected" ? "danger" : item.status === "submitted" ? "warn" : ""}">${escapeHtml(deliverableStatusName(item.status))}</span>
+        ${actions}
+      </div>
+    </div>
+  `;
+}
+
+function deliverableStatusName(statusCode) {
+  return (state.bootstrap?.workbench_deliverable_statuses || []).find((item) => item.code === statusCode)?.name || statusCode || "";
+}
+
+function renderPendingDeliverables(items) {
+  return `
+    <section class="workbench-panel">
+      <div class="workbench-section-title">
+        <h3>待确认交付物</h3>
+        <span>${escapeHtml(items.length)} 个</span>
+      </div>
+      <div class="deliverable-list">
+        ${items.length ? items.map((item) => renderDeliverableItem(item)).join("") : `<div class="empty small-empty">暂无待确认文件</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderIssuesPanel(issues, tasks) {
+  const openIssueCount = issues.filter((issue) => ["open", "following"].includes(issue.status)).length;
+  return `
+    <section class="workbench-panel risk-window-panel">
+      <div class="workbench-section-title">
+        <h3>创建风险</h3>
+        <span>${escapeHtml(openIssueCount)} 个打开</span>
+      </div>
+      <p class="panel-hint">产品/产线风险会在同一产品下所有设备显示；设备风险只影响当前项目；任务风险必须关联具体任务。</p>
+      <form id="workbenchIssueForm" class="issue-create-form">
+        <input name="title" placeholder="新增风险/问题" required />
+        <select name="scope">
+          ${optionItems(state.bootstrap?.workbench_issue_scopes || [], "equipment")}
+        </select>
+        <select name="task_id">
+          <option value="">关联任务，仅任务级必填</option>
+          ${renderTaskSelectOptions(tasks)}
+        </select>
+        <select name="issue_type">
+          <option value="">类型</option>
+          ${stringOptions(state.bootstrap?.workbench_issue_types || [])}
+        </select>
+        <select name="source">
+          <option value="">来源</option>
+          ${stringOptions(state.bootstrap?.workbench_issue_sources || [])}
+        </select>
+        <select name="severity">${optionItems(state.bootstrap?.workbench_issue_severities || [], "medium")}</select>
+        <input name="owner_name" placeholder="负责人" value="${escapeHtml($("#workbenchOwnerInput").value.trim())}" />
+        <input name="due_date" type="date" />
+        <button type="submit" class="secondary compact-submit">+ 风险</button>
+      </form>
+      <div class="workbench-section-title risk-list-title">
+        <h3>当前风险列表</h3>
+        <span>${escapeHtml(issues.length)} 条</span>
+      </div>
+      <div class="issue-list">
+        ${issues.length ? issues.map((issue) => renderIssueItem(issue, tasks)).join("") : `<div class="empty small-empty">暂无风险/问题</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderIssueItem(issue, tasks) {
+  const linkedTask = taskTitleById(tasks, issue.task_id);
+  const scope = issue.scope || (issue.task_id ? "task" : "equipment");
+  const scopeName = workbenchIssueScopeName(scope);
+  const linkText = scope === "task"
+    ? `任务：${linkedTask || "未关联"}`
+    : scope === "product"
+      ? "影响产品/产线"
+      : `设备：${issue.issue_project_name || "当前设备"}`;
+  const due = issue.due_date || "未设置Due Date";
+  return `
+    <form class="issue-item ${escapeHtml(issue.severity || "")}" data-issue-id="${escapeHtml(issue.id)}">
+      <div class="issue-readable">
+        <div class="issue-readable-main">
+          <strong>${escapeHtml(issue.title)}</strong>
+          <span class="subtext">${escapeHtml(scopeName)} · ${escapeHtml(issue.issue_type || "未分类")} · ${escapeHtml(issue.source || "来源未填")} · ${escapeHtml(issue.owner_name || "未指派")} · <span class="${dueClass(issue.due_date || "")}">${escapeHtml(due)}</span></span>
+          <span class="subtext">${escapeHtml(linkText)}</span>
+        </div>
+        <div class="task-actions">
+          <span class="tag ${issue.severity === "high" ? "danger" : issue.severity === "medium" ? "warn" : "neutral"}">${escapeHtml(workbenchSeverityName(issue.severity))} · ${escapeHtml(workbenchIssueStatusName(issue.status))}</span>
+          <button type="button" class="danger slim-inline" data-action="delete-issue" data-issue-id="${escapeHtml(issue.id)}">删除</button>
+        </div>
+      </div>
+      <details class="issue-edit-panel">
+        <summary>编辑风险 / 处理记录</summary>
+        <div class="issue-edit-grid">
+          <input name="title" value="${escapeHtml(issue.title)}" />
+          <select name="scope">${optionItems(state.bootstrap?.workbench_issue_scopes || [], scope)}</select>
+          <select name="task_id">
+            <option value="">关联任务，仅任务级必填</option>
+            ${renderTaskSelectOptions(tasks, issue.task_id || "")}
+          </select>
+          <select name="issue_type">
+            <option value="">类型</option>
+            ${stringOptions(state.bootstrap?.workbench_issue_types || [], issue.issue_type || "")}
+          </select>
+          <select name="source">
+            <option value="">来源</option>
+            ${stringOptions(state.bootstrap?.workbench_issue_sources || [], issue.source || "")}
+          </select>
+          <select name="severity">${optionItems(state.bootstrap?.workbench_issue_severities || [], issue.severity)}</select>
+          <select name="status">${optionItems(state.bootstrap?.workbench_issue_statuses || [], issue.status)}</select>
+          <input name="owner_name" value="${escapeHtml(issue.owner_name || "")}" placeholder="负责人" />
+          <input name="due_date" type="date" value="${escapeHtml(issue.due_date || "")}" />
+          <input name="resolution" value="${escapeHtml(issue.resolution || "")}" placeholder="处理记录" />
+          <div class="task-actions">
+            <button type="button" class="secondary slim-inline" data-action="save-issue" data-issue-id="${escapeHtml(issue.id)}">保存</button>
+          </div>
+        </div>
+      </details>
+    </form>
+  `;
+}
+
+function renderLogDrawer(logs) {
+  return `
+    <dialog id="logDrawer" class="log-drawer">
+      <div class="log-drawer-shell">
+        <div class="log-drawer-header">
+          <div>
+            <h3>执行日志</h3>
+            <span class="subtext">${escapeHtml(logs.length)} 条</span>
+          </div>
+          <button type="button" class="secondary slim-inline" data-action="close-log-drawer">关闭</button>
+        </div>
+      <div class="log-list">
+        ${logs.length ? logs.slice(0, 12).map((log) => `
+          <div class="log-item">
+            <strong>${escapeHtml(log.title)}</strong>
+            <span class="subtext">${escapeHtml(log.created_at)}${log.detail ? ` · ${escapeHtml(log.detail)}` : ""}</span>
+          </div>
+        `).join("") : `<div class="empty small-empty">暂无日志</div>`}
+      </div>
+      </div>
+    </dialog>
+  `;
+}
+
+function bindWorkbenchWorkspaceActions(projectId) {
+  const workspace = $("#workbenchWorkspace");
+  const taskForm = $("#workbenchTaskForm");
+  if (taskForm) {
+    taskForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = event.submitter;
+      button.disabled = true;
+      try {
+        await api(`/api/workbench/projects/${encodeURIComponent(projectId)}/tasks`, {
+          method: "POST",
+          body: JSON.stringify(formToPayload(taskForm)),
+        });
+        showToast("任务已添加");
+        await loadWorkbenchProjects(projectId);
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+  const issueForm = $("#workbenchIssueForm");
+  if (issueForm) {
+    issueForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = event.submitter;
+      button.disabled = true;
+      try {
+        await api(`/api/workbench/projects/${encodeURIComponent(projectId)}/issues`, {
+          method: "POST",
+          body: JSON.stringify(formToPayload(issueForm)),
+        });
+        showToast("风险/问题已添加");
+        await loadWorkbenchProjects(projectId);
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+  const templateTaskForm = $("#templateTaskForm");
+  if (templateTaskForm) {
+    const templateSelect = $("#taskTemplateSelect");
+    if (templateSelect) {
+      templateSelect.addEventListener("change", () => {
+        const selectedTemplate = WORKBENCH_TASK_TEMPLATES[templateSelect.value];
+        templateTaskForm.querySelectorAll(".template-checklist").forEach((panel) => {
+          panel.hidden = panel.dataset.templatePanel !== templateSelect.value;
+        });
+        const note = $("#taskTemplateNote");
+        if (note) {
+          note.textContent = selectedTemplate ? selectedTemplate.note : "先选择模板，再勾选要添加的任务。";
+        }
+      });
+    }
+    templateTaskForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = event.submitter;
+      if (button) button.disabled = true;
+      try {
+        const activePanel = templateTaskForm.querySelector(".template-checklist:not([hidden])");
+        if (!activePanel) {
+          showToast("请先选择任务模板");
+          return;
+        }
+        const checkedItems = Array.from(activePanel?.querySelectorAll("input[type='checkbox']:checked:not(:disabled)") || []);
+        if (!checkedItems.length) {
+          showToast("请选择要添加的模板任务");
+          return;
+        }
+        let created = 0;
+        for (const checkbox of checkedItems) {
+          const template = WORKBENCH_TASK_TEMPLATES[checkbox.dataset.templateCode];
+          const item = template?.items[Number(checkbox.dataset.templateIndex)];
+          if (!item) continue;
+          await api(`/api/workbench/projects/${encodeURIComponent(projectId)}/tasks`, {
+            method: "POST",
+            body: JSON.stringify({
+              title: item.title,
+              work_package: item.work_package,
+              phase_code: item.phase_code,
+              due_date: addDays(item.offset_days),
+              requires_deliverable: item.requires_deliverable,
+            }),
+          });
+          created += 1;
+        }
+        showToast(`已添加 ${created} 个模板任务`);
+        await loadWorkbenchProjects(projectId);
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+  }
+  const riskDialog = workspace.querySelector("#riskDialog");
+  if (riskDialog) {
+    riskDialog.addEventListener("click", (event) => {
+      if (event.target === riskDialog) {
+        riskDialog.close();
+      }
+    });
+  }
+  const taskDialog = workspace.querySelector("#taskDialog");
+  if (taskDialog) {
+    taskDialog.addEventListener("click", (event) => {
+      if (event.target === taskDialog) {
+        taskDialog.close();
+      }
+    });
+  }
+  const logDrawer = workspace.querySelector("#logDrawer");
+  if (logDrawer) {
+    logDrawer.addEventListener("click", (event) => {
+      if (event.target === logDrawer) {
+        logDrawer.close();
+      }
+    });
+  }
+  workspace.querySelectorAll(".workbench-task-form").forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await saveWorkbenchTask(form, projectId);
+    });
+  });
+  workspace.querySelectorAll(".deliverable-upload-form").forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = event.submitter;
+      button.disabled = true;
+      try {
+        const formData = new FormData(form);
+        await uploadApi(`/api/workbench/tasks/${encodeURIComponent(form.dataset.taskId)}/deliverables`, formData);
+        showToast("文件已提交，等待PM确认");
+        await loadWorkbenchProjects(projectId);
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+  workspace.querySelectorAll("[data-action]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const action = button.dataset.action;
+      try {
+        if (action === "open-folder") {
+          await api(`/api/projects/${encodeURIComponent(projectId)}/open-folder`, { method: "POST", body: "{}" });
+          showToast("已打开项目文件夹");
+        }
+        if (action === "open-library-detail") {
+          await openDetail(projectId);
+        }
+        if (action === "open-task-dialog") {
+          const dialog = $("#taskDialog");
+          if (dialog?.showModal) {
+            dialog.showModal();
+          } else if (dialog) {
+            dialog.setAttribute("open", "");
+          }
+        }
+        if (action === "close-task-dialog") {
+          const dialog = $("#taskDialog");
+          if (dialog?.close) {
+            dialog.close();
+          } else {
+            dialog?.removeAttribute("open");
+          }
+        }
+        if (action === "select-visible-template") {
+          $("#templateTaskForm")?.querySelectorAll(".template-checklist:not([hidden]) input[type='checkbox']:not(:disabled)").forEach((input) => {
+            input.checked = true;
+          });
+        }
+        if (action === "clear-visible-template") {
+          $("#templateTaskForm")?.querySelectorAll(".template-checklist:not([hidden]) input[type='checkbox']").forEach((input) => {
+            input.checked = false;
+          });
+        }
+        if (action === "apply-template") {
+          button.disabled = true;
+          const result = await api(`/api/workbench/projects/${encodeURIComponent(projectId)}/templates`, {
+            method: "POST",
+            body: JSON.stringify({ template: button.dataset.template }),
+          });
+          showToast(`已生成 ${result.created} 个任务`);
+          await loadWorkbenchProjects(projectId);
+        }
+        if (action === "open-risk-dialog") {
+          const dialog = $("#riskDialog");
+          if (dialog?.showModal) {
+            dialog.showModal();
+          } else if (dialog) {
+            dialog.setAttribute("open", "");
+          }
+        }
+        if (action === "close-risk-dialog") {
+          const dialog = $("#riskDialog");
+          if (dialog?.close) {
+            dialog.close();
+          } else {
+            dialog?.removeAttribute("open");
+          }
+        }
+        if (action === "open-log-drawer") {
+          const drawer = $("#logDrawer");
+          if (drawer?.showModal) {
+            drawer.showModal();
+          } else if (drawer) {
+            drawer.setAttribute("open", "");
+          }
+        }
+        if (action === "close-log-drawer") {
+          const drawer = $("#logDrawer");
+          if (drawer?.close) {
+            drawer.close();
+          } else {
+            drawer?.removeAttribute("open");
+          }
+        }
+        if (action === "save-task") {
+          await saveWorkbenchTask(button.closest(".workbench-task-form"), projectId);
+        }
+        if (action === "delete-task") {
+          if (!confirm("确定删除这个任务吗？")) return;
+          await api(`/api/workbench/tasks/${encodeURIComponent(button.dataset.taskId)}`, { method: "DELETE", body: "{}" });
+          showToast("任务已删除");
+          await loadWorkbenchProjects(projectId);
+        }
+        if (action === "confirm-deliverable") {
+          await api(`/api/workbench/deliverables/${encodeURIComponent(button.dataset.deliverableId)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ status: "confirmed", confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM" }),
+          });
+          showToast("交付物已确认");
+          await loadWorkbenchProjects(projectId);
+        }
+        if (action === "reject-deliverable") {
+          const reason = prompt("请输入驳回原因");
+          if (!reason) return;
+          await api(`/api/workbench/deliverables/${encodeURIComponent(button.dataset.deliverableId)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ status: "rejected", confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM", reject_reason: reason }),
+          });
+          showToast("交付物已驳回");
+          await loadWorkbenchProjects(projectId);
+        }
+        if (action === "save-issue") {
+          const form = button.closest(".issue-item");
+          await api(`/api/workbench/issues/${encodeURIComponent(button.dataset.issueId)}`, {
+            method: "PATCH",
+            body: JSON.stringify(formDataFromContainer(form)),
+          });
+          showToast("风险/问题已保存");
+          await loadWorkbenchProjects(projectId);
+        }
+        if (action === "delete-issue") {
+          if (!confirm("确定删除这个风险/问题吗？")) return;
+          await api(`/api/workbench/issues/${encodeURIComponent(button.dataset.issueId)}`, { method: "DELETE", body: "{}" });
+          showToast("风险/问题已删除");
+          await loadWorkbenchProjects(projectId);
+        }
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+}
+
+async function saveWorkbenchTask(form, projectId) {
+  const button = form.querySelector("[data-action='save-task']");
+  if (button) button.disabled = true;
+  try {
+    await api(`/api/workbench/tasks/${encodeURIComponent(form.dataset.taskId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(formDataFromContainer(form)),
+    });
+    showToast("任务已保存");
+    await loadWorkbenchProjects(projectId);
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 function formToPayload(form) {
@@ -851,15 +1775,27 @@ function bindEvents() {
   });
   $("#navLibraryButton").addEventListener("click", () => switchView("library"));
   $("#navCreateButton").addEventListener("click", () => switchView("create"));
+  $("#navWorkbenchButton").addEventListener("click", () => {
+    if (isWorkbenchFocusMode() || !openWorkbenchWindow()) {
+      switchView("workbench");
+    }
+  });
   $("#listCreateButton").addEventListener("click", () => switchView("create"));
   $("#backToLibraryButton").addEventListener("click", () => switchView("library"));
   $("#refreshButton").addEventListener("click", loadProjects);
+  $("#workbenchRefreshButton").addEventListener("click", () => loadWorkbenchProjects().catch(console.error));
   $("#saveSettingsButton").addEventListener("click", saveSettings);
   $("#searchInput").addEventListener("input", debouncedLoadProjects);
   $("#filterGroup").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterSite").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterStatus").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterNeedsEquipment").addEventListener("change", () => loadProjects().catch(console.error));
+  $("#workbenchSearchInput").addEventListener("input", debounce(() => loadWorkbenchProjects().catch(console.error), 300));
+  $("#workbenchOwnerInput").addEventListener("input", debounce(() => {
+    localStorage.setItem(WORKBENCH_OWNER_STORAGE_KEY, $("#workbenchOwnerInput").value.trim());
+    loadWorkbenchProjects().catch(console.error);
+  }, 300));
+  $("#workbenchViewFilter").addEventListener("change", () => loadWorkbenchProjects().catch(console.error));
   $("#closeDetailButton").addEventListener("click", () => {
     closeDetailPane();
   });
@@ -870,10 +1806,19 @@ function bindEvents() {
 
 async function boot() {
   state.visibleColumns = loadVisibleColumns();
+  $("#workbenchOwnerInput").value = localStorage.getItem(WORKBENCH_OWNER_STORAGE_KEY) || "";
+  if (isWorkbenchFocusMode()) {
+    document.body.classList.add("workbench-focus");
+  }
   renderColumnPicker();
   bindEvents();
   await loadBootstrap();
-  await loadProjects();
+  if (isWorkbenchFocusMode()) {
+    switchView("workbench", false);
+    await loadWorkbenchProjects(initialWorkbenchProjectId());
+  } else {
+    await loadProjects();
+  }
 }
 
 boot().catch((error) => {
