@@ -141,7 +141,16 @@ async function loadUsers() {
 
 function renderUsers(users) {
   $("#userList").innerHTML = users.length
-    ? users.map((user) => renderUserCard(user)).join("")
+    ? `
+      <div class="user-list-head">
+        <span>账号</span>
+        <span>姓名</span>
+        <span>状态</span>
+        <span>角色</span>
+        <span></span>
+      </div>
+      ${users.map((user) => renderUserCard(user)).join("")}
+    `
     : `<div class="empty">暂无用户</div>`;
   $("#userList").querySelectorAll(".user-card").forEach((card) => {
     card.querySelector("[data-action='save-user']").addEventListener("click", () => saveUser(card).catch(console.error));
@@ -156,24 +165,17 @@ function renderUserCard(user) {
         <strong>${escapeHtml(user.email)}</strong>
         <small>最后登录：${escapeHtml(user.last_login_at || "未登录")}</small>
       </div>
-      <div class="user-edit-grid">
-        <label>
-          姓名
-          <input name="display_name" value="${escapeHtml(user.display_name || "")}" placeholder="姓名" />
-        </label>
-        <label>
-          状态
-          <select name="status">
-            <option value="enabled"${user.status === "enabled" ? " selected" : ""}>启用</option>
-            <option value="disabled"${user.status === "disabled" ? " selected" : ""}>停用</option>
-          </select>
-        </label>
-      </div>
+      <input name="display_name" value="${escapeHtml(user.display_name || "")}" placeholder="姓名" />
+      <select name="status">
+        <option value="enabled"${user.status === "enabled" ? " selected" : ""}>启用</option>
+        <option value="disabled"${user.status === "disabled" ? " selected" : ""}>停用</option>
+      </select>
       <div class="role-checks" aria-label="用户角色">
         ${Object.entries(AUTH_ROLE_LABELS).map(([role, label]) => `
           <label class="role-check">
             <input type="checkbox" name="roles" value="${escapeHtml(role)}"${roles.has(role) ? " checked" : ""} />
-            <span>${escapeHtml(label)}</span>
+            <span class="role-box" aria-hidden="true"></span>
+            <span class="role-label">${escapeHtml(label)}</span>
           </label>
         `).join("")}
       </div>

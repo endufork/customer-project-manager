@@ -57,64 +57,94 @@
 }
 
 .auth-user-badge {
-  min-width: 96px;
-  padding: 9px 12px;
+  min-width: 104px;
+  height: 38px;
+  padding: 0 14px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
   color: var(--text);
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   line-height: 1.2;
 }
 
 .admin-page {
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 
 .admin-heading {
-  align-items: end;
-  min-height: 88px;
+  align-items: center;
+  min-height: auto;
+  padding: 12px 0 14px;
+  border-bottom: 1px solid var(--line);
 }
 
 .admin-heading .heading-actions {
   display: grid;
-  grid-template-columns: minmax(260px, 340px) auto;
-  align-items: end;
+  grid-template-columns: minmax(280px, 360px) 76px;
+  align-items: center;
+  margin-left: auto;
 }
 
 .admin-heading .heading-actions input {
-  height: 42px;
+  height: 38px;
 }
 
 .admin-heading .heading-actions button {
-  height: 42px;
+  height: 38px;
 }
 
 .user-list {
   display: grid;
-  gap: 12px;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.user-list-head {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.25fr) minmax(200px, 0.8fr) 128px minmax(360px, 1.35fr) 88px;
+  gap: 14px;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 14px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .user-card {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(340px, 1.35fr) minmax(300px, 0.95fr) 96px;
-  gap: 16px;
-  align-items: start;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  grid-template-columns: minmax(280px, 1.25fr) minmax(200px, 0.8fr) 128px minmax(360px, 1.35fr) 88px;
+  gap: 14px;
+  align-items: center;
+  min-height: 68px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
   background: #fff;
 }
 
+.user-card:last-child {
+  border-bottom: 0;
+}
+
 .user-identity {
-  padding-top: 5px;
+  min-width: 0;
 }
 
 .user-card strong {
   display: block;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .user-card small {
@@ -123,38 +153,25 @@
   margin-top: 4px;
 }
 
-.user-edit-grid {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) 140px;
-  gap: 10px;
-}
-
-.user-edit-grid label {
-  display: grid;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.user-edit-grid input,
-.user-edit-grid select {
+.user-card > input,
+.user-card > select {
   width: 100%;
-  height: 40px;
+  height: 38px;
 }
 
 .role-checks {
   display: grid;
-  grid-template-columns: repeat(4, minmax(64px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
+  gap: 6px;
 }
 
 .role-check {
   display: inline-grid;
-  grid-template-columns: 18px auto;
+  grid-template-columns: 14px auto;
   gap: 6px;
   align-items: center;
-  min-height: 40px;
-  padding: 8px 10px;
+  height: 34px;
+  padding: 0 9px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #f8fafc;
@@ -163,26 +180,54 @@
 }
 
 .role-check input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  margin: 0;
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.role-check span {
+.role-box {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 3px;
+  background: #fff;
+  display: grid;
+  place-content: center;
+  color: #fff;
+}
+
+.role-box::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  transform: scale(0);
+  transition: transform 120ms ease;
+  background: currentColor;
+  clip-path: polygon(14% 48%, 38% 72%, 84% 18%, 96% 30%, 39% 88%, 4% 58%);
+}
+
+.role-check input[type="checkbox"]:checked + .role-box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.role-check input[type="checkbox"]:checked + .role-box::before {
+  transform: scale(1);
+}
+
+.role-label {
   white-space: nowrap;
   font-weight: 600;
 }
 
 .user-card-actions {
   display: flex;
-  justify-content: flex-end;
-  align-items: end;
-  min-height: 40px;
+  align-items: center;
 }
 
 .user-card-actions button {
   width: 100%;
-  height: 40px;
+  height: 38px;
 }
 
 body.authenticated #authView {
@@ -199,13 +244,13 @@ body:not(.authenticated) > .detail-backdrop {
 
 @media (max-width: 900px) {
   .auth-code-row,
-  .user-card {
+  .user-card,
+  .user-list-head {
     grid-template-columns: 1fr;
   }
 
   .admin-heading,
   .admin-heading .heading-actions,
-  .user-edit-grid,
   .role-checks {
     grid-template-columns: 1fr;
   }
@@ -257,9 +302,11 @@ h2 {
 
 .settings {
   display: flex;
-  align-items: end;
+  align-items: center;
   gap: 10px;
-  min-width: min(520px, 48vw);
+  margin-left: auto;
+  min-width: 0;
+  flex: 0 0 auto;
 }
 
 .settings label {
