@@ -13,6 +13,121 @@
   --shadow: 0 8px 24px rgba(20, 31, 43, 0.08);
 }
 
+.auth-view {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f5f7fb;
+}
+
+.auth-view[hidden] {
+  display: none;
+}
+
+.auth-card {
+  width: min(440px, 100%);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 28px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.1);
+}
+
+.auth-card h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+}
+
+.auth-card p {
+  margin: 0 0 18px;
+  color: var(--muted);
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-code-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.auth-user-badge {
+  min-width: 150px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-page {
+  display: grid;
+  gap: 14px;
+}
+
+.user-list {
+  display: grid;
+  gap: 10px;
+}
+
+.user-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.1fr) 1.4fr 140px auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.user-card strong {
+  display: block;
+}
+
+.user-card small {
+  color: var(--muted);
+}
+
+.role-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.role-checks label {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text);
+}
+
+body.authenticated #authView {
+  display: none;
+}
+
+body:not(.authenticated) > header,
+body:not(.authenticated) > nav,
+body:not(.authenticated) > main,
+body:not(.authenticated) > aside,
+body:not(.authenticated) > .detail-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .auth-code-row,
+  .user-card {
+    grid-template-columns: 1fr;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

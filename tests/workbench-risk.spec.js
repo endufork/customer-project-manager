@@ -2,6 +2,12 @@ const { test, expect } = require("@playwright/test");
 
 test("workbench action windows open from the task action row", async ({ page }) => {
   await page.goto("/?view=workbench");
+  await expect(page.getByRole("heading", { name: "客户项目资料管理" })).toBeVisible();
+  await page.locator("#loginEmailInput").fill("rongkai@jinxiangsz.com");
+  await page.getByRole("button", { name: "发送验证码" }).click();
+  await expect(page.locator("#authStatus")).toContainText(/验证码/);
+  await expect(page.locator("#loginCodeInput")).not.toHaveValue("");
+  await page.getByRole("button", { name: "登录" }).click();
 
   await expect(page.getByRole("heading", { name: "项目执行" })).toBeVisible();
   await expect(page.locator("#workbenchWorkspace")).toContainText(/任务|暂无匹配的执行项目/);
@@ -60,10 +66,9 @@ test("workbench action windows open from the task action row", async ({ page }) 
   await expect(logDrawer).not.toBeVisible();
 
   await page.getByRole("button", { name: "我的待办" }).click();
-  await expect(page.locator("#workbenchWorkspace")).toContainText("请输入负责人后查看我的待办");
   await expect(page.locator("#workbenchKpiTotalLabel")).toHaveText("我的待办");
   await expect(page.locator("#workbenchView")).toHaveClass(/workbench-task-mode/);
-  await page.locator("#workbenchRoleSelect").selectOption("pm");
+  await expect(page.locator("#workbenchRoleSelect")).toBeDisabled();
   await expect(page.locator("#workbenchWorkspace")).toContainText("待确认文件");
   await expect(page.locator("#workbenchKpiSubmittedLabel")).toHaveText("待确认文件");
 });

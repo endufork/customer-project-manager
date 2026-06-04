@@ -62,6 +62,7 @@ function renderIssueItem(issue, tasks) {
   const linkedTask = taskTitleById(tasks, issue.task_id);
   const scope = issue.scope || (issue.task_id ? "task" : "equipment");
   const scopeName = workbenchIssueScopeName(scope);
+  const canManageIssue = userHasRole("pm");
   const linkText = scope === "task"
     ? `任务：${linkedTask || "未关联"}`
     : scope === "product"
@@ -78,10 +79,10 @@ function renderIssueItem(issue, tasks) {
         </div>
         <div class="task-actions">
           <span class="tag ${issue.severity === "high" ? "danger" : issue.severity === "medium" ? "warn" : "neutral"}">${escapeHtml(workbenchSeverityName(issue.severity))} · ${escapeHtml(workbenchIssueStatusName(issue.status))}</span>
-          <button type="button" class="danger slim-inline" data-action="delete-issue" data-issue-id="${escapeHtml(issue.id)}">删除</button>
+          ${canManageIssue ? `<button type="button" class="danger slim-inline" data-action="delete-issue" data-issue-id="${escapeHtml(issue.id)}">删除</button>` : ""}
         </div>
       </div>
-      <details class="issue-edit-panel">
+      ${canManageIssue ? `<details class="issue-edit-panel">
         <summary>编辑风险 / 处理记录</summary>
         <div class="issue-edit-grid">
           <input name="title" value="${escapeHtml(issue.title)}" />
@@ -107,7 +108,7 @@ function renderIssueItem(issue, tasks) {
             <button type="button" class="secondary slim-inline" data-action="save-issue" data-issue-id="${escapeHtml(issue.id)}">保存</button>
           </div>
         </div>
-      </details>
+      </details>` : ""}
     </form>
   `;
 }

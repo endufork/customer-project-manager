@@ -5,6 +5,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from .api_router import ApiRouterMixin
+from .auth_router import AuthRouterMixin
 from .config import DB_PATH
 from .database import init_db
 from .http_helpers import JsonApiMixin, StaticAssetMixin
@@ -12,7 +13,7 @@ from .utils import safe_print
 from .workbench_router import WorkbenchRouterMixin
 
 
-class AppHandler(ApiRouterMixin, WorkbenchRouterMixin, JsonApiMixin, StaticAssetMixin, SimpleHTTPRequestHandler):
+class AppHandler(AuthRouterMixin, ApiRouterMixin, WorkbenchRouterMixin, JsonApiMixin, StaticAssetMixin, SimpleHTTPRequestHandler):
     server_version = "CustomerProjectPrototype/0.1"
 
     def do_GET(self) -> None:

@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import re
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -6,6 +7,21 @@ DATA_DIR = BASE_DIR / "data"
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = DATA_DIR / "customer_projects.db"
 SCHEMA_PATH = BASE_DIR / "mvp-sqlite-schema-v0.2.sql"
+
+AUTH_EMAIL_DOMAIN = os.environ.get("CUSTOMER_AUTH_EMAIL_DOMAIN", "jinxiangsz.com").strip().lower()
+AUTH_INITIAL_ADMIN_EMAIL = os.environ.get("CUSTOMER_AUTH_INITIAL_ADMIN_EMAIL", "rongkai@jinxiangsz.com").strip().lower()
+AUTH_CODE_TTL_SECONDS = int(os.environ.get("CUSTOMER_AUTH_CODE_TTL_SECONDS", "600"))
+AUTH_CODE_RESEND_SECONDS = int(os.environ.get("CUSTOMER_AUTH_CODE_RESEND_SECONDS", "60"))
+AUTH_SESSION_DAYS = int(os.environ.get("CUSTOMER_AUTH_SESSION_DAYS", "7"))
+AUTH_SECRET = os.environ.get("CUSTOMER_AUTH_SECRET", "local-dev-auth-secret")
+
+SMTP_HOST = os.environ.get("CUSTOMER_SMTP_HOST", "").strip()
+SMTP_PORT = int(os.environ.get("CUSTOMER_SMTP_PORT", "465"))
+SMTP_SECURITY = os.environ.get("CUSTOMER_SMTP_SECURITY", "ssl").strip().lower()
+SMTP_USERNAME = os.environ.get("CUSTOMER_SMTP_USERNAME", "").strip()
+SMTP_PASSWORD = os.environ.get("CUSTOMER_SMTP_PASSWORD", "").strip()
+SMTP_FROM_EMAIL = os.environ.get("CUSTOMER_SMTP_FROM_EMAIL", SMTP_USERNAME).strip()
+SMTP_FROM_NAME = os.environ.get("CUSTOMER_SMTP_FROM_NAME", "项目管理系统").strip()
 
 SINGLE_DEVICE_CONTAINER = "01_独立项目"
 PROJECT_GROUP_CONTAINER = "02_客户产品项目"

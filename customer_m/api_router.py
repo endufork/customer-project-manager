@@ -42,6 +42,10 @@ def match_project_action(path: str) -> tuple[str, str] | None:
 class ApiRouterMixin:
     def handle_api_get(self, path: str, query: dict[str, list[str]]) -> None:
         try:
+            if path.startswith("/api/auth/") or path == "/api/users":
+                if self.route_auth_get(path, query):
+                    return
+            self.require_auth()
             if path == "/api/bootstrap":
                 return self.api_bootstrap()
             if path.startswith("/api/workbench/") and self.handle_workbench_get(path, query):
@@ -52,11 +56,17 @@ class ApiRouterMixin:
             if project_id is not None:
                 return self.api_project_detail(project_id)
             self.send_error_json("接口不存在", 404)
+        except PermissionError as exc:
+            self.auth_error(exc)
         except Exception as exc:
             self.send_error_json(str(exc), 500)
 
     def handle_api_post(self, path: str) -> None:
         try:
+            if path.startswith("/api/auth/"):
+                if self.route_auth_post(path):
+                    return
+            self.require_auth()
             if path.startswith("/api/workbench/"):
                 if self.handle_workbench_post(path):
                     return
@@ -68,25 +78,34 @@ class ApiRouterMixin:
                 return self.send_error_json("接口不存在", 404)
             project_id, action = action_match
             if action == "scan":
+                self.require_role("pm")
                 return self.api_scan_project(project_id)
             if action == "rename-folder":
+                self.require_role("pm")
                 return self.api_rename_project_folder(project_id)
             if action == "open-folder":
                 return self.api_open_project_folder(project_id)
             if action == "open-shared-folder":
                 return self.api_open_shared_folder(project_id)
             if action == "scan-shared":
+                self.require_role("pm")
                 return self.api_scan_shared_folder(project_id)
             self.send_error_json("接口不存在", 404)
         except ValueError as exc:
             self.send_error_json(str(exc), 400)
         except sqlite3.IntegrityError as exc:
             self.send_error_json(f"数据约束错误：{exc}", 400)
+        except PermissionError as exc:
+            self.auth_error(exc)
         except Exception as exc:
             self.send_error_json(str(exc), 500)
 
     def handle_api_patch(self, path: str) -> None:
         try:
+            if path.startswith("/api/auth/") or path.startswith("/api/users/"):
+                if self.route_auth_patch(path):
+                    return
+            self.require_auth()
             if path.startswith("/api/workbench/"):
                 if self.handle_workbench_patch(path):
                     return
@@ -95,27 +114,34 @@ class ApiRouterMixin:
                 return self.api_update_settings()
             project_id = match_project_id(path)
             if project_id is not None:
+                self.require_role("pm")
                 return self.api_update_project(project_id)
             self.send_error_json("接口不存在", 404)
         except ValueError as exc:
             self.send_error_json(str(exc), 400)
         except sqlite3.IntegrityError as exc:
             self.send_error_json(f"数据约束错误：{exc}", 400)
+        except PermissionError as exc:
+            self.auth_error(exc)
         except Exception as exc:
             self.send_error_json(str(exc), 500)
 
     def handle_api_delete(self, path: str) -> None:
         try:
+            self.require_auth()
             if path.startswith("/api/workbench/"):
                 if self.handle_workbench_delete(path):
                     return
                 return self.send_error_json("接口不存在", 404)
             project_id = match_project_id(path)
             if project_id is not None:
+                self.require_role("admin")
                 return self.api_delete_project(project_id)
             self.send_error_json("接口不存在", 404)
         except ValueError as exc:
             self.send_error_json(str(exc), 400)
+        except PermissionError as exc:
+            self.auth_error(exc)
         except Exception as exc:
             self.send_error_json(str(exc), 500)
 
@@ -137,6 +163,7 @@ class ApiRouterMixin:
         self.send_json(payload)
 
     def api_create_project(self) -> None:
+        self.require_role("pm")
         data = self.read_json()
         with db_connect() as conn:
             payload = create_project_record(conn, data)
@@ -195,6 +222,7 @@ class ApiRouterMixin:
         self.send_json(payload)
 
     def api_update_settings(self) -> None:
+        self.require_role("admin")
         data = self.read_json()
         with db_connect() as conn:
             if "project_root_path" in data:

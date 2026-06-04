@@ -92,6 +92,9 @@ function renderWorkbenchTask(task) {
   const owner = task.owner_name || "未指派";
   const due = task.due_date || "未设置Due Date";
   const workPackage = task.work_package || "未分组";
+  const deleteButton = userHasRole("pm")
+    ? `<button type="button" class="danger slim-inline" data-action="delete-task" data-task-id="${escapeHtml(task.id)}">删除</button>`
+    : "";
   return `
     <article class="workbench-task ${escapeHtml(task.status)}" data-task-id="${escapeHtml(task.id)}">
       <div class="task-readable">
@@ -101,7 +104,7 @@ function renderWorkbenchTask(task) {
         </div>
         <div class="task-actions">
           <span class="task-status ${escapeHtml(task.status)}">${escapeHtml(workbenchTaskStatusName(task.status))}</span>
-          <button type="button" class="danger slim-inline" data-action="delete-task" data-task-id="${escapeHtml(task.id)}">删除</button>
+          ${deleteButton}
         </div>
       </div>
       <details class="task-deliverable-panel">

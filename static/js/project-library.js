@@ -78,12 +78,15 @@ function switchView(view, refresh = true) {
   const isCreate = view === "create";
   const isWorkbench = view === "workbench";
   const isLibrary = view === "library";
+  const isAdmin = view === "admin";
   $("#entryView").hidden = !isCreate;
   $("#libraryView").hidden = !isLibrary;
   $("#workbenchView").hidden = !isWorkbench;
+  $("#adminView").hidden = !isAdmin;
   $("#navCreateButton").classList.toggle("active", isCreate);
   $("#navLibraryButton").classList.toggle("active", isLibrary);
   $("#navWorkbenchButton").classList.toggle("active", isWorkbench);
+  $("#navAdminButton").classList.toggle("active", isAdmin);
   if (isWorkbench) {
     closeDetailPane({ restoreFocus: false });
   }
@@ -92,6 +95,9 @@ function switchView(view, refresh = true) {
   }
   if (isWorkbench && refresh) {
     loadWorkbench().catch(console.error);
+  }
+  if (isAdmin && refresh) {
+    loadUsers().catch(console.error);
   }
 }
 
@@ -526,6 +532,13 @@ async function openDetail(projectId) {
       }
     </div>
   `;
+  if (!userHasRole("pm")) {
+    $("#detailContent").querySelector(".edit-block")?.setAttribute("hidden", "");
+    $("#detailContent").querySelector(".scan-toolbar")?.setAttribute("hidden", "");
+  }
+  if (!userHasRole("admin")) {
+    $("#detailContent").querySelector("[data-action='delete-project']")?.setAttribute("hidden", "");
+  }
   bindDetailActions(project);
   showDetailPane();
 }

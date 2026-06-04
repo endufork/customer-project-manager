@@ -24,7 +24,7 @@ function workbenchQueryParams() {
   const role = workbenchRole();
   const view = $("#workbenchViewFilter").value;
   if (search) params.set("search", search);
-  if (owner) params.set("owner", owner);
+  if (owner && state.workbenchMode === "tasks") params.set("owner", owner);
   if (role) params.set("role", role);
   if (view) params.set("view", view);
   return params;
@@ -125,6 +125,7 @@ function renderWorkbenchWorkspace(payload) {
   const { project, tasks = [], deliverables = [], issues = [], logs = [] } = payload;
   const pendingDeliverables = deliverables.filter((item) => item.status === "submitted");
   const showPmDeliverables = canReviewDeliverables();
+  const canManageTasks = userHasRole("pm");
   const openIssueCount = issues.filter((issue) => ["open", "following"].includes(issue.status)).length;
   $("#workbenchWorkspace").innerHTML = `
     <div class="workbench-header">
@@ -146,10 +147,10 @@ function renderWorkbenchWorkspace(payload) {
     <div class="workbench-columns${showPmDeliverables ? "" : " single"}">
       <section class="workbench-main">
         <div class="workbench-action-row">
-          <button type="button" class="secondary workbench-entry-button" data-action="open-task-dialog">
+          ${canManageTasks ? `<button type="button" class="secondary workbench-entry-button" data-action="open-task-dialog">
             <span>新增任务</span>
             <small>${escapeHtml(tasks.filter((task) => !taskDone(task)).length)} 未完成</small>
-          </button>
+          </button>` : ""}
           <button type="button" class="secondary workbench-entry-button" data-action="open-risk-dialog">
             <span>风险/异常</span>
             <small>${escapeHtml(openIssueCount)} 打开</small>
@@ -159,7 +160,7 @@ function renderWorkbenchWorkspace(payload) {
             <small>${escapeHtml(logs.length)} 条</small>
           </button>
         </div>
-        ${renderTaskDialog(tasks)}
+        ${canManageTasks ? renderTaskDialog(tasks) : ""}
         ${renderRiskDialog(issues, tasks)}
         ${renderLogDrawer(logs)}
         <div class="workbench-section-title">

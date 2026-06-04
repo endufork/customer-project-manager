@@ -32,6 +32,7 @@ class StaticAssetMixin:
         html = html.replace('/static/styles.css"', f'/static/styles.css?v={version}"')
         for script_path in [
             "/static/js/app-core.js",
+            "/static/js/auth.js",
             "/static/js/ui-shell.js",
             "/static/js/form-utils.js",
             "/static/js/project-config.js",
@@ -58,6 +59,7 @@ class StaticAssetMixin:
             STATIC_DIR / "styles.css",
             STATIC_DIR / "app.js",
             STATIC_DIR / "js" / "app-core.js",
+            STATIC_DIR / "js" / "auth.js",
             STATIC_DIR / "js" / "ui-shell.js",
             STATIC_DIR / "js" / "form-utils.js",
             STATIC_DIR / "js" / "project-config.js",

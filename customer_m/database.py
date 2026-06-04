@@ -1,7 +1,7 @@
 import sqlite3
 
-from .config import CATEGORY_DEFAULT_FOLDERS, DATA_DIR, DB_PATH, SCHEMA_PATH
-from .utils import now_iso
+from .config import AUTH_INITIAL_ADMIN_EMAIL, CATEGORY_DEFAULT_FOLDERS, DATA_DIR, DB_PATH, SCHEMA_PATH
+from .utils import make_id, now_iso
 
 def db_connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
@@ -210,6 +210,74 @@ def migrate_db(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+          display_name TEXT,
+          status TEXT NOT NULL DEFAULT 'enabled',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          last_login_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_roles (
+          user_id TEXT NOT NULL,
+          role_code TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (user_id, role_code),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS login_codes (
+          id TEXT PRIMARY KEY,
+          email TEXT NOT NULL COLLATE NOCASE,
+          code_hash TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          attempt_count INTEGER NOT NULL DEFAULT 0,
+          used_at TEXT,
+          created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS auth_sessions (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          token_hash TEXT NOT NULL UNIQUE,
+          expires_at TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          last_seen_at TEXT,
+          revoked_at TEXT,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS notifications (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          body TEXT,
+          related_type TEXT,
+          related_id TEXT,
+          status TEXT NOT NULL DEFAULT 'unread',
+          created_at TEXT NOT NULL,
+          read_at TEXT,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE
+        )
+        """
+    )
     ensure_column(conn, "customers", "group_id", "group_id TEXT")
     ensure_column(conn, "contacts", "site_id", "site_id TEXT")
     ensure_column(conn, "contacts", "department", "department TEXT")
@@ -265,6 +333,41 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_severity ON execution_issues(severity)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_scope ON execution_issues(scope)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_logs_project_id ON execution_activity_logs(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_roles_role_code ON user_roles(role_code)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_login_codes_email ON login_codes(email)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)")
+    ensure_initial_admin(conn)
+
+
+def ensure_initial_admin(conn: sqlite3.Connection) -> None:
+    email = AUTH_INITIAL_ADMIN_EMAIL.strip().lower()
+    if not email:
+        return
+    now = now_iso()
+    row = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+    if row is None:
+        user_id = make_id()
+        display_name = email.split("@", 1)[0]
+        conn.execute(
+            """
+            INSERT INTO users (id, email, display_name, status, created_at, updated_at)
+            VALUES (?, ?, ?, 'enabled', ?, ?)
+            """,
+            (user_id, email, display_name, now, now),
+        )
+    else:
+        user_id = row["id"]
+        conn.execute("UPDATE users SET status = 'enabled', updated_at = ? WHERE id = ?", (now, user_id))
+    for role in ("admin", "pm"):
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO user_roles (user_id, role_code, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (user_id, role, now),
+        )
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict | None:

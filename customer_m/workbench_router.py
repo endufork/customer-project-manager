@@ -56,6 +56,7 @@ class WorkbenchRouterMixin:
     def handle_workbench_post(self, path: str) -> bool:
         parts = path.strip("/").split("/")
         if len(parts) == 5 and parts[2] == "projects" and parts[4] == "tasks":
+            self.require_role("pm")
             data = self.read_json()
             with db_connect() as conn:
                 payload = create_task(conn, parts[3], data)
@@ -63,6 +64,7 @@ class WorkbenchRouterMixin:
             self.send_json(payload, 201)
             return True
         if len(parts) == 5 and parts[2] == "projects" and parts[4] == "issues":
+            self.require_role("engineer", "pm")
             data = self.read_json()
             with db_connect() as conn:
                 payload = create_issue(conn, parts[3], data)
@@ -70,6 +72,7 @@ class WorkbenchRouterMixin:
             self.send_json(payload, 201)
             return True
         if len(parts) == 5 and parts[2] == "projects" and parts[4] == "templates":
+            self.require_role("pm")
             data = self.read_json()
             with db_connect() as conn:
                 payload = apply_template(conn, parts[3], data.get("template"))
@@ -77,6 +80,7 @@ class WorkbenchRouterMixin:
             self.send_json(payload)
             return True
         if len(parts) == 5 and parts[2] == "tasks" and parts[4] == "deliverables":
+            self.require_role("engineer", "pm")
             fields, filename, content = self.read_multipart()
             with db_connect() as conn:
                 payload = submit_task_file(conn, parts[3], filename, content, fields)
@@ -89,18 +93,21 @@ class WorkbenchRouterMixin:
         parts = path.strip("/").split("/")
         data = self.read_json()
         if len(parts) == 4 and parts[2] == "tasks":
+            self.require_role("engineer", "pm")
             with db_connect() as conn:
                 payload = update_task(conn, parts[3], data)
                 conn.commit()
             self.send_json(payload)
             return True
         if len(parts) == 4 and parts[2] == "issues":
+            self.require_role("pm")
             with db_connect() as conn:
                 payload = update_issue(conn, parts[3], data)
                 conn.commit()
             self.send_json(payload)
             return True
         if len(parts) == 4 and parts[2] == "deliverables":
+            self.require_role("pm")
             with db_connect() as conn:
                 payload = review_deliverable(conn, parts[3], data)
                 conn.commit()
@@ -111,12 +118,14 @@ class WorkbenchRouterMixin:
     def handle_workbench_delete(self, path: str) -> bool:
         parts = path.strip("/").split("/")
         if len(parts) == 4 and parts[2] == "tasks":
+            self.require_role("pm")
             with db_connect() as conn:
                 payload = delete_task(conn, parts[3])
                 conn.commit()
             self.send_json(payload)
             return True
         if len(parts) == 4 and parts[2] == "issues":
+            self.require_role("pm")
             with db_connect() as conn:
                 payload = delete_issue(conn, parts[3])
                 conn.commit()

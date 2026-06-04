@@ -35,6 +35,9 @@ function workbenchAreaName(areaCode) {
 }
 
 function workbenchRole() {
+  if (state.auth.user) {
+    return preferredWorkbenchRole();
+  }
   const selected = $("#workbenchRoleSelect")?.value;
   if (selected) return selected.trim().toLowerCase();
   const urlRole = new URLSearchParams(window.location.search).get("role");
@@ -42,7 +45,7 @@ function workbenchRole() {
 }
 
 function canReviewDeliverables() {
-  return workbenchRole() === "pm";
+  return userHasRole("pm");
 }
 
 function renderTaskSelectOptions(tasks, selectedId = "") {

@@ -7,6 +7,30 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
+    <section id="authView" class="auth-view">
+      <div class="auth-card">
+        <div>
+          <h1>客户项目资料管理</h1>
+          <p>使用企业邮箱验证码登录</p>
+        </div>
+        <form id="loginForm" class="auth-form">
+          <label>
+            企业邮箱
+            <input id="loginEmailInput" name="email" type="email" placeholder="name@jinxiangsz.com" required />
+          </label>
+          <div class="auth-code-row">
+            <label>
+              验证码
+              <input id="loginCodeInput" name="code" inputmode="numeric" maxlength="6" placeholder="6位验证码" />
+            </label>
+            <button id="requestCodeButton" type="button" class="secondary">发送验证码</button>
+          </div>
+          <button type="submit">登录</button>
+          <p id="authStatus" class="form-hint">仅允许 @jinxiangsz.com 企业邮箱登录。</p>
+        </form>
+      </div>
+    </section>
+
     <header class="topbar">
       <div>
         <h1>客户项目资料管理</h1>
@@ -18,6 +42,8 @@
           <input id="projectRootPath" type="text" />
         </label>
         <button id="saveSettingsButton" type="button">保存配置</button>
+        <div id="authUserBadge" class="auth-user-badge"></div>
+        <button id="logoutButton" type="button" class="secondary">退出</button>
       </div>
     </header>
 
@@ -25,6 +51,7 @@
       <button id="navLibraryButton" type="button" class="tab-button active" data-view="library">项目库</button>
       <button id="navCreateButton" type="button" class="tab-button" data-view="create">新建项目</button>
       <button id="navWorkbenchButton" type="button" class="tab-button" data-view="workbench">项目执行</button>
+      <button id="navAdminButton" type="button" class="tab-button" data-view="admin" hidden>用户管理</button>
     </nav>
 
     <main class="workspace">
@@ -263,6 +290,22 @@
           </section>
         </div>
       </section>
+
+      <section id="adminView" class="admin-page page-view" aria-labelledby="admin-title" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 id="admin-title">用户管理</h2>
+            <span class="muted">角色 · 启用状态 · 登录记录</span>
+          </div>
+          <div class="heading-actions">
+            <input id="userSearchInput" placeholder="搜索邮箱或姓名" />
+            <button id="refreshUsersButton" type="button" class="secondary">刷新</button>
+          </div>
+        </div>
+        <div id="userList" class="user-list">
+          <div class="empty">请先以 Admin 登录</div>
+        </div>
+      </section>
     </main>
 
     <div id="detailBackdrop" class="detail-backdrop" hidden></div>
@@ -289,6 +332,7 @@
     <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="false"></div>
 
     <script src="/static/js/app-core.js"></script>
+    <script src="/static/js/auth.js"></script>
     <script src="/static/js/ui-shell.js"></script>
     <script src="/static/js/form-utils.js"></script>
     <script src="/static/js/project-config.js"></script>

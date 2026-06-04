@@ -46,6 +46,7 @@ async function saveSettings() {
 
 function bindEvents() {
   const debouncedLoadProjects = debounce(() => loadProjects().catch(console.error), 300);
+  bindAuthEvents();
   $("#projectForm").addEventListener("submit", createProject);
   document.addEventListener("focusout", (event) => {
     const target = event.target;
@@ -130,6 +131,7 @@ function bindEvents() {
     loadWorkbench().catch(console.error);
   }, 300));
   $("#workbenchRoleSelect").addEventListener("change", () => {
+    if ($("#workbenchRoleSelect").disabled) return;
     localStorage.setItem(WORKBENCH_ROLE_STORAGE_KEY, $("#workbenchRoleSelect").value);
     loadWorkbench().catch(console.error);
   });
@@ -142,6 +144,19 @@ function bindEvents() {
   });
 }
 
+async function startAuthenticatedApp() {
+  await loadBootstrap();
+  if (isWorkbenchFocusMode()) {
+    switchView("workbench", false);
+    await loadWorkbench(initialWorkbenchProjectId());
+  } else if (!$("#adminView").hidden) {
+    await loadUsers();
+  } else {
+    await loadProjects();
+  }
+  state.appReady = true;
+}
+
 async function boot() {
   state.visibleColumns = loadVisibleColumns();
   $("#workbenchOwnerInput").value = localStorage.getItem(WORKBENCH_OWNER_STORAGE_KEY) || "";
@@ -152,13 +167,9 @@ async function boot() {
   }
   renderColumnPicker();
   bindEvents();
-  await loadBootstrap();
-  if (isWorkbenchFocusMode()) {
-    switchView("workbench", false);
-    await loadWorkbench(initialWorkbenchProjectId());
-  } else {
-    await loadProjects();
-  }
+  const authenticated = await restoreAuthSession();
+  if (!authenticated) return;
+  await startAuthenticatedApp();
 }
 
 boot().catch((error) => {
