@@ -36,6 +36,7 @@ class StaticAssetMixin:
             "/static/js/form-utils.js",
             "/static/js/project-config.js",
             "/static/js/workbench-config.js",
+            "/static/js/workbench.js",
             "/static/app.js",
         ]:
             html = html.replace(f'{script_path}"', f'{script_path}?v={version}"')
@@ -56,6 +57,7 @@ class StaticAssetMixin:
             STATIC_DIR / "js" / "form-utils.js",
             STATIC_DIR / "js" / "project-config.js",
             STATIC_DIR / "js" / "workbench-config.js",
+            STATIC_DIR / "js" / "workbench.js",
         ]
         return max(int(path.stat().st_mtime) for path in paths if path.exists())
 
