@@ -35,6 +35,7 @@ class StaticAssetMixin:
             "/static/js/ui-shell.js",
             "/static/js/form-utils.js",
             "/static/js/project-config.js",
+            "/static/js/project-library.js",
             "/static/js/workbench-config.js",
             "/static/js/workbench.js",
             "/static/app.js",
@@ -56,6 +57,7 @@ class StaticAssetMixin:
             STATIC_DIR / "js" / "ui-shell.js",
             STATIC_DIR / "js" / "form-utils.js",
             STATIC_DIR / "js" / "project-config.js",
+            STATIC_DIR / "js" / "project-library.js",
             STATIC_DIR / "js" / "workbench-config.js",
             STATIC_DIR / "js" / "workbench.js",
         ]
