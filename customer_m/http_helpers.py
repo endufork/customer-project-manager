@@ -37,7 +37,11 @@ class StaticAssetMixin:
             "/static/js/project-config.js",
             "/static/js/project-library.js",
             "/static/js/workbench-config.js",
-            "/static/js/workbench.js",
+            "/static/js/workbench-utils.js",
+            "/static/js/workbench-deliverables.js",
+            "/static/js/workbench-tasks.js",
+            "/static/js/workbench-risks.js",
+            "/static/js/workbench-view.js",
             "/static/app.js",
         ]:
             html = html.replace(f'{script_path}"', f'{script_path}?v={version}"')
@@ -59,7 +63,11 @@ class StaticAssetMixin:
             STATIC_DIR / "js" / "project-config.js",
             STATIC_DIR / "js" / "project-library.js",
             STATIC_DIR / "js" / "workbench-config.js",
-            STATIC_DIR / "js" / "workbench.js",
+            STATIC_DIR / "js" / "workbench-utils.js",
+            STATIC_DIR / "js" / "workbench-deliverables.js",
+            STATIC_DIR / "js" / "workbench-tasks.js",
+            STATIC_DIR / "js" / "workbench-risks.js",
+            STATIC_DIR / "js" / "workbench-view.js",
         ]
         return max(int(path.stat().st_mtime) for path in paths if path.exists())
 
