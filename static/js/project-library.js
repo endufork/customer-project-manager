@@ -595,7 +595,7 @@ function bindDetailActions(project) {
         if (action === "scan-folder") {
           button.disabled = true;
           const result = await api(`/api/projects/${encodeURIComponent(projectId)}/scan`, { method: "POST", body: "{}" });
-          showToast(`扫描完成：新增 ${result.new_files} 个文件`);
+          showToast(`扫描完成：新增 ${result.new_files} 个，更新 ${result.updated_files || 0} 个，移除 ${result.removed_files || 0} 个文件记录`);
           await loadProjects();
           await openDetail(projectId);
         }
@@ -606,7 +606,7 @@ function bindDetailActions(project) {
         if (action === "scan-shared-folder") {
           button.disabled = true;
           const result = await api(`/api/projects/${encodeURIComponent(projectId)}/scan-shared`, { method: "POST", body: "{}" });
-          showToast(`共享资料扫描完成：新增 ${result.new_files} 个文件`);
+          showToast(`共享资料扫描完成：新增 ${result.new_files} 个，更新 ${result.updated_files || 0} 个，移除 ${result.removed_files || 0} 个文件记录`);
           await openDetail(projectId);
         }
         if (action === "copy-path") {

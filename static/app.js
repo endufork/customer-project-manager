@@ -1,5 +1,3 @@
-
-
 function formToPayload(form) {
   normalizeTextInputs(form);
   const data = new FormData(form);
