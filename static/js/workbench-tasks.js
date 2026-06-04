@@ -92,9 +92,11 @@ function renderWorkbenchTask(task) {
   const owner = task.owner_name || "未指派";
   const due = task.due_date || "未设置Due Date";
   const workPackage = task.work_package || "未分组";
+  const pendingDueRequest = latestPendingDueDateRequest(task);
   const deleteButton = userHasRole("pm")
     ? `<button type="button" class="danger slim-inline" data-action="delete-task" data-task-id="${escapeHtml(task.id)}">删除</button>`
     : "";
+  const dueDateButtonText = userHasRole("pm") ? "修改Due Date" : pendingDueRequest ? "查看改期" : "申请改期";
   return `
     <article class="workbench-task ${escapeHtml(task.status)}" data-task-id="${escapeHtml(task.id)}">
       <div class="task-readable">
@@ -104,6 +106,7 @@ function renderWorkbenchTask(task) {
         </div>
         <div class="task-actions">
           <span class="task-status ${escapeHtml(task.status)}">${escapeHtml(workbenchTaskStatusName(task.status))}</span>
+          <button type="button" class="secondary slim-inline" data-action="open-due-date-dialog" data-task-id="${escapeHtml(task.id)}">${dueDateButtonText}</button>
           ${deleteButton}
         </div>
       </div>
@@ -131,7 +134,7 @@ function renderWorkbenchTask(task) {
           </label>
           <label>
             Due Date
-            <input name="due_date" type="date" value="${escapeHtml(task.due_date || "")}" />
+            <input name="due_date_display" type="date" value="${escapeHtml(task.due_date || "")}" disabled />
           </label>
           <label class="checkline compact-check">
             <input name="requires_deliverable" type="checkbox" value="1"${task.requires_deliverable ? " checked" : ""} />
@@ -156,6 +159,7 @@ function renderWorkbenchTask(task) {
           ${deliverables.length ? deliverables.map((item) => renderDeliverableItem(item)).join("") : `<div class="empty small-empty">暂无交付文件</div>`}
         </div>
       </details>
+      ${renderDueDateDialog(task)}
     </article>
   `;
 }

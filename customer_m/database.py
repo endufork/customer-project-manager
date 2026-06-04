@@ -172,6 +172,30 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS due_date_change_requests (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          old_due_date TEXT,
+          proposed_due_date TEXT NOT NULL,
+          final_due_date TEXT,
+          reason TEXT NOT NULL,
+          impact_note TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          requested_by TEXT,
+          requested_at TEXT NOT NULL,
+          reviewed_by TEXT,
+          reviewed_at TEXT,
+          review_note TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (task_id) REFERENCES execution_tasks(id) ON UPDATE CASCADE ON DELETE CASCADE,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE CASCADE ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS execution_issues (
           id TEXT PRIMARY KEY,
           project_id TEXT NOT NULL,
@@ -328,6 +352,9 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_task_deliverables_task_id ON task_deliverables(task_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_task_deliverables_project_id ON task_deliverables(project_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_task_deliverables_status ON task_deliverables(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_due_date_requests_task_id ON due_date_change_requests(task_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_due_date_requests_project_id ON due_date_change_requests(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_due_date_requests_status ON due_date_change_requests(status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_project_id ON execution_issues(project_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_status ON execution_issues(status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_severity ON execution_issues(severity)")

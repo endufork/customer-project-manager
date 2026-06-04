@@ -6,7 +6,7 @@ function renderWorkbenchMode() {
   $("#workbenchTasksModeButton").classList.toggle("active", isTaskMode);
   $("#workbenchKpiTotalLabel").textContent = isTaskMode ? "我的待办" : "执行项目";
   $("#workbenchKpiBlockedLabel").textContent = isTaskMode ? "阻塞/待资料" : "阻塞/风险";
-  $("#workbenchKpiSubmittedLabel").textContent = isTaskMode && role === "pm" ? "待确认文件" : isTaskMode ? "已提交" : "待PM确认";
+  $("#workbenchKpiSubmittedLabel").textContent = isTaskMode && role === "pm" ? "待处理审批" : isTaskMode ? "已提交" : "待PM确认";
 }
 
 async function loadWorkbench(selectProjectId = state.workbenchProjectId) {
@@ -182,6 +182,7 @@ function renderWorkbenchWorkspace(payload) {
 function renderMyTodoWorkspace(payload = {}, options = {}) {
   const tasks = payload.tasks || [];
   const deliverables = payload.deliverables || [];
+  const dueDateRequests = payload.due_date_requests || [];
   const role = payload.role || workbenchRole();
   const owner = $("#workbenchOwnerInput").value.trim();
   if (options.ownerRequired) {
@@ -202,17 +203,18 @@ function renderMyTodoWorkspace(payload = {}, options = {}) {
     <div class="workbench-header">
       <div>
         <h3>我的待办 · ${isPm ? "PM" : "工程师"}${owner ? ` · ${escapeHtml(owner)}` : ""}</h3>
-        <p>${isPm ? "优先处理待确认交付文件；填写负责人后，也会显示自己负责的未完成任务。" : "按 Due Date、阻塞和状态排序；需要提交文件的任务进入项目后上传交付物。"}</p>
+        <p>${isPm ? "优先处理待确认文件和改期申请；填写负责人后，也会显示自己负责的未完成任务。" : "按 Due Date、阻塞和状态排序；需要提交文件的任务进入项目后上传交付物。"}</p>
       </div>
     </div>
     <div class="workbench-summary-grid">
-      <div><span>${escapeHtml(isPm ? deliverables.length : tasks.length)}</span><small>${isPm ? "待确认文件" : "未完成任务"}</small></div>
+      <div><span>${escapeHtml(isPm ? deliverables.length + dueDateRequests.length : tasks.length)}</span><small>${isPm ? "待处理审批" : "未完成任务"}</small></div>
       <div><span>${escapeHtml(overdueCount)}</span><small>已超期</small></div>
       <div><span>${escapeHtml(tasks.filter((task) => ["blocked", "waiting_info", "rework"].includes(task.status)).length)}</span><small>阻塞/待资料/返工</small></div>
       <div><span>${escapeHtml(isPm ? tasks.length : tasks.filter((task) => task.requires_deliverable).length)}</span><small>${isPm ? "我的任务" : "需要文件"}</small></div>
     </div>
     <section class="workbench-main my-task-surface">
       ${isPm ? renderInboxDeliverablesSection(deliverables) : ""}
+      ${isPm ? renderInboxDueDateSection(dueDateRequests) : ""}
       <div class="workbench-section-title">
         <h3>${isPm ? "我负责的任务" : "任务列表"}</h3>
         <span>${escapeHtml(tasks.length)} 个</span>
@@ -265,6 +267,15 @@ function bindMyTodoActions() {
       }
     });
   });
+  $("#workbenchWorkspace").querySelectorAll("[data-action='approve-due-date-request'], [data-action='reject-due-date-request']").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        await handleDueDateAction(button.dataset.action, button, button.dataset.projectId || state.workbenchProjectId);
+      } catch (error) {
+        showToast(error.message);
+      }
+    });
+  });
 }
 
 function bindLogDrawer(workspace) {
@@ -297,9 +308,11 @@ function bindWorkbenchWorkspaceActions(projectId) {
   bindTaskCreation(projectId);
   bindRiskCreation(projectId);
   bindTaskDialog(workspace);
+  bindDueDateDialogs(workspace);
   bindRiskDialog(workspace);
   bindLogDrawer(workspace);
   bindTaskForms(projectId, workspace);
+  bindDueDateForms(projectId, workspace);
   bindDeliverableUploads(projectId, workspace);
 
   workspace.querySelectorAll("[data-action]").forEach((button) => {
@@ -308,6 +321,7 @@ function bindWorkbenchWorkspaceActions(projectId) {
       try {
         if (await handleWorkbenchShellAction(action, projectId)) return;
         if (await handleTaskAction(action, button, projectId)) return;
+        if (await handleDueDateAction(action, button, projectId)) return;
         if (await handleDeliverableAction(action, button, () => loadWorkbenchProjects(projectId))) return;
         if (await handleIssueAction(action, button, projectId)) return;
       } catch (error) {

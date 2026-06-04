@@ -1,6 +1,12 @@
 """Execution workbench workflow facade."""
 
 from .workbench_deliverables import review_deliverable, submit_task_file
+from .workbench_due_dates import (
+    guard_regular_task_due_date_update,
+    list_due_date_requests,
+    request_due_date_change,
+    review_due_date_change,
+)
 from .workbench_issues import create_issue, delete_issue, update_issue
 from .workbench_queries import (
     get_workbench_project,
@@ -18,11 +24,15 @@ __all__ = [
     "delete_issue",
     "delete_task",
     "get_workbench_project",
+    "guard_regular_task_due_date_update",
+    "list_due_date_requests",
     "list_pending_deliverables",
     "list_workbench_inbox",
     "list_workbench_projects",
     "list_workbench_tasks",
+    "request_due_date_change",
     "review_deliverable",
+    "review_due_date_change",
     "submit_task_file",
     "update_issue",
     "update_task",

@@ -65,10 +65,23 @@ test("workbench action windows open from the task action row", async ({ page }) 
   await logDrawer.getByRole("button", { name: "关闭" }).click();
   await expect(logDrawer).not.toBeVisible();
 
+  const dueDateButton = page.getByRole("button", { name: /修改Due Date|申请改期|查看改期/ }).first();
+  if (await dueDateButton.count()) {
+    await expect(dueDateButton).toBeVisible();
+    await dueDateButton.click();
+    const dueDateDialog = page.locator(".due-date-dialog:visible");
+    await expect(dueDateDialog).toBeVisible();
+    await expect(dueDateDialog.getByRole("heading", { name: /修改Due Date|申请改期/ })).toBeVisible();
+    await expect(dueDateDialog.locator("textarea[name='reason']")).toBeVisible();
+    await dueDateDialog.getByRole("button", { name: "关闭" }).click();
+    await expect(dueDateDialog).not.toBeVisible();
+  }
+
   await page.getByRole("button", { name: "我的待办" }).click();
   await expect(page.locator("#workbenchKpiTotalLabel")).toHaveText("我的待办");
   await expect(page.locator("#workbenchView")).toHaveClass(/workbench-task-mode/);
   await expect(page.locator("#workbenchRoleSelect")).toBeDisabled();
   await expect(page.locator("#workbenchWorkspace")).toContainText("待确认文件");
-  await expect(page.locator("#workbenchKpiSubmittedLabel")).toHaveText("待确认文件");
+  await expect(page.locator("#workbenchKpiSubmittedLabel")).toHaveText("待处理审批");
+  await expect(page.locator("#workbenchWorkspace")).toContainText("待审批改期");
 });

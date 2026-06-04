@@ -6,10 +6,14 @@ from .modules.workbench import (
     delete_issue,
     delete_task,
     get_workbench_project,
+    guard_regular_task_due_date_update,
+    list_due_date_requests,
     list_workbench_inbox,
     list_workbench_projects,
     list_workbench_tasks,
+    request_due_date_change,
     review_deliverable,
+    review_due_date_change,
     submit_task_file,
     update_issue,
     update_task,
@@ -24,6 +28,8 @@ class WorkbenchRouterMixin:
             return self.api_workbench_inbox(query)
         if path == "/api/workbench/tasks":
             return self.api_workbench_tasks(query)
+        if path == "/api/workbench/due-date-requests":
+            return self.api_due_date_requests(query)
         if path.startswith("/api/workbench/projects/"):
             project_id = path.rsplit("/", 1)[1]
             return self.api_workbench_project(project_id)
@@ -50,6 +56,13 @@ class WorkbenchRouterMixin:
     def api_workbench_project(self, project_id: str) -> bool:
         with db_connect() as conn:
             payload = get_workbench_project(conn, project_id)
+        self.send_json(payload)
+        return True
+
+    def api_due_date_requests(self, query: dict[str, list[str]]) -> bool:
+        self.require_role("pm")
+        with db_connect() as conn:
+            payload = {"due_date_requests": list_due_date_requests(conn, query)}
         self.send_json(payload)
         return True
 
@@ -87,6 +100,14 @@ class WorkbenchRouterMixin:
                 conn.commit()
             self.send_json(payload, 201)
             return True
+        if len(parts) == 5 and parts[2] == "tasks" and parts[4] == "due-date-requests":
+            user = self.require_role("engineer", "pm")
+            data = self.read_json()
+            with db_connect() as conn:
+                payload = request_due_date_change(conn, parts[3], data, user)
+                conn.commit()
+            self.send_json(payload, 201)
+            return True
         return False
 
     def handle_workbench_patch(self, path: str) -> bool:
@@ -95,7 +116,14 @@ class WorkbenchRouterMixin:
         if len(parts) == 4 and parts[2] == "tasks":
             self.require_role("engineer", "pm")
             with db_connect() as conn:
-                payload = update_task(conn, parts[3], data)
+                payload = update_task(conn, parts[3], guard_regular_task_due_date_update(conn, parts[3], data))
+                conn.commit()
+            self.send_json(payload)
+            return True
+        if len(parts) == 4 and parts[2] == "due-date-requests":
+            user = self.require_role("pm")
+            with db_connect() as conn:
+                payload = review_due_date_change(conn, parts[3], data, user)
                 conn.commit()
             self.send_json(payload)
             return True

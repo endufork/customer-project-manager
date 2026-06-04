@@ -1330,6 +1330,62 @@ tr.project-row:focus {
   padding-top: 4px;
 }
 
+.due-date-window-panel,
+.due-date-request-form,
+.due-date-history {
+  display: grid;
+  gap: 10px;
+}
+
+.due-date-request-form {
+  grid-template-columns: minmax(150px, 0.45fr) minmax(260px, 1fr);
+  align-items: end;
+}
+
+.due-date-request-form label:nth-child(2),
+.due-date-request-form label:nth-child(3),
+.due-date-request-form .form-actions {
+  grid-column: 1 / -1;
+}
+
+.due-date-request-form textarea {
+  resize: vertical;
+  min-height: 78px;
+}
+
+.form-actions.right {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.due-date-request-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.due-date-request-card.compact {
+  padding: 8px 10px;
+}
+
+.due-date-request-card > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.due-date-request-status {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
 .risk-list-title {
   margin-top: 12px;
 }

@@ -3,6 +3,7 @@
 import sqlite3
 
 from ..database import row_to_dict
+from .workbench_due_dates import due_date_requests_for_project, list_due_date_requests
 from .workbench_common import (
     DONE_STATUSES,
     _done_sql,
@@ -338,16 +339,18 @@ def list_workbench_inbox(conn: sqlite3.Connection, query: dict[str, list[str]]) 
         task_payload = list_workbench_tasks(conn, query)
     tasks = task_payload["tasks"]
     deliverables = list_pending_deliverables(conn, query) if role == "pm" else []
+    due_date_requests = list_due_date_requests(conn, query) if role == "pm" else []
     kpis = {
-        "total": len(tasks) + len(deliverables),
+        "total": len(tasks) + len(deliverables) + len(due_date_requests),
         "blocked": task_payload["kpis"].get("blocked", 0),
-        "submitted": len(deliverables) if role == "pm" else task_payload["kpis"].get("submitted", 0),
+        "submitted": len(deliverables) + len(due_date_requests) if role == "pm" else task_payload["kpis"].get("submitted", 0),
         "overdue": task_payload["kpis"].get("overdue", 0),
     }
     return {
         "role": role,
         "tasks": tasks,
         "deliverables": deliverables,
+        "due_date_requests": due_date_requests,
         "kpis": kpis,
     }
 
@@ -398,6 +401,12 @@ def get_workbench_project(conn: sqlite3.Connection, project_id: str) -> dict:
         by_task.setdefault(deliverable["task_id"], []).append(deliverable)
     for task in tasks:
         task["deliverables"] = by_task.get(task["id"], [])
+    due_date_requests = due_date_requests_for_project(conn, project_id)
+    due_requests_by_task: dict[str, list[dict]] = {}
+    for item in due_date_requests:
+        due_requests_by_task.setdefault(item["task_id"], []).append(item)
+    for task in tasks:
+        task["due_date_requests"] = due_requests_by_task.get(task["id"], [])
 
     issue_where, issue_params = _issue_filter(project, "ei")
     issues = [
@@ -431,4 +440,11 @@ def get_workbench_project(conn: sqlite3.Connection, project_id: str) -> dict:
             (project_id,),
         )
     ]
-    return {"project": project, "tasks": tasks, "deliverables": deliverables, "issues": issues, "logs": logs}
+    return {
+        "project": project,
+        "tasks": tasks,
+        "deliverables": deliverables,
+        "due_date_requests": due_date_requests,
+        "issues": issues,
+        "logs": logs,
+    }
