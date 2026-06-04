@@ -30,7 +30,15 @@ class StaticAssetMixin:
         html = index_path.read_text(encoding="utf-8")
         version = self.static_asset_version()
         html = html.replace('/static/styles.css"', f'/static/styles.css?v={version}"')
-        html = html.replace('/static/app.js"', f'/static/app.js?v={version}"')
+        for script_path in [
+            "/static/js/app-core.js",
+            "/static/js/ui-shell.js",
+            "/static/js/form-utils.js",
+            "/static/js/project-config.js",
+            "/static/js/workbench-config.js",
+            "/static/app.js",
+        ]:
+            html = html.replace(f'{script_path}"', f'{script_path}?v={version}"')
         encoded = html.encode("utf-8")
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -39,7 +47,16 @@ class StaticAssetMixin:
         self.wfile.write(encoded)
 
     def static_asset_version(self) -> int:
-        paths = [STATIC_DIR / "index.html", STATIC_DIR / "styles.css", STATIC_DIR / "app.js"]
+        paths = [
+            STATIC_DIR / "index.html",
+            STATIC_DIR / "styles.css",
+            STATIC_DIR / "app.js",
+            STATIC_DIR / "js" / "app-core.js",
+            STATIC_DIR / "js" / "ui-shell.js",
+            STATIC_DIR / "js" / "form-utils.js",
+            STATIC_DIR / "js" / "project-config.js",
+            STATIC_DIR / "js" / "workbench-config.js",
+        ]
         return max(int(path.stat().st_mtime) for path in paths if path.exists())
 
 
