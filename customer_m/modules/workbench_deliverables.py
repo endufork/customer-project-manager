@@ -187,7 +187,8 @@ def review_deliverable(conn: sqlite3.Connection, deliverable_id: str, data: dict
             (now, now, now, row["task_id"]),
         )
         record_activity(conn, row["project_id"], "deliverable_confirmed", "确认交付物", reviewer, task_id=row["task_id"])
-        return {"id": deliverable_id, "status": "confirmed"}
+        create_event(conn, row["project_id"], "workbench_file_confirmed", "确认交付物", reviewer)
+        return {"id": deliverable_id, "project_id": row["project_id"], "task_id": row["task_id"], "status": "confirmed"}
     if action == "rejected":
         reason = _nullable_text(data.get("reject_reason"))
         if not reason:
@@ -210,5 +211,6 @@ def review_deliverable(conn: sqlite3.Connection, deliverable_id: str, data: dict
             (f"交付物驳回：{reason}", now, row["task_id"]),
         )
         record_activity(conn, row["project_id"], "deliverable_rejected", "驳回交付物", reason, task_id=row["task_id"])
-        return {"id": deliverable_id, "status": "rejected"}
+        create_event(conn, row["project_id"], "workbench_file_rejected", "驳回交付物", reason)
+        return {"id": deliverable_id, "project_id": row["project_id"], "task_id": row["task_id"], "status": "rejected"}
     raise ValueError("交付物操作无效")

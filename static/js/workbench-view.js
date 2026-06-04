@@ -163,6 +163,7 @@ function renderWorkbenchWorkspace(payload) {
         ${canManageTasks ? renderTaskDialog(tasks) : ""}
         ${renderRiskDialog(issues, tasks)}
         ${renderLogDrawer(logs)}
+        ${renderDeliverableReviewDialog()}
         <div class="workbench-section-title">
           <h3>任务</h3>
           <span>${escapeHtml(tasks.filter((task) => !taskDone(task)).length)} 个未完成</span>
@@ -213,6 +214,7 @@ function renderMyTodoWorkspace(payload = {}, options = {}) {
       <div><span>${escapeHtml(isPm ? tasks.length : tasks.filter((task) => task.requires_deliverable).length)}</span><small>${isPm ? "我的任务" : "需要文件"}</small></div>
     </div>
     <section class="workbench-main my-task-surface">
+      ${renderDeliverableReviewDialog()}
       ${isPm ? renderInboxDeliverablesSection(deliverables) : ""}
       ${isPm ? renderInboxDueDateSection(dueDateRequests) : ""}
       <div class="workbench-section-title">
@@ -252,6 +254,7 @@ function renderLogDrawer(logs) {
 }
 
 function bindMyTodoActions() {
+  bindDeliverableReviewDialog($("#workbenchWorkspace"), () => loadWorkbenchTasks());
   $("#workbenchWorkspace").querySelectorAll("[data-action='open-my-task-project'], [data-action='open-inbox-project']").forEach((button) => {
     button.addEventListener("click", async () => {
       state.workbenchMode = "projects";
@@ -314,6 +317,7 @@ function bindWorkbenchWorkspaceActions(projectId) {
   bindTaskForms(projectId, workspace);
   bindDueDateForms(projectId, workspace);
   bindDeliverableUploads(projectId, workspace);
+  bindDeliverableReviewDialog(workspace, () => loadWorkbenchProjects(projectId));
 
   workspace.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", async () => {

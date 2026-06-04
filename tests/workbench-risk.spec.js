@@ -84,4 +84,31 @@ test("workbench action windows open from the task action row", async ({ page }) 
   await expect(page.locator("#workbenchWorkspace")).toContainText("待确认文件");
   await expect(page.locator("#workbenchKpiSubmittedLabel")).toHaveText("待处理审批");
   await expect(page.locator("#workbenchWorkspace")).toContainText("待审批改期");
+
+  const inboxConfirmDeliverable = page.locator("[data-action='confirm-inbox-deliverable']").first();
+  if (await inboxConfirmDeliverable.count()) {
+    await inboxConfirmDeliverable.click();
+    const reviewDialog = page.locator("#deliverableReviewDialog");
+    await expect(reviewDialog).toBeVisible();
+    await expect(reviewDialog.getByRole("heading", { name: "确认交付物" })).toBeVisible();
+    await expect(reviewDialog).toContainText("工程师上传");
+    await expect(reviewDialog).toContainText("归档资料库");
+    await expect(reviewDialog).toContainText("PM确认");
+    await expect(reviewDialog).toContainText("关闭/返工");
+    await expect(reviewDialog).toContainText("确认后任务会关闭");
+    await reviewDialog.getByRole("button", { name: "关闭" }).click();
+    await expect(reviewDialog).not.toBeVisible();
+  }
+
+  const inboxRejectDeliverable = page.locator("[data-action='reject-inbox-deliverable']").first();
+  if (await inboxRejectDeliverable.count()) {
+    await inboxRejectDeliverable.click();
+    const reviewDialog = page.locator("#deliverableReviewDialog");
+    await expect(reviewDialog).toBeVisible();
+    await expect(reviewDialog.getByRole("heading", { name: "驳回交付物" })).toBeVisible();
+    await expect(reviewDialog.locator("textarea[name='reject_reason']")).toBeVisible();
+    await expect(reviewDialog.locator("textarea[name='reject_reason']")).toBeRequired();
+    await reviewDialog.getByRole("button", { name: "关闭" }).click();
+    await expect(reviewDialog).not.toBeVisible();
+  }
 });

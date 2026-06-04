@@ -1386,6 +1386,42 @@ tr.project-row:focus {
   flex: 0 0 auto;
 }
 
+.deliverable-review-form {
+  display: grid;
+  gap: 12px;
+}
+
+.deliverable-flow-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.deliverable-flow-strip span {
+  position: relative;
+  min-height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.deliverable-review-hint {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.deliverable-review-form textarea {
+  resize: vertical;
+  min-height: 86px;
+}
+
 .risk-list-title {
   margin-top: 12px;
 }
@@ -1951,6 +1987,10 @@ tr.project-row:focus {
   .template-form-actions {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .deliverable-flow-strip {
+    grid-template-columns: 1fr 1fr;
   }
 
   .workbench-mode-tabs {
