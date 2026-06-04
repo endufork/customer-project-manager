@@ -91,15 +91,26 @@ function Test-JavaScript {
         return
     }
 
-    $appJs = Join-Path $RepoRoot "static\app.js"
-    if (-not (Test-Path $appJs)) {
+    $staticDir = Join-Path $RepoRoot "static"
+    if (-not (Test-Path $staticDir)) {
         return
     }
 
     Write-Host "Running JavaScript syntax check..."
-    & $node --check $appJs
-    if ($LASTEXITCODE -ne 0) {
-        throw "JavaScript syntax check failed."
+    $targets = @()
+    $appJs = Join-Path $staticDir "app.js"
+    if (Test-Path $appJs) {
+        $targets += $appJs
+    }
+    $moduleDir = Join-Path $staticDir "js"
+    if (Test-Path $moduleDir) {
+        $targets += @(Get-ChildItem -Path $moduleDir -Filter "*.js" -File | Sort-Object FullName | ForEach-Object { $_.FullName })
+    }
+    foreach ($target in $targets) {
+        & $node --check $target
+        if ($LASTEXITCODE -ne 0) {
+            throw "JavaScript syntax check failed: $target"
+        }
     }
 }
 
