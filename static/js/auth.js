@@ -31,11 +31,7 @@ function showAuthenticatedApp() {
   document.body.classList.add("authenticated");
   $("#authView").hidden = true;
   const user = state.auth.user;
-  const roleText = authRoles().map((role) => AUTH_ROLE_LABELS[role] || role).join(" / ");
-  $("#authUserBadge").innerHTML = `
-    <strong>${escapeHtml(user.display_name || user.email)}</strong><br />
-    <small>${escapeHtml(roleText || "只读")}</small>
-  `;
+  $("#authUserBadge").textContent = user.display_name || user.email.split("@")[0];
   const canManageProjects = userHasRole("pm");
   $("#navCreateButton").hidden = !canManageProjects;
   $("#listCreateButton").hidden = !canManageProjects;
@@ -156,24 +152,34 @@ function renderUserCard(user) {
   const roles = new Set(user.roles || []);
   return `
     <article class="user-card" data-user-id="${escapeHtml(user.id)}">
-      <div>
+      <div class="user-identity">
         <strong>${escapeHtml(user.email)}</strong>
         <small>最后登录：${escapeHtml(user.last_login_at || "未登录")}</small>
       </div>
-      <input name="display_name" value="${escapeHtml(user.display_name || "")}" placeholder="姓名" />
-      <select name="status">
-        <option value="enabled"${user.status === "enabled" ? " selected" : ""}>启用</option>
-        <option value="disabled"${user.status === "disabled" ? " selected" : ""}>停用</option>
-      </select>
-      <div class="role-checks">
+      <div class="user-edit-grid">
+        <label>
+          姓名
+          <input name="display_name" value="${escapeHtml(user.display_name || "")}" placeholder="姓名" />
+        </label>
+        <label>
+          状态
+          <select name="status">
+            <option value="enabled"${user.status === "enabled" ? " selected" : ""}>启用</option>
+            <option value="disabled"${user.status === "disabled" ? " selected" : ""}>停用</option>
+          </select>
+        </label>
+      </div>
+      <div class="role-checks" aria-label="用户角色">
         ${Object.entries(AUTH_ROLE_LABELS).map(([role, label]) => `
-          <label>
+          <label class="role-check">
             <input type="checkbox" name="roles" value="${escapeHtml(role)}"${roles.has(role) ? " checked" : ""} />
-            ${escapeHtml(label)}
+            <span>${escapeHtml(label)}</span>
           </label>
         `).join("")}
       </div>
-      <button type="button" class="secondary slim-inline" data-action="save-user">保存</button>
+      <div class="user-card-actions">
+        <button type="button" class="secondary slim-inline" data-action="save-user">保存</button>
+      </div>
     </article>
   `;
 }
