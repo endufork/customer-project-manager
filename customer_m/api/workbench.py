@@ -25,7 +25,14 @@ from ..modules.workbench import (
     update_task,
 )
 from .deps import current_user, query_as_lists, require_roles
-from .schemas import WorkbenchMutationRequest, WorkbenchTemplateRequest
+from .schemas import (
+    DeliverableReviewRequest,
+    DueDateChangeRequest,
+    DueDateReviewRequest,
+    WorkbenchIssueRequest,
+    WorkbenchTaskRequest,
+    WorkbenchTemplateRequest,
+)
 
 
 router = APIRouter(prefix="/api/workbench", tags=["workbench"])
@@ -39,7 +46,7 @@ def _integrity_error(exc: sqlite3.IntegrityError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"数据约束错误：{exc}")
 
 
-def _model_data(body: WorkbenchMutationRequest) -> dict:
+def _model_data(body) -> dict:
     if callable(getattr(body, "model_dump", None)):
         return body.model_dump()
     return body.dict()
@@ -87,7 +94,7 @@ def workbench_project(project_id: str, _: dict = Depends(current_user)) -> dict:
 
 
 @router.post("/projects/{project_id}/tasks", status_code=status.HTTP_201_CREATED)
-def add_task(project_id: str, body: WorkbenchMutationRequest, _: dict = Depends(pm_user)) -> dict:
+def add_task(project_id: str, body: WorkbenchTaskRequest, _: dict = Depends(pm_user)) -> dict:
     try:
         with db_connect() as conn:
             payload = create_task(conn, project_id, _model_data(body))
@@ -100,7 +107,7 @@ def add_task(project_id: str, body: WorkbenchMutationRequest, _: dict = Depends(
 
 
 @router.post("/projects/{project_id}/issues", status_code=status.HTTP_201_CREATED)
-def add_issue(project_id: str, body: WorkbenchMutationRequest, _: dict = Depends(engineer_or_pm_user)) -> dict:
+def add_issue(project_id: str, body: WorkbenchIssueRequest, _: dict = Depends(engineer_or_pm_user)) -> dict:
     try:
         with db_connect() as conn:
             payload = create_issue(conn, project_id, _model_data(body))
@@ -154,7 +161,7 @@ async def submit_deliverable(
 @router.post("/tasks/{task_id}/due-date-requests", status_code=status.HTTP_201_CREATED)
 def add_due_date_request(
     task_id: str,
-    body: WorkbenchMutationRequest,
+    body: DueDateChangeRequest,
     user: dict = Depends(engineer_or_pm_user),
 ) -> dict:
     try:
@@ -169,7 +176,7 @@ def add_due_date_request(
 
 
 @router.patch("/tasks/{task_id}")
-def patch_task(task_id: str, body: WorkbenchMutationRequest, _: dict = Depends(engineer_or_pm_user)) -> dict:
+def patch_task(task_id: str, body: WorkbenchTaskRequest, _: dict = Depends(engineer_or_pm_user)) -> dict:
     try:
         with db_connect() as conn:
             data = guard_regular_task_due_date_update(conn, task_id, _model_data(body))
@@ -183,7 +190,7 @@ def patch_task(task_id: str, body: WorkbenchMutationRequest, _: dict = Depends(e
 
 
 @router.patch("/due-date-requests/{request_id}")
-def patch_due_date_request(request_id: str, body: WorkbenchMutationRequest, user: dict = Depends(pm_user)) -> dict:
+def patch_due_date_request(request_id: str, body: DueDateReviewRequest, user: dict = Depends(pm_user)) -> dict:
     try:
         with db_connect() as conn:
             payload = review_due_date_change(conn, request_id, _model_data(body), user)
@@ -194,7 +201,7 @@ def patch_due_date_request(request_id: str, body: WorkbenchMutationRequest, user
 
 
 @router.patch("/issues/{issue_id}")
-def patch_issue(issue_id: str, body: WorkbenchMutationRequest, _: dict = Depends(pm_user)) -> dict:
+def patch_issue(issue_id: str, body: WorkbenchIssueRequest, _: dict = Depends(pm_user)) -> dict:
     try:
         with db_connect() as conn:
             payload = update_issue(conn, issue_id, _model_data(body))
@@ -207,7 +214,7 @@ def patch_issue(issue_id: str, body: WorkbenchMutationRequest, _: dict = Depends
 
 
 @router.patch("/deliverables/{deliverable_id}")
-def patch_deliverable(deliverable_id: str, body: WorkbenchMutationRequest, _: dict = Depends(pm_user)) -> dict:
+def patch_deliverable(deliverable_id: str, body: DeliverableReviewRequest, _: dict = Depends(pm_user)) -> dict:
     try:
         with db_connect() as conn:
             payload = review_deliverable(conn, deliverable_id, _model_data(body))

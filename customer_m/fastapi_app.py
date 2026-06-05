@@ -5,9 +5,11 @@ Business behavior stays in customer_m.modules; API files only adapt HTTP calls.
 """
 
 from contextlib import asynccontextmanager
+import logging
 from pathlib import Path
+import time
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -19,6 +21,8 @@ from .config import STATIC_DIR
 from .database import init_db
 from .api.schemas import HealthPayload
 
+
+logger = logging.getLogger(__name__)
 
 STATIC_SCRIPT_PATHS = (
     "/static/js/app-core.js",
@@ -72,8 +76,26 @@ app.include_router(workbench_router)
 
 
 @app.middleware("http")
-async def no_cache_static_pages(request, call_next):
-    response = await call_next(request)
+async def request_logging_and_cache_headers(request: Request, call_next):
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (time.perf_counter() - started) * 1000
+        logger.exception(
+            "Request failed method=%s path=%s duration_ms=%.1f",
+            request.method,
+            request.url.path,
+            duration_ms,
+        )
+        raise
+    duration_ms = (time.perf_counter() - started) * 1000
+    log_message = "Request handled method=%s path=%s status=%s duration_ms=%.1f"
+    log_args = (request.method, request.url.path, response.status_code, duration_ms)
+    if response.status_code >= 400:
+        logger.warning(log_message, *log_args)
+    elif request.url.path.startswith("/api/"):
+        logger.info(log_message, *log_args)
     if not request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"

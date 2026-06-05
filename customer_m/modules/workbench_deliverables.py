@@ -1,5 +1,6 @@
 """Workbench task deliverable file workflows."""
 
+import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,9 @@ from .lifecycle import create_event
 from .parsers import extract_text
 from .scanner import sha256_file
 from .workbench_common import _nullable_text, _project_row, record_activity
+
+
+logger = logging.getLogger(__name__)
 
 
 def _category_row(conn: sqlite3.Connection, category_code: str) -> sqlite3.Row:
@@ -78,13 +82,22 @@ def submit_task_file(
     suffix = Path(raw_name).suffix
     safe_name = f"{safe_stem}{suffix}"
     target_folder = project_folder / category["default_folder"]
-    target_folder.mkdir(parents=True, exist_ok=True)
-    target_path = _unique_path(target_folder, safe_name)
-    target_path.write_bytes(content)
-
-    ext = target_path.suffix.lower()
-    stat = target_path.stat()
-    text_extracted, extracted_text = extract_text(target_path)
+    try:
+        target_folder.mkdir(parents=True, exist_ok=True)
+        target_path = _unique_path(target_folder, safe_name)
+        target_path.write_bytes(content)
+        ext = target_path.suffix.lower()
+        stat = target_path.stat()
+        text_extracted, extracted_text = extract_text(target_path)
+        file_hash = sha256_file(target_path)
+    except OSError as exc:
+        logger.exception(
+            "Failed to archive task deliverable task_id=%s filename=%s target_folder=%s",
+            task_id,
+            filename,
+            target_folder,
+        )
+        raise ValueError(f"交付文件归档失败，请检查网络路径或权限：{exc}") from exc
     file_id = make_id()
     now = now_iso()
     conn.execute(
@@ -109,7 +122,7 @@ def submit_task_file(
             1 if ext in MODEL_EXTENSIONS else 0,
             text_extracted,
             extracted_text,
-            sha256_file(target_path),
+            file_hash,
             now,
             now,
         ),
@@ -154,6 +167,13 @@ def submit_task_file(
     _refresh_project_file_flags(conn, task["project_id"])
     record_activity(conn, task["project_id"], "deliverable_submitted", "提交交付文件", target_path.name, task_id=task_id)
     create_event(conn, task["project_id"], "workbench_file_submitted", "提交交付文件", target_path.name)
+    logger.info(
+        "Archived task deliverable task_id=%s project_id=%s file_id=%s path=%s",
+        task_id,
+        task["project_id"],
+        file_id,
+        target_path,
+    )
     return {
         "id": deliverable_id,
         "file_id": file_id,

@@ -1,6 +1,7 @@
 """scanner module."""
 
 import hashlib
+import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,10 @@ from .file_types import classify_file
 from .lifecycle import create_event
 from .parsers import extract_text
 
+
+logger = logging.getLogger(__name__)
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -25,6 +30,14 @@ def sha256_file(path: Path) -> str:
 
 def file_modified_at(path: Path) -> str:
     return datetime.fromtimestamp(path.stat().st_mtime).astimezone().isoformat(timespec="seconds")
+
+
+def iter_scan_files(folder: Path, scope: str) -> list[Path]:
+    try:
+        return [path for path in folder.rglob("*") if path.is_file()]
+    except OSError as exc:
+        logger.exception("Failed to enumerate %s folder path=%s", scope, folder)
+        raise ValueError(f"扫描文件夹失败，请检查网络路径或权限：{exc}") from exc
 
 def category_from_project_path(conn: sqlite3.Connection, project_folder: Path, file_path: Path) -> str:
     try:
@@ -101,7 +114,8 @@ def scan_project_folder(conn: sqlite3.Connection, project_id: str) -> dict:
     if not project_folder.exists() or not project_folder.is_dir():
         raise ValueError("项目文件夹不存在")
 
-    files = [path for path in project_folder.rglob("*") if path.is_file()]
+    logger.info("Scanning project folder project_id=%s path=%s", project_id, project_folder)
+    files = iter_scan_files(project_folder, "project")
     current_paths = {str(path) for path in files}
     removed_count = remove_missing_project_files(conn, project_id, current_paths)
     new_count = 0
@@ -196,13 +210,15 @@ def scan_project_folder(conn: sqlite3.Connection, project_id: str) -> dict:
             "folder_scanned",
             f"扫描项目文件夹，新增 {new_count} 个，更新 {updated_count} 个，移除 {removed_count} 个文件记录",
         )
-    return {
+    result = {
         "total_files": len(files),
         "new_files": new_count,
         "updated_files": updated_count,
         "removed_files": removed_count,
         "skipped_files": skipped_count,
     }
+    logger.info("Scanned project folder project_id=%s result=%s", project_id, result)
+    return result
 
 def remove_missing_project_group_files(conn: sqlite3.Connection, project_group_id: str, current_paths: set[str]) -> int:
     rows = conn.execute(
@@ -225,7 +241,8 @@ def scan_project_group_shared_folder(conn: sqlite3.Connection, project_group_id:
     if not shared_folder.exists() or not shared_folder.is_dir():
         raise ValueError("共享资料文件夹不存在")
 
-    files = [path for path in shared_folder.rglob("*") if path.is_file()]
+    logger.info("Scanning shared project group folder project_group_id=%s path=%s", project_group_id, shared_folder)
+    files = iter_scan_files(shared_folder, "project_group")
     current_paths = {str(path) for path in files}
     removed_count = remove_missing_project_group_files(conn, project_group_id, current_paths)
     new_count = 0
@@ -308,10 +325,12 @@ def scan_project_group_shared_folder(conn: sqlite3.Connection, project_group_id:
         )
         new_count += 1
 
-    return {
+    result = {
         "total_files": len(files),
         "new_files": new_count,
         "updated_files": updated_count,
         "removed_files": removed_count,
         "skipped_files": skipped_count,
     }
+    logger.info("Scanned shared project group folder project_group_id=%s result=%s", project_group_id, result)
+    return result

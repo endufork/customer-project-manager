@@ -1,5 +1,6 @@
 """folders module."""
 
+import logging
 import shutil
 import sqlite3
 from pathlib import Path
@@ -16,6 +17,7 @@ from .lifecycle import create_event
 
 
 RECYCLE_BIN_FOLDER = "_RecycleBin_"
+logger = logging.getLogger(__name__)
 
 def customer_context_folder_for(
     conn: sqlite3.Connection,
@@ -208,11 +210,12 @@ def cleanup_empty_parent_dirs(conn: sqlite3.Connection, start_path: Path) -> lis
             for child in sorted((path for path in current.rglob("*") if path.is_dir()), key=lambda path: len(path.parts), reverse=True):
                 try:
                     child.rmdir()
-                except OSError:
-                    pass
+                except OSError as exc:
+                    logger.debug("Skip non-empty child folder during cleanup path=%s error=%s", child, exc)
         try:
             current.rmdir()
-        except OSError:
+        except OSError as exc:
+            logger.debug("Stop empty parent cleanup path=%s error=%s", current, exc)
             break
         cleaned.append(str(current))
         current = current.parent.resolve(strict=False)
@@ -249,23 +252,32 @@ def move_project_folder_if_needed(
         return None
 
     current = Path(row["project_folder_path"])
-    target_folder.parent.mkdir(parents=True, exist_ok=True)
     try:
         if current.resolve(strict=False) == target_folder.resolve(strict=False):
             ensure_standard_dirs(target_folder, conn)
             return current
-    except OSError:
-        pass
+    except OSError as exc:
+        logger.debug("Skip folder equality check current=%s target=%s error=%s", current, target_folder, exc)
 
     old_parent = current.parent
     target = target_folder
-    if current.exists() and current.is_dir():
-        if target.exists():
-            target = unique_directory_destination(target)
-        shutil.move(str(current), str(target))
-        cleanup_empty_parent_dirs(conn, old_parent)
-    else:
-        ensure_standard_dirs(target, conn)
+    try:
+        target_folder.parent.mkdir(parents=True, exist_ok=True)
+        if current.exists() and current.is_dir():
+            if target.exists():
+                target = unique_directory_destination(target)
+            shutil.move(str(current), str(target))
+            cleanup_empty_parent_dirs(conn, old_parent)
+        else:
+            ensure_standard_dirs(target, conn)
+    except OSError as exc:
+        logger.exception(
+            "Failed to move project folder project_id=%s current=%s target=%s",
+            project_id,
+            current,
+            target,
+        )
+        raise ValueError(f"项目文件夹迁移失败，请检查网络路径或权限：{exc}") from exc
 
     old_prefix = str(current)
     new_prefix = str(target)
@@ -286,6 +298,7 @@ def move_project_folder_if_needed(
                 (updated_path, now_iso(), file_row["id"]),
             )
     create_event(conn, project_id, event_type, event_title, new_prefix)
+    logger.info("Moved project folder project_id=%s old=%s new=%s", project_id, old_prefix, new_prefix)
     return target
 
 def _project_folder_row_for_path(conn: sqlite3.Connection, target: Path) -> sqlite3.Row | None:
@@ -376,11 +389,17 @@ def move_project_folder_to_recycle_bin(
     recycle_root = recycle_bin_folder(conn)
     archive_day = now_iso()[:10]
     destination = unique_directory_destination(recycle_root / archive_day / target.name)
-    destination.parent.mkdir(parents=True, exist_ok=True)
     old_parent = target.parent
     try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(target), str(destination))
     except OSError as exc:
+        logger.exception(
+            "Failed to archive project folder project_id=%s source=%s destination=%s",
+            project_id,
+            target,
+            destination,
+        )
         raise ValueError(f"项目文件夹归档失败，请检查网络路径或权限：{exc}") from exc
 
     old_prefix = str(target)
@@ -406,4 +425,5 @@ def move_project_folder_to_recycle_bin(
                 (updated_path, now_iso(), file_row["id"]),
             )
     cleanup_empty_parent_dirs(conn, old_parent)
+    logger.info("Archived project folder project_id=%s old=%s archived=%s", project_id, old_prefix, new_prefix)
     return destination

@@ -78,6 +78,7 @@ function addDays(days) {
 function formDataFromContainer(container) {
   const data = {};
   container.querySelectorAll("[name]").forEach((input) => {
+    if (input.disabled) return;
     if (input.type === "checkbox") {
       data[input.name] = input.checked ? "1" : "0";
     } else {

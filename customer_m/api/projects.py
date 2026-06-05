@@ -1,5 +1,6 @@
 """FastAPI project routes."""
 
+import logging
 import os
 import sqlite3
 from pathlib import Path
@@ -24,6 +25,7 @@ from .schemas import DeleteProjectRequest, ProjectDetailPayload, ProjectListPayl
 
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+logger = logging.getLogger(__name__)
 
 
 def _bad_request(exc: Exception) -> HTTPException:
@@ -146,6 +148,7 @@ def open_project_folder(project_id: str, _: dict = Depends(current_user)) -> dic
     except ValueError as exc:
         raise _bad_request(exc) from exc
     except OSError as exc:
+        logger.exception("Failed to open project folder project_id=%s", project_id)
         raise _bad_request(f"打开项目文件夹失败，请检查网络路径或权限：{exc}") from exc
 
 
@@ -162,4 +165,5 @@ def open_shared_project_folder(project_id: str, _: dict = Depends(current_user))
     except ValueError as exc:
         raise _bad_request(exc) from exc
     except OSError as exc:
+        logger.exception("Failed to open shared project folder project_id=%s", project_id)
         raise _bad_request(f"打开共享资料文件夹失败，请检查网络路径或权限：{exc}") from exc

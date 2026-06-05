@@ -1,5 +1,6 @@
 """file import module."""
 
+import logging
 import shutil
 import sqlite3
 from datetime import datetime
@@ -12,12 +13,20 @@ from .folders import default_folder_for, unique_destination
 from .parsers import extract_text
 from .scanner import sha256_file
 
+
+logger = logging.getLogger(__name__)
+
+
 def iter_source_files(source_path: Path) -> list[Path]:
-    if not source_path.exists():
-        raise ValueError("导入路径不存在")
-    if source_path.is_file():
-        return [source_path]
-    return [path for path in source_path.rglob("*") if path.is_file()]
+    try:
+        if not source_path.exists():
+            raise ValueError("导入路径不存在")
+        if source_path.is_file():
+            return [source_path]
+        return [path for path in source_path.rglob("*") if path.is_file()]
+    except OSError as exc:
+        logger.exception("Failed to enumerate import source path=%s", source_path)
+        raise ValueError(f"读取导入路径失败，请检查网络路径或权限：{exc}") from exc
 
 def import_source_path(
     conn: sqlite3.Connection,
@@ -29,21 +38,37 @@ def import_source_path(
     if not source_path_value:
         return 0, False
 
-    files = iter_source_files(Path(source_path_value))
+    source_root = Path(source_path_value)
+    files = iter_source_files(source_root)
+    logger.info(
+        "Importing project source path project_id=%s source=%s file_count=%s",
+        project_id,
+        source_root,
+        len(files),
+    )
     imported = 0
     has_model = False
     for source in files:
         category = classify_file(source)
         target_dir = project_folder / default_folder_for(conn, category)
-        target_dir.mkdir(parents=True, exist_ok=True)
-        destination = unique_destination(target_dir / source.name)
-        shutil.copy2(source, destination)
-        ext = destination.suffix.lower()
-        is_model = 1 if ext in MODEL_EXTENSIONS else 0
-        has_model = has_model or bool(is_model)
-        text_extracted, extracted_text = extract_text(destination)
-        file_hash = sha256_file(destination)
-        stat = destination.stat()
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            destination = unique_destination(target_dir / source.name)
+            shutil.copy2(source, destination)
+            ext = destination.suffix.lower()
+            is_model = 1 if ext in MODEL_EXTENSIONS else 0
+            has_model = has_model or bool(is_model)
+            text_extracted, extracted_text = extract_text(destination)
+            file_hash = sha256_file(destination)
+            stat = destination.stat()
+        except OSError as exc:
+            logger.exception(
+                "Failed to import project source file project_id=%s source=%s target_dir=%s",
+                project_id,
+                source,
+                target_dir,
+            )
+            raise ValueError(f"导入文件失败，请检查网络路径或权限：{exc}") from exc
         file_id = make_id()
         conn.execute(
             """
@@ -81,4 +106,5 @@ def import_source_path(
             (file_id, project_id, destination.name, extracted_text),
         )
         imported += 1
+    logger.info("Imported project source path project_id=%s imported=%s has_model=%s", project_id, imported, has_model)
     return imported, has_model
