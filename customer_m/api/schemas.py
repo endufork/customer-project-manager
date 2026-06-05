@@ -48,6 +48,15 @@ class UpdateUserRequest(BaseModel):
     roles: list[str] = Field(default_factory=list)
 
 
+class ProjectMutationRequest(BaseModel):
+    class Config:
+        extra = "allow"
+
+
+class DeleteProjectRequest(BaseModel):
+    delete_files: bool = False
+
+
 class ProjectListPayload(BaseModel):
     projects: list[dict] = Field(default_factory=list)
     kpis: dict = Field(default_factory=dict)

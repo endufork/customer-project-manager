@@ -13,10 +13,10 @@ from .customers import (
 )
 from .file_import import import_source_path
 from .folders import (
-    delete_project_folder_if_requested,
     cleanup_orphan_project_group,
     ensure_standard_dirs,
     get_or_create_project_group,
+    move_project_folder_to_recycle_bin,
     move_project_folder_if_needed,
     project_folder_for,
     project_group_folder_for,
@@ -250,7 +250,7 @@ def update_project_record(conn: sqlite3.Connection, project_id: str, data: dict)
         """
         SELECT id, project_folder_path, intake_no, customer_id, site_id, project_group_id
         FROM projects
-        WHERE id = ?
+        WHERE id = ? AND COALESCE(is_deleted, 0) = 0
         """,
         (project_id,),
     ).fetchone()
@@ -318,7 +318,7 @@ def update_project_record(conn: sqlite3.Connection, project_id: str, data: dict)
             actual_ship_date = ?,
             notes = ?,
             updated_at = ?
-        WHERE id = ?
+        WHERE id = ? AND COALESCE(is_deleted, 0) = 0
         """,
         (
             equipment_no,
@@ -397,22 +397,43 @@ def rename_project_folder_to_wo(conn: sqlite3.Connection, project_id: str) -> di
     }
 
 def delete_project_record(conn: sqlite3.Connection, project_id: str, delete_files: bool) -> dict:
-    folder_deleted = False
+    folder_archived = False
+    archived_path = None
     project = conn.execute(
-        "SELECT project_folder_path FROM projects WHERE id = ?",
+        """
+        SELECT id, project_folder_path
+        FROM projects
+        WHERE id = ? AND COALESCE(is_deleted, 0) = 0
+        """,
         (project_id,),
     ).fetchone()
     if project is None:
         raise ValueError("项目不存在")
     folder_path = project["project_folder_path"]
     if delete_files:
-        folder_deleted = delete_project_folder_if_requested(conn, folder_path)
-    conn.execute("DELETE FROM file_search WHERE project_id = ?", (project_id,))
-    conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+        archived = move_project_folder_to_recycle_bin(conn, project_id, folder_path)
+        if archived is not None:
+            folder_archived = True
+            archived_path = str(archived)
+    deleted_at = now_iso()
+    conn.execute(
+        """
+        UPDATE projects
+        SET is_deleted = 1,
+            is_archived = 1,
+            deleted_at = ?,
+            deleted_folder_path = COALESCE(?, deleted_folder_path),
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (deleted_at, archived_path, deleted_at, project_id),
+    )
+    create_event(conn, project_id, "project_deleted", "删除项目", "资料已归档到回收站" if folder_archived else "保留原项目资料")
     return {
         "deleted": True,
-        "folder_deleted": folder_deleted,
-        "project_folder_path": folder_path,
+        "folder_deleted": False,
+        "folder_archived": folder_archived,
+        "project_folder_path": archived_path or folder_path,
     }
 
 def scan_project_shared_folder(conn: sqlite3.Connection, project_id: str) -> dict:

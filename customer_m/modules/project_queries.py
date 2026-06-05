@@ -27,7 +27,7 @@ def enrich_project_status_date(project: dict) -> dict:
 
 
 def list_project_records(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
-    filters = []
+    filters = ["COALESCE(p.is_deleted, 0) = 0"]
     params: list[str] = []
     search = (query.get("search", [""])[0] or "").strip()
     status = (query.get("status", [""])[0] or "").strip()
@@ -106,6 +106,7 @@ def list_project_records(conn: sqlite3.Connection, query: dict[str, list[str]]) 
               COALESCE(SUM(CASE WHEN has_po = 1 THEN 1 ELSE 0 END), 0) AS with_po,
               COALESCE(SUM(CASE WHEN has_3d_model = 1 THEN 1 ELSE 0 END), 0) AS with_model
             FROM projects
+            WHERE COALESCE(is_deleted, 0) = 0
             """
         ).fetchone()
     )
@@ -127,7 +128,7 @@ def get_project_detail_payload(conn: sqlite3.Connection, project_id: str) -> dic
             LEFT JOIN customers po ON po.id = p.po_customer_id
             LEFT JOIN contacts co ON co.id = p.contact_id
             JOIN project_statuses s ON s.code = p.status_code
-            WHERE p.id = ?
+            WHERE p.id = ? AND COALESCE(p.is_deleted, 0) = 0
             """,
             (project_id,),
         ).fetchone()
@@ -193,7 +194,7 @@ def _project_file_flags(conn: sqlite3.Connection, project_id: str) -> tuple[int,
 
 def get_project_folder_path(conn: sqlite3.Connection, project_id: str) -> str:
     row = conn.execute(
-        "SELECT project_folder_path FROM projects WHERE id = ?",
+        "SELECT project_folder_path FROM projects WHERE id = ? AND COALESCE(is_deleted, 0) = 0",
         (project_id,),
     ).fetchone()
     if row is None:
@@ -206,7 +207,7 @@ def project_group_for_project(conn: sqlite3.Connection, project_id: str) -> sqli
         SELECT pg.id, pg.shared_folder_path
         FROM projects p
         JOIN project_groups pg ON pg.id = p.project_group_id
-        WHERE p.id = ?
+        WHERE p.id = ? AND COALESCE(p.is_deleted, 0) = 0
         """,
         (project_id,),
     ).fetchone()

@@ -58,7 +58,7 @@ def _project_row(conn: sqlite3.Connection, project_id: str) -> sqlite3.Row:
         LEFT JOIN customers po ON po.id = p.po_customer_id
         LEFT JOIN contacts co ON co.id = p.contact_id
         JOIN project_statuses s ON s.code = p.status_code
-        WHERE p.id = ?
+        WHERE p.id = ? AND COALESCE(p.is_deleted, 0) = 0
         """,
         (project_id,),
     ).fetchone()
@@ -183,7 +183,8 @@ def _issue_filter(project: dict, alias: str = "execution_issues") -> tuple[str, 
               ({alias}.scope = 'product' AND EXISTS (
                 SELECT 1 FROM projects issue_project
                 WHERE issue_project.id = {alias}.project_id
-                  AND issue_project.project_group_id = ?
+                    AND issue_project.project_group_id = ?
+                    AND COALESCE(issue_project.is_deleted, 0) = 0
               ))
               OR ({alias}.project_id = ? AND {alias}.scope <> 'product')
             )

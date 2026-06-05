@@ -18,7 +18,7 @@ from .workbench_common import (
 
 
 def list_workbench_projects(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
-    filters = []
+    filters = ["COALESCE(p.is_deleted, 0) = 0"]
     params: list[str] = []
     search = (query.get("search", [""])[0] or "").strip()
     area_filter = (query.get("area", [""])[0] or "").strip()
@@ -119,7 +119,7 @@ def list_workbench_projects(conn: sqlite3.Connection, query: dict[str, list[str]
 
 def list_workbench_tasks(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
     done_sql = _done_sql()
-    filters = [f"t.status NOT IN ({done_sql})"]
+    filters = [f"t.status NOT IN ({done_sql})", "COALESCE(p.is_deleted, 0) = 0"]
     params: list[str] = []
     search = (query.get("search", [""])[0] or "").strip()
     owner = (query.get("owner", [""])[0] or "").strip()
@@ -253,7 +253,7 @@ def list_workbench_tasks(conn: sqlite3.Connection, query: dict[str, list[str]]) 
     return {"tasks": rows, "kpis": kpis}
 
 def list_pending_deliverables(conn: sqlite3.Connection, query: dict[str, list[str]]) -> list[dict]:
-    filters = ["d.status = 'submitted'"]
+    filters = ["d.status = 'submitted'", "COALESCE(p.is_deleted, 0) = 0"]
     params: list[str] = []
     search = (query.get("search", [""])[0] or "").strip()
     view = (query.get("view", [""])[0] or "all").strip()

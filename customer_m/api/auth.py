@@ -31,7 +31,7 @@ def _integrity_error(exc: sqlite3.IntegrityError) -> HTTPException:
 
 
 def _model_data(body: UpdateUserRequest) -> dict:
-    if hasattr(body, "model_dump"):
+    if callable(getattr(body, "model_dump", None)):
         return body.model_dump()
     return body.dict()
 

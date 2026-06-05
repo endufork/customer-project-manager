@@ -14,6 +14,9 @@ from ..database import get_setting
 from ..utils import make_id, now_iso, sanitize_path_part
 from .lifecycle import create_event
 
+
+RECYCLE_BIN_FOLDER = "_RecycleBin_"
+
 def customer_context_folder_for(
     conn: sqlite3.Connection,
     customer_group_name: str,
@@ -336,6 +339,71 @@ def delete_project_folder_if_requested(conn: sqlite3.Connection, folder_path: st
         return False
     if not target.is_dir():
         raise ValueError("项目资料路径不是文件夹，无法删除")
+    recycled_path = move_project_folder_to_recycle_bin(conn, project["id"], folder_path)
+    return recycled_path is not None
 
-    shutil.rmtree(target)
-    return True
+def recycle_bin_folder(conn: sqlite3.Connection) -> Path:
+    root = Path(get_setting(conn, "project_root_path", r"D:\01_CustomerProject")).resolve(strict=False)
+    return root / RECYCLE_BIN_FOLDER
+
+def move_project_folder_to_recycle_bin(
+    conn: sqlite3.Connection,
+    project_id: str,
+    folder_path: str,
+) -> Path | None:
+    if not folder_path:
+        raise ValueError("项目文件夹路径为空，无法归档资料")
+
+    root = Path(get_setting(conn, "project_root_path", r"D:\01_CustomerProject")).resolve(strict=False)
+    target = Path(folder_path).resolve(strict=False)
+    try:
+        relative = target.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("为安全起见，只能归档项目根目录下的项目文件夹") from exc
+
+    if target == root or not _is_project_leaf_path(relative):
+        raise ValueError("为安全起见，只能归档系统标准结构下的项目文件夹")
+    project = _project_folder_row_for_path(conn, target)
+    if project is None or project["id"] != project_id:
+        raise ValueError("为安全起见，只能归档数据库中登记的当前项目文件夹")
+    if not _folder_name_contains_project_no(project, target):
+        raise ValueError("为安全起见，项目文件夹名称必须包含INQ号或WO号")
+    if not target.exists():
+        return None
+    if not target.is_dir():
+        raise ValueError("项目资料路径不是文件夹，无法归档")
+
+    recycle_root = recycle_bin_folder(conn)
+    archive_day = now_iso()[:10]
+    destination = unique_directory_destination(recycle_root / archive_day / target.name)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    old_parent = target.parent
+    try:
+        shutil.move(str(target), str(destination))
+    except OSError as exc:
+        raise ValueError(f"项目文件夹归档失败，请检查网络路径或权限：{exc}") from exc
+
+    old_prefix = str(target)
+    new_prefix = str(destination)
+    conn.execute(
+        """
+        UPDATE projects
+        SET project_folder_path = ?, deleted_folder_path = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (new_prefix, new_prefix, now_iso(), project_id),
+    )
+    rows = conn.execute(
+        "SELECT id, file_path FROM project_files WHERE project_id = ?",
+        (project_id,),
+    ).fetchall()
+    for file_row in rows:
+        file_path = file_row["file_path"]
+        if file_path.startswith(old_prefix):
+            updated_path = new_prefix + file_path[len(old_prefix):]
+            conn.execute(
+                "UPDATE project_files SET file_path = ?, updated_at = ? WHERE id = ?",
+                (updated_path, now_iso(), file_row["id"]),
+            )
+    cleanup_empty_parent_dirs(conn, old_parent)
+    return destination

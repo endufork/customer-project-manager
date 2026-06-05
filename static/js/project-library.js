@@ -620,7 +620,7 @@ function bindDetailActions(project) {
             method: "DELETE",
             body: JSON.stringify({ delete_files: decision.deleteFiles }),
           });
-          showToast(result.folder_deleted ? "项目记录和资料文件夹已删除" : "项目记录已删除，资料已保留");
+          showToast(result.folder_archived ? "项目记录已删除，资料已移入回收站" : "项目记录已删除，资料已保留");
           closeDetailPane({ restoreFocus: false });
           await loadBootstrap();
           await loadProjects();

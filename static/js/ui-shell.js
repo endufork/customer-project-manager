@@ -32,9 +32,9 @@ function showDetailPane() {
 function confirmProjectDeletion() {
   const dialog = $("#deleteProjectDialog");
   if (!dialog || typeof dialog.showModal !== "function") {
-    const keepFiles = confirm("是否保留项目资料文件夹？\n\n确定：保留资料，只删除系统记录。\n取消：不保留资料，继续确认删除项目文件夹。");
+    const keepFiles = confirm("是否保留项目资料文件夹？\n\n确定：保留资料，只删除系统记录。\n取消：将资料移入系统回收站。");
     if (keepFiles) return Promise.resolve({ confirmed: true, deleteFiles: false });
-    const deleteFiles = confirm("你选择不保留资料。确认永久删除这个项目文件夹吗？");
+    const deleteFiles = confirm("你选择不保留资料。确认将项目文件夹移入 _RecycleBin_ 回收站吗？");
     return Promise.resolve({ confirmed: deleteFiles, deleteFiles });
   }
 

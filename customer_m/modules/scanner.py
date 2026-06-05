@@ -92,7 +92,7 @@ def upsert_file_search(conn: sqlite3.Connection, file_id: str, project_id: str, 
 
 def scan_project_folder(conn: sqlite3.Connection, project_id: str) -> dict:
     project = conn.execute(
-        "SELECT project_folder_path FROM projects WHERE id = ?",
+        "SELECT project_folder_path FROM projects WHERE id = ? AND COALESCE(is_deleted, 0) = 0",
         (project_id,),
     ).fetchone()
     if project is None:
