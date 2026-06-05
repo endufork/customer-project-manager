@@ -3,7 +3,47 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $RepoRoot
 . (Join-Path $PSScriptRoot "runtime.ps1")
 
-$python = Resolve-Python
+function Test-PythonModule {
+    param(
+        [string]$Python,
+        [string]$ModuleName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Python) -or -not (Test-Path $Python)) {
+        return $false
+    }
+
+    & $Python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('$ModuleName') else 1)" *> $null
+    return $LASTEXITCODE -eq 0
+}
+
+function Resolve-FastApiPython {
+    $candidates = @()
+
+    if (-not [string]::IsNullOrWhiteSpace($env:CUSTOMER_PROJECT_PYTHON)) {
+        $candidates += $env:CUSTOMER_PROJECT_PYTHON
+    }
+
+    $pathPython = Get-Command python -ErrorAction SilentlyContinue
+    if ($pathPython) {
+        $candidates += $pathPython.Source
+    }
+
+    $bundled = Get-CodexDependencyPath "python\python.exe"
+    if (-not [string]::IsNullOrWhiteSpace($bundled)) {
+        $candidates += $bundled
+    }
+
+    foreach ($candidate in ($candidates | Select-Object -Unique)) {
+        if (Test-PythonModule $candidate "uvicorn") {
+            return $candidate
+        }
+    }
+
+    throw "FastAPI runtime was not found. Install dependencies with 'python -m pip install -r requirements.txt', or set CUSTOMER_PROJECT_PYTHON to the Python executable that has uvicorn installed."
+}
+
+$python = Resolve-FastApiPython
 if ([string]::IsNullOrWhiteSpace($python)) {
     throw "Python was not found. Install Python, add it to PATH, or set CUSTOMER_PROJECT_PYTHON."
 }

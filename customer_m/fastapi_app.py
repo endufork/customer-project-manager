@@ -76,6 +76,7 @@ async def no_cache_static_pages(request, call_next):
 
 
 @app.get("/health", response_model=HealthPayload)
+@app.get("/api/health", response_model=HealthPayload)
 def health() -> HealthPayload:
     return HealthPayload()
 
