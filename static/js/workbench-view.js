@@ -164,12 +164,13 @@ function renderWorkbenchWorkspace(payload) {
         ${renderRiskDialog(issues, tasks)}
         ${renderLogDrawer(logs)}
         ${renderDeliverableReviewDialog()}
+        ${renderTaskCompletionReviewDialog()}
         <div class="workbench-section-title">
           <h3>任务</h3>
           <span>${escapeHtml(tasks.filter((task) => !taskDone(task)).length)} 个未完成</span>
         </div>
         <div class="workbench-task-list">
-          ${tasks.length ? tasks.map((task) => renderWorkbenchTask(task)).join("") : `<div class="empty small-empty">暂无任务，先用模板或手动添加一个任务</div>`}
+          ${tasks.length ? tasks.map((task) => renderWorkbenchTask(task, issues)).join("") : `<div class="empty small-empty">暂无任务，先用模板或手动添加一个任务</div>`}
         </div>
       </section>
       ${showPmDeliverables ? `<aside class="workbench-side">
@@ -216,6 +217,7 @@ function renderMyTodoWorkspace(payload = {}, options = {}) {
     </div>
     <section class="workbench-main my-task-surface">
       ${renderDeliverableReviewDialog()}
+      ${renderTaskCompletionReviewDialog()}
       ${isPm ? renderInboxDeliverablesSection(deliverables) : ""}
       ${isPm ? renderInboxTaskCompletionsSection(taskCompletions) : ""}
       ${isPm ? renderInboxDueDateSection(dueDateRequests) : ""}
@@ -257,6 +259,7 @@ function renderLogDrawer(logs) {
 
 function bindMyTodoActions() {
   bindDeliverableReviewDialog($("#workbenchWorkspace"), () => loadWorkbenchTasks());
+  bindTaskCompletionReviewDialog($("#workbenchWorkspace"), () => loadWorkbenchTasks());
   $("#workbenchWorkspace").querySelectorAll("[data-action='open-my-task-project'], [data-action='open-inbox-project']").forEach((button) => {
     button.addEventListener("click", async () => {
       state.workbenchMode = "projects";
@@ -276,18 +279,7 @@ function bindMyTodoActions() {
     button.addEventListener("click", async () => {
       try {
         const status = button.dataset.action.startsWith("confirm") ? "confirmed" : "rejected";
-        let body = { status, confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM" };
-        if (status === "rejected") {
-          const reason = prompt("请输入驳回原因");
-          if (!reason || !reason.trim()) return;
-          body.reject_reason = reason.trim();
-        }
-        await api(`/api/workbench/tasks/${encodeURIComponent(button.dataset.taskId)}/completion`, {
-          method: "PATCH",
-          body: JSON.stringify(body),
-        });
-        showToast(status === "confirmed" ? "任务已确认关闭" : "任务已驳回，进入返工");
-        await loadWorkbenchTasks();
+        openTaskCompletionReviewDialog(button, status);
       } catch (error) {
         showToast(error.message);
       }
@@ -342,6 +334,7 @@ function bindWorkbenchWorkspaceActions(projectId) {
   bindDueDateForms(projectId, workspace);
   bindDeliverableUploads(projectId, workspace);
   bindDeliverableReviewDialog(workspace, () => loadWorkbenchProjects(projectId));
+  bindTaskCompletionReviewDialog(workspace, () => loadWorkbenchProjects(projectId));
 
   workspace.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", async () => {

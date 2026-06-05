@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from ..database import row_to_dict
 from ..utils import make_id, now_iso
 from .lifecycle import create_event
-from .workbench_issues import create_issue
+from .workbench_issues import create_issue, link_issue_to_task
 from .workbench_common import (
     _bool_value,
     _clean_task_status,
@@ -42,6 +42,17 @@ TEMPLATES = {
 }
 
 
+def _actor_name(user: dict | None) -> str:
+    if not user:
+        return "系统"
+    return user.get("display_name") or user.get("email") or "系统"
+
+
+def _is_pm(user: dict | None) -> bool:
+    roles = set((user or {}).get("roles", []))
+    return bool({"admin", "pm"}.intersection(roles))
+
+
 def _task_row(conn: sqlite3.Connection, task_id: str) -> sqlite3.Row:
     row = conn.execute("SELECT * FROM execution_tasks WHERE id = ?", (task_id,)).fetchone()
     if row is None:
@@ -72,6 +83,10 @@ def ensure_blocked_task_has_issue(conn: sqlite3.Connection, task: sqlite3.Row | 
     reason = _nullable_text(data.get("blocked_reason")) or _nullable_text(data.get("notes"))
     if not reason:
         raise ValueError("阻塞任务必须填写阻塞原因")
+    linked_issue_id = _nullable_text(data.get("linked_issue_id"))
+    if linked_issue_id:
+        link_issue_to_task(conn, linked_issue_id, task, reason)
+        return
     if _open_task_issue_exists(conn, task["id"]):
         return
     create_issue(
@@ -218,9 +233,29 @@ def submit_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, u
     note = _nullable_text(data.get("completion_note"))
     if not note:
         raise ValueError("提交完成需要填写完成说明")
-    submitted_by = _nullable_text(data.get("submitted_by")) or (user or {}).get("display_name") or (user or {}).get("email") or row["owner_name"] or "工程师"
+    direct_confirm = _bool_value(data.get("direct_confirm"))
+    if direct_confirm and not _is_pm(user):
+        raise ValueError("只有PM可以提交并直接确认任务")
+    submitted_by = _nullable_text(data.get("submitted_by")) or _actor_name(user) or row["owner_name"] or "工程师"
     now = now_iso()
     detail = f"{submitted_by}：{note}"
+    if direct_confirm:
+        conn.execute(
+            """
+            UPDATE execution_tasks
+            SET status = 'confirmed',
+                submitted_at = ?,
+                confirmed_at = ?,
+                completed_at = ?,
+                notes = COALESCE(notes || char(10), '') || ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (now, now, now, f"完成说明并由PM直接确认：{detail}", now, task_id),
+        )
+        record_activity(conn, row["project_id"], "task_completion_direct_confirmed", "提交并确认任务完成", detail, task_id=task_id)
+        create_event(conn, row["project_id"], "workbench_task_confirmed", "提交并确认任务完成", row["title"])
+        return {"id": task_id, "submitted": True, "direct_confirmed": True, "status": "confirmed"}
     conn.execute(
         """
         UPDATE execution_tasks

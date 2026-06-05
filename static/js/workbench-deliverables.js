@@ -50,8 +50,8 @@ function renderInboxTaskCompletionCard(task) {
       <div class="my-task-foot">
         <span class="inline-actions">
           <button type="button" class="secondary slim-inline" data-action="open-inbox-project" data-project-id="${escapeHtml(task.project_id)}">打开项目</button>
-          <button type="button" class="secondary slim-inline" data-action="confirm-inbox-task-completion" data-task-id="${escapeHtml(task.id)}">确认</button>
-          <button type="button" class="danger slim-inline" data-action="reject-inbox-task-completion" data-task-id="${escapeHtml(task.id)}">驳回</button>
+          <button type="button" class="secondary slim-inline" data-action="confirm-inbox-task-completion" data-task-id="${escapeHtml(task.id)}" data-task-title="${escapeHtml(task.title || "任务完成说明")}">确认</button>
+          <button type="button" class="danger slim-inline" data-action="reject-inbox-task-completion" data-task-id="${escapeHtml(task.id)}" data-task-title="${escapeHtml(task.title || "任务完成说明")}">驳回</button>
         </span>
       </div>
       ${task.notes ? `<p class="my-task-note">${escapeHtml(task.notes)}</p>` : ""}

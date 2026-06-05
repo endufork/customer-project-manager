@@ -103,12 +103,14 @@ class WorkbenchTaskRequest(_StrictRequest):
     is_required: str | int | bool | None = None
     requires_deliverable: str | int | bool | None = None
     blocked_reason: str | None = None
+    linked_issue_id: str | None = None
     notes: str | None = None
 
 
 class TaskCompletionRequest(_StrictRequest):
     completion_note: str | None = None
     submitted_by: str | None = None
+    direct_confirm: bool | str | int | None = None
 
 
 class TaskCompletionReviewRequest(_StrictRequest):

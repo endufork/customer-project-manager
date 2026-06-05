@@ -56,6 +56,35 @@ def create_issue(conn: sqlite3.Connection, project_id: str, data: dict) -> dict:
     create_event(conn, project_id, "workbench_issue_created", "新增风险/问题", title)
     return {"id": issue_id, "created": True}
 
+def link_issue_to_task(conn: sqlite3.Connection, issue_id: str, task: sqlite3.Row | dict, reason: str | None = None) -> dict:
+    row = conn.execute("SELECT * FROM execution_issues WHERE id = ?", (issue_id,)).fetchone()
+    if row is None:
+        raise ValueError("关联风险不存在")
+    if row["project_id"] != task["project_id"]:
+        raise ValueError("只能关联当前项目下的风险")
+    if row["status"] not in {"open", "following"}:
+        raise ValueError("只能关联打开或跟进中的风险")
+    if row["task_id"] and row["task_id"] != task["id"]:
+        raise ValueError("该风险已关联其他任务")
+    now = now_iso()
+    resolution = _nullable_text(row["resolution"])
+    clean_reason = _nullable_text(reason)
+    if clean_reason and f"任务阻塞关联：{clean_reason}" not in (resolution or ""):
+        resolution = f"{resolution}\n任务阻塞关联：{clean_reason}".strip() if resolution else f"任务阻塞关联：{clean_reason}"
+    conn.execute(
+        """
+        UPDATE execution_issues
+        SET task_id = ?,
+            scope = 'task',
+            resolution = ?,
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (task["id"], resolution, now, issue_id),
+    )
+    record_activity(conn, task["project_id"], "issue_linked_to_task", "关联阻塞风险", row["title"], task_id=task["id"], issue_id=issue_id)
+    return {"id": issue_id, "linked": True}
+
 def update_issue(conn: sqlite3.Connection, issue_id: str, data: dict) -> dict:
     row = conn.execute("SELECT * FROM execution_issues WHERE id = ?", (issue_id,)).fetchone()
     if row is None:

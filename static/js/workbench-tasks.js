@@ -87,7 +87,27 @@ function renderTaskCreateForm() {
   `;
 }
 
-function renderWorkbenchTask(task) {
+function renderBlockedIssueOptions(issues = [], task = {}) {
+  const selectedIssue = issues.find((issue) => issue.task_id === task.id && ["open", "following"].includes(issue.status));
+  const selectedId = selectedIssue?.id || "";
+  const options = issues.filter((issue) => {
+    if (!["open", "following"].includes(issue.status)) return false;
+    if (issue.project_id !== task.project_id) return false;
+    return !issue.task_id || issue.task_id === task.id;
+  });
+  if (!options.length) {
+    return `<option value="">无可关联风险，阻塞时自动创建</option>`;
+  }
+  return `
+    <option value="">不关联，阻塞时自动创建</option>
+    ${options.map((issue) => {
+      const scopeName = workbenchIssueScopeName(issue.scope || (issue.task_id ? "task" : "equipment"));
+      return `<option value="${escapeHtml(issue.id)}"${issue.id === selectedId ? " selected" : ""}>${escapeHtml(issue.title)} · ${escapeHtml(scopeName)}</option>`;
+    }).join("")}
+  `;
+}
+
+function renderWorkbenchTask(task, issues = []) {
   const deliverables = task.deliverables || [];
   const owner = task.owner_name || "未指派";
   const due = task.due_date || "未设置Due Date";
@@ -99,8 +119,8 @@ function renderWorkbenchTask(task) {
   const dueDateButtonText = userHasRole("pm") ? "修改Due Date" : pendingDueRequest ? "查看改期" : "申请改期";
   const taskCompletionActions = !task.requires_deliverable && task.status === "submitted" && userHasRole("pm")
     ? `
-      <button type="button" class="secondary slim-inline" data-action="confirm-task-completion" data-task-id="${escapeHtml(task.id)}">确认完成</button>
-      <button type="button" class="danger slim-inline" data-action="reject-task-completion" data-task-id="${escapeHtml(task.id)}">驳回</button>
+      <button type="button" class="secondary slim-inline" data-action="confirm-task-completion" data-task-id="${escapeHtml(task.id)}" data-task-title="${escapeHtml(task.title)}">确认完成</button>
+      <button type="button" class="danger slim-inline" data-action="reject-task-completion" data-task-id="${escapeHtml(task.id)}" data-task-title="${escapeHtml(task.title)}">驳回</button>
     `
     : "";
   return `
@@ -150,6 +170,12 @@ function renderWorkbenchTask(task) {
             备注/阻塞说明
             <input name="notes" value="${escapeHtml(task.notes || "")}" placeholder="备注/阻塞说明" />
           </label>
+          <label>
+            关联阻塞风险
+            <select name="linked_issue_id">
+              ${renderBlockedIssueOptions(issues, task)}
+            </select>
+          </label>
           <div class="task-actions">
             <button type="button" class="secondary slim-inline" data-action="save-task" data-task-id="${escapeHtml(task.id)}">保存任务</button>
             ${taskCompletionActions}
@@ -184,13 +210,69 @@ function renderTaskCompletionForm(task) {
   if (task.status === "submitted") {
     return `<div class="empty small-empty">完成说明已提交，等待 PM 确认。</div>`;
   }
+  const submitText = userHasRole("pm") ? "提交并确认" : "提交完成说明";
   return `
     <form class="task-completion-form" data-task-id="${escapeHtml(task.id)}">
       <textarea name="completion_note" rows="2" placeholder="填写完成说明，例如 已完成客户资料确认并同步给PM" required></textarea>
       <input name="submitted_by" placeholder="提交人" value="${escapeHtml($("#workbenchOwnerInput").value.trim() || task.owner_name || "")}" />
-      <button type="submit" class="secondary compact-submit">提交完成说明</button>
+      <button type="submit" class="secondary compact-submit">${submitText}</button>
     </form>
   `;
+}
+
+function renderTaskCompletionReviewDialog() {
+  return `
+    <dialog id="taskCompletionReviewDialog" class="workbench-dialog deliverable-review-dialog">
+      <div class="workbench-dialog-shell">
+        <div class="workbench-dialog-header">
+          <div>
+            <h3 id="taskCompletionReviewTitle">确认完成说明</h3>
+            <span id="taskCompletionReviewMeta" class="subtext">确认后任务关闭；驳回后任务进入返工。</span>
+          </div>
+          <button type="button" class="secondary slim-inline" data-action="close-task-completion-review">关闭</button>
+        </div>
+        <form id="taskCompletionReviewForm" class="workbench-panel deliverable-review-form">
+          <input name="task_id" type="hidden" />
+          <input name="status" type="hidden" />
+          <div class="deliverable-flow-strip" aria-label="完成说明确认路径">
+            <span>工程师提交</span>
+            <span>PM确认</span>
+            <span>关闭/返工</span>
+          </div>
+          <p id="taskCompletionReviewHint" class="deliverable-review-hint">确认后，该任务会从未完成列表移出。</p>
+          <label id="taskCompletionRejectReasonLabel" hidden>
+            驳回原因
+            <textarea name="reject_reason" rows="3" placeholder="例如说明不完整、需要补充客户确认、任务实际未完成"></textarea>
+          </label>
+          <div class="form-actions right">
+            <button type="button" class="secondary slim-inline" data-action="close-task-completion-review">取消</button>
+            <button id="taskCompletionReviewSubmitButton" type="submit" class="secondary compact-submit">确认</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+  `;
+}
+
+function openTaskCompletionReviewDialog(button, status) {
+  const dialog = $("#taskCompletionReviewDialog");
+  const form = $("#taskCompletionReviewForm");
+  if (!dialog || !form) return false;
+  const isReject = status === "rejected";
+  form.reset();
+  form.elements.task_id.value = button.dataset.taskId || "";
+  form.elements.status.value = status;
+  $("#taskCompletionReviewTitle").textContent = isReject ? "驳回完成说明" : "确认完成说明";
+  $("#taskCompletionReviewMeta").textContent = button.dataset.taskTitle || "任务完成说明";
+  $("#taskCompletionReviewHint").textContent = isReject
+    ? "驳回后任务会进入返工，并把原因写入任务备注和执行日志。"
+    : "确认后任务会关闭，并从待确认完成说明中移出。";
+  $("#taskCompletionRejectReasonLabel").hidden = !isReject;
+  form.elements.reject_reason.required = isReject;
+  $("#taskCompletionReviewSubmitButton").textContent = isReject ? "确认驳回" : "确认通过";
+  $("#taskCompletionReviewSubmitButton").classList.toggle("danger", isReject);
+  openWorkbenchDialog("#taskCompletionReviewDialog");
+  return true;
 }
 
 function renderMyTaskCard(task) {
@@ -351,11 +433,15 @@ function bindTaskCompletionForms(projectId, workspace) {
       const button = event.submitter;
       if (button) button.disabled = true;
       try {
+        const payload = formDataFromContainer(form);
+        if (userHasRole("pm")) {
+          payload.direct_confirm = true;
+        }
         await api(`/api/workbench/tasks/${encodeURIComponent(form.dataset.taskId)}/completion`, {
           method: "POST",
-          body: JSON.stringify(formDataFromContainer(form)),
+          body: JSON.stringify(payload),
         });
-        showToast("完成说明已提交，等待PM确认");
+        showToast(userHasRole("pm") ? "任务已提交并确认关闭" : "完成说明已提交，等待PM确认");
         await loadWorkbenchProjects(projectId);
       } catch (error) {
         showToast(error.message);
@@ -363,6 +449,44 @@ function bindTaskCompletionForms(projectId, workspace) {
         if (button) button.disabled = false;
       }
     });
+  });
+}
+
+function bindTaskCompletionReviewDialog(workspace, reload) {
+  const dialog = workspace.querySelector("#taskCompletionReviewDialog");
+  closeDialogOnBackdrop(dialog);
+  workspace.querySelectorAll("[data-action='close-task-completion-review']").forEach((button) => {
+    button.addEventListener("click", () => closeWorkbenchDialog("#taskCompletionReviewDialog"));
+  });
+  const form = workspace.querySelector("#taskCompletionReviewForm");
+  if (!form) return;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = event.submitter;
+    if (button) button.disabled = true;
+    try {
+      const status = form.elements.status.value;
+      const body = { status, confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM" };
+      if (status === "rejected") {
+        const reason = form.elements.reject_reason.value.trim();
+        if (!reason) {
+          showToast("驳回完成说明需要填写原因");
+          return;
+        }
+        body.reject_reason = reason;
+      }
+      await api(`/api/workbench/tasks/${encodeURIComponent(form.elements.task_id.value)}/completion`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      closeWorkbenchDialog("#taskCompletionReviewDialog");
+      showToast(status === "confirmed" ? "任务已确认关闭" : "任务已驳回，进入返工");
+      await reload();
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      if (button) button.disabled = false;
+    }
   });
 }
 
@@ -409,23 +533,11 @@ async function handleTaskAction(action, button, projectId) {
     return true;
   }
   if (action === "confirm-task-completion") {
-    await api(`/api/workbench/tasks/${encodeURIComponent(button.dataset.taskId)}/completion`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "confirmed", confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM" }),
-    });
-    showToast("任务已确认关闭");
-    await loadWorkbenchProjects(projectId);
+    openTaskCompletionReviewDialog(button, "confirmed");
     return true;
   }
   if (action === "reject-task-completion") {
-    const reason = prompt("请输入驳回原因");
-    if (!reason || !reason.trim()) return true;
-    await api(`/api/workbench/tasks/${encodeURIComponent(button.dataset.taskId)}/completion`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "rejected", reject_reason: reason.trim(), confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM" }),
-    });
-    showToast("任务已驳回，进入返工");
-    await loadWorkbenchProjects(projectId);
+    openTaskCompletionReviewDialog(button, "rejected");
     return true;
   }
   return false;

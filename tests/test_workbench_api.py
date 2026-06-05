@@ -129,6 +129,47 @@ def test_non_file_task_requires_completion_review(client):
     assert task["completed_at"]
 
 
+def test_pm_can_submit_and_confirm_non_file_task_in_one_step(client):
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "PM customer coordination",
+            "work_package": "项目管理",
+            "owner_name": "rongkai",
+            "requires_deliverable": 0,
+        },
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+
+    submit_response = client.post(
+        f"/api/workbench/tasks/{task_id}/completion",
+        headers=headers,
+        json={
+            "completion_note": "Customer scope and next step confirmed.",
+            "submitted_by": "rongkai",
+            "direct_confirm": True,
+        },
+    )
+    assert submit_response.status_code == 201, submit_response.text
+    assert submit_response.json()["status"] == "confirmed"
+    assert submit_response.json()["direct_confirmed"] is True
+
+    inbox_response = client.get("/api/workbench/inbox?role=pm&view=submitted", headers=headers)
+    assert inbox_response.status_code == 200, inbox_response.text
+    assert all(item["id"] != task_id for item in inbox_response.json()["task_completions"])
+
+    detail_response = client.get(f"/api/workbench/projects/{project_id}", headers=headers)
+    task = next(item for item in detail_response.json()["tasks"] if item["id"] == task_id)
+    assert task["status"] == "confirmed"
+    assert task["confirmed_at"]
+    assert task["completed_at"]
+
+
 def test_blocked_task_auto_creates_task_issue(client):
     headers = auth_headers(client)
     project_id = create_project(client, headers)
@@ -154,6 +195,47 @@ def test_blocked_task_auto_creates_task_issue(client):
     assert linked_issue["scope"] == "task"
     assert linked_issue["status"] == "open"
     assert linked_issue["severity"] == "high"
+
+
+def test_blocked_task_can_link_existing_issue(client):
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+
+    issue_response = client.post(
+        f"/api/workbench/projects/{project_id}/issues",
+        headers=headers,
+        json={
+            "title": "Customer sample missing",
+            "scope": "equipment",
+            "severity": "high",
+            "status": "open",
+        },
+    )
+    assert issue_response.status_code == 201, issue_response.text
+    issue_id = issue_response.json()["id"]
+
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "Wait for customer sample",
+            "work_package": "前期方案",
+            "owner_name": "Bob",
+            "status": "blocked",
+            "notes": "Customer sample is required before fixture design.",
+            "linked_issue_id": issue_id,
+        },
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+
+    detail_response = client.get(f"/api/workbench/projects/{project_id}", headers=headers)
+    issues = detail_response.json()["issues"]
+    assert len([item for item in issues if item["title"] == "Customer sample missing"]) == 1
+    linked_issue = next(item for item in issues if item["id"] == issue_id)
+    assert linked_issue["task_id"] == task_id
+    assert linked_issue["scope"] == "task"
+    assert "Customer sample is required" in linked_issue["resolution"]
 
 
 def test_rejected_deliverable_must_be_resubmitted(client):
