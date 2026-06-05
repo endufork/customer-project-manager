@@ -48,6 +48,11 @@ class UpdateUserRequest(BaseModel):
     roles: list[str] = Field(default_factory=list)
 
 
+class SettingsUpdateRequest(BaseModel):
+    project_root_path: str | None = None
+    backup_target_path: str | None = None
+
+
 class ProjectMutationRequest(BaseModel):
     class Config:
         extra = "allow"
@@ -55,6 +60,15 @@ class ProjectMutationRequest(BaseModel):
 
 class DeleteProjectRequest(BaseModel):
     delete_files: bool = False
+
+
+class WorkbenchMutationRequest(BaseModel):
+    class Config:
+        extra = "allow"
+
+
+class WorkbenchTemplateRequest(BaseModel):
+    template: str = ""
 
 
 class ProjectListPayload(BaseModel):
