@@ -123,6 +123,12 @@ fastapi-refactor-plan-v0.1.md
 project-status-link-plan-v0.1.md
 ```
 
+- 综合架构、功能需求和后续实施计划记录在：
+
+```text
+project-management-platform-architecture-plan-v0.1.md
+```
+
 ## 后续代码开发固化规则
 
 ### 开发前
