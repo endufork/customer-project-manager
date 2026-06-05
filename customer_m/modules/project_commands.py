@@ -266,21 +266,17 @@ def update_project_record(conn: sqlite3.Connection, project_id: str, data: dict)
         context["site_name"],
         payload["project_group_name"],
     )
-    current_leaf = Path(existing["project_folder_path"]).name if existing["project_folder_path"] else ""
-    if current_leaf:
-        target_project_folder = target_parent / current_leaf
-    else:
-        target_project_folder = project_folder_for(
-            conn,
-            context["group_name"],
-            context["customer_name"],
-            context["site_name"],
-            payload["project_group_name"],
-            context["contact_name"],
-            payload["equipment_name"],
-            existing["intake_no"] or "",
-            equipment_no,
-        )
+    target_project_folder = project_folder_for(
+        conn,
+        context["group_name"],
+        context["customer_name"],
+        context["site_name"],
+        payload["project_group_name"],
+        context["contact_name"],
+        payload["equipment_name"],
+        existing["intake_no"] or "",
+        equipment_no,
+    )
 
     project_group_id = None
     if payload["project_group_name"]:
