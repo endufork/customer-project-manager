@@ -103,3 +103,51 @@ codex/team-trial-auth -> codex/fastapi-refactor
 ```
 
 不要从旧 `main` 拉分支。
+
+## 2026-06-05 阶段记录
+
+### 已完成
+
+- FastAPI 应用入口已成为当前后端主入口。
+- 旧 `http.server` 入口已清理，不再维护双服务路径。
+- 项目库、认证、用户管理、工作台核心接口已迁移为 FastAPI 路由。
+- 请求体已从宽松模型收紧为明确 Pydantic Schema：
+  - 项目创建/修改。
+  - 登录验证码、登录、用户管理、系统设置。
+  - 工作台任务、风险、Due Date 改期、交付物确认、任务模板。
+- 所有请求模型默认禁止多余字段，避免前端误传字段被后端静默吞掉。
+- 工作台 API 不再使用通用 `WorkbenchMutationRequest`，按业务动作拆分请求模型。
+- 增加统一请求日志：
+  - API 请求记录 method、path、status、duration。
+  - 4xx/5xx 请求记录 warning。
+  - 未捕获异常记录堆栈。
+- 增强文件系统诊断日志：
+  - 项目文件夹扫描。
+  - 共享资料扫描。
+  - 外部文件导入。
+  - 项目目录迁移。
+  - 项目目录回收站归档。
+  - 工作台交付物写盘归档。
+- 前端工作台表单采集已跳过 disabled 字段，避免 Schema 收紧后误触发 422。
+
+### 最近提交
+
+```text
+8b14a22 refactor: tighten api schemas and diagnostics
+```
+
+### 验证结果
+
+```text
+.\tools\check.cmd
+Python compile check: passed
+pytest: 4 passed
+JavaScript syntax check: passed
+```
+
+### 下一步
+
+- 继续补充扫描流程的单文件失败记录，避免单个文件异常中断整个项目扫描。
+- 优化文件扫描 N+1 查询，把现有文件记录预加载为字典。
+- 增加针对 422 请求校验、文件系统失败、工作台关键写接口的测试。
+- 规划日志落盘策略，区分开发控制台日志和团队试用运维日志。
