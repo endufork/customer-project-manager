@@ -258,7 +258,8 @@ PM 通知重点：
 方向：
 
 - 后端业务逻辑优先放在 `customer_m/modules/`。
-- `customer_m/server.py` 只负责 HTTP 路由、请求解析和响应组织。
+- `customer_m/fastapi_app.py` 只负责应用创建、路由注册、静态资源和启动初始化。
+- `customer_m/api/` 只负责 HTTP 路由、请求校验、权限依赖和响应组织。
 - 数据库迁移集中放在 `customer_m/database.py`。
 - 前端暂时仍在 `static/app.js` / `static/styles.css`，但新增大功能时应提取清晰函数边界。
 - 新增 Python 第三方依赖写入 `requirements.txt`。

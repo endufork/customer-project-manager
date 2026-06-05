@@ -180,7 +180,7 @@ function Save-Changes {
 
     Test-PythonCompile
 
-    Git-Run add app.py customer_m static tools "*.md" "*.sql" run_server.cmd .gitignore
+    Git-Run add app.py customer_m static tools "*.md" "*.sql" run_server.cmd run_fastapi_server.cmd requirements.txt .gitignore
 
     $staged = Git-Text diff --cached --name-only
     if (@($staged).Count -eq 0) {

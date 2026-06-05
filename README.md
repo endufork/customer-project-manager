@@ -8,7 +8,7 @@
   本地 Web 原型启动入口。
 
 - `customer_m/`  
-  后端模块包：`config.py` 配置和常量，`database.py` 数据库初始化和迁移，`server.py` HTTP 接口。
+  后端模块包：`fastapi_app.py` FastAPI 应用入口，`api/` 声明式 API 路由，`config.py` 配置和常量，`database.py` 数据库初始化和迁移。
 
 - `customer_m/modules/`  
   后端业务模块：客户与联系人、项目规则/查询/写入流程、基础下拉数据、生命周期辅助、目录管家、文件分类、文档解析、文件导入和目录扫描。
@@ -20,7 +20,10 @@
   前端页面，包含新项目录入、项目列表、筛选和项目详情抽屉。
 
 - `run_server.cmd`  
-  Windows 启动脚本。
+  Windows 默认启动脚本，当前会启动 FastAPI 服务。
+
+- `run_fastapi_server.cmd`  
+  FastAPI 明确启动脚本，与 `run_server.cmd` 指向同一套服务。
 
 - `tools/version.cmd` / `tools/version.ps1`  
   Git 版本管理半自动脚本，支持查看状态、保存提交、创建功能分支和打版本标签。
@@ -98,6 +101,7 @@ static/
 *.md
 *.sql
 run_server.cmd
+run_fastapi_server.cmd
 .gitignore
 ```
 
@@ -134,7 +138,7 @@ http://127.0.0.1:8765
 run_server.cmd
 ```
 
-`run_server.cmd` 会自动切到脚本所在目录，并通过 `tools\runtime.ps1` 查找 Python。默认优先使用 Codex bundled Python，也可以通过 `CUSTOMER_PROJECT_PYTHON` 指定 Python 路径，找不到时回退到系统 `python`/`py`。
+`run_server.cmd` 会自动切到脚本所在目录，并启动 FastAPI 服务。脚本会优先使用带有 `uvicorn` 的 Python；也可以通过 `CUSTOMER_PROJECT_PYTHON` 指定 Python 路径。
 
 第一次在新电脑运行时，先安装依赖：
 

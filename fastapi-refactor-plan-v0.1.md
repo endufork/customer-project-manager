@@ -48,7 +48,7 @@ uvicorn
 python-multipart
 ```
 
-- 保留旧 `run_server.cmd`，新增 FastAPI 启动脚本。
+- `run_server.cmd` 改为 FastAPI 默认启动脚本，同时保留 `run_fastapi_server.cmd` 作为明确入口。
 - 首批只迁移只读接口，不替换旧服务。
 
 ### 阶段 2：迁移基础接口

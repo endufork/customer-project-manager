@@ -1,7 +1,7 @@
 """FastAPI application entry point.
 
-This module is the migration target for the current http.server based app.
-The first step keeps existing business modules and frontend API paths intact.
+This module is the FastAPI entry point for the project management system.
+Business behavior stays in customer_m.modules; API files only adapt HTTP calls.
 """
 
 from pathlib import Path

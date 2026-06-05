@@ -6,10 +6,11 @@
 
 ```text
 app.py
-customer_m/server.py
+customer_m/fastapi_app.py
+customer_m/api/
 ```
 
-`app.py` 是启动入口。`customer_m/server.py` 是 Web API 网关，负责 HTTP 路由、JSON 请求/响应、本地静态页面服务。它不直接处理客户、项目、目录和文件业务，只负责调用业务模块。
+`app.py` 是本地启动入口。`customer_m/fastapi_app.py` 是 FastAPI 应用入口，负责注册 API 路由、静态页面和启动初始化。`customer_m/api/` 放声明式 HTTP 路由和请求体验证；它不直接处理客户、项目、目录和文件业务，只负责调用业务模块。
 
 ## 数据层
 
@@ -101,7 +102,7 @@ customer_m/modules/scanner.py
 customer_m/services.py
 ```
 
-这是第一阶段重构保留的兼容出口。旧代码仍然可以从 `customer_m.services` 调用业务函数，新代码优先直接从 `customer_m.modules.*` 导入。
+这是第一阶段重构保留的兼容出口。新代码优先直接从 `customer_m.modules.*` 导入。
 
 ## 后续拆分方向
 

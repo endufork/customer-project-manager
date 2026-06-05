@@ -172,8 +172,9 @@ git status --short --branch
 
 ### 代码结构
 
-- 后端业务逻辑优先放在 `customer_m/modules/`，避免继续把功能堆进 `customer_m/server.py`。
-- `customer_m/server.py` 只负责 HTTP 路由、请求解析和响应组织。
+- 后端业务逻辑优先放在 `customer_m/modules/`，避免把功能堆进 API 路由文件。
+- `customer_m/fastapi_app.py` 只负责应用创建、路由注册、静态资源和启动初始化。
+- `customer_m/api/` 只负责 HTTP 路由、请求校验、权限依赖和响应组织。
 - 数据库迁移集中放在 `customer_m/database.py`，新增字段或表必须考虑旧数据库迁移。
 - 前端暂时仍在 `static/app.js` / `static/styles.css`，但新增大功能时应优先提取清晰函数边界，避免超长逻辑互相缠绕。
 - 不写死本机绝对路径。工具路径通过 `tools/runtime.ps1`、环境变量或 PATH 解析。
@@ -184,11 +185,12 @@ git status --short --branch
 
 - 代码优先按业务功能模块拆分，而不是长期堆在单个前端或后端大文件中。
 - 后端模块边界：
-  - `customer_m/server.py` 只负责服务启动、HTTP 方法入口和日志。
+  - `customer_m/fastapi_app.py` 只负责服务入口、路由注册和静态资源。
+  - `customer_m/api/` 只负责 HTTP 方法入口、请求校验、权限依赖和响应组织。
   - HTTP 读写、静态资源、JSON 响应放在独立基础模块。
   - API 路由分发放在独立网关或路由模块。
   - 项目资料库、文件目录管家、扫描解析、工程工作台、任务、风险、交付物、Due Date、用户权限、通知、审计、备份分别按功能进入独立模块。
-  - 业务逻辑优先放在 `customer_m/modules/` 或清晰命名的功能包中，避免回流到 `server.py`。
+  - 业务逻辑优先放在 `customer_m/modules/` 或清晰命名的功能包中，避免回流到 API 路由文件。
 - 前端模块边界：
   - 新增大功能时不要继续无边界堆进 `static/app.js`。
   - 优先按项目资料库、工作台、任务、风险、交付物、Due Date、登录权限、通知、用户管理等功能拆分。

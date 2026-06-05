@@ -43,8 +43,8 @@ GET /api/projects/{project_id}
 
 - `/docs` 可打开。
 - `/health` 可返回健康状态。
-- 旧服务仍可通过 `run_server.cmd` 启动。
-- FastAPI 服务可通过 `run_fastapi_server.cmd` 启动。
+- `run_server.cmd` 和 `run_fastapi_server.cmd` 均启动 FastAPI 服务。
+- 旧 `http.server` 入口已移除，不再维护双路由。
 
 ## 2. 性能优化：消除 N+1 查询
 
