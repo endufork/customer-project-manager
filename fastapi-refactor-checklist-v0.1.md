@@ -92,7 +92,8 @@ existing_files = {
 
 - 工作台列表已做过 N+1 优化。
 - 已增加 API 请求耗时日志。
-- 文件夹扫描仍需继续优化，后续应预加载 `project_files` / `project_group_files` 形成字典，避免循环内重复查询。
+- 文件夹扫描按当前业务频率保持轻量，不做实时监听。
+- 文件夹扫描 N+1 优化降为中低优先级；如后续文件数量明显上升，再预加载 `project_files` / `project_group_files` 形成字典。
 
 ## 3. SQLite 高并发处理
 
@@ -206,7 +207,9 @@ OSError
 
 - 已为目录迁移、回收站归档、外部导入、交付物归档、文件夹枚举增加异常日志。
 - 当前扫描枚举失败可追踪并返回明确错误。
-- 单个文件失败不中断整个扫描尚未完全实现，后续需增加 `failed_files` 和失败明细记录。
+- 单个文件失败不会中断整个扫描。
+- 扫描结果已包含 `failed_files` 和 `file_errors`。
+- 暂不新增扫描错误数据库明细表；团队试用阶段先依赖返回结果和日志排错。
 
 ## 6. 分阶段执行
 
@@ -275,9 +278,18 @@ OSError
 
 - FastAPI 请求必须保留统一耗时日志。
 - 4xx/5xx 请求需要能从日志中定位 method、path、status、duration。
+- 应用日志必须落盘，默认路径为 `data/logs/app.log`，可通过 `CUSTOMER_PROJECT_LOG_DIR` 覆盖。
 - 文件系统操作失败必须记录上下文：
   - project_id 或 task_id。
   - 源路径。
   - 目标路径或目标目录。
   - 原始异常。
 - 面向前端的错误信息要可读，但日志中要保留完整堆栈，便于排查 NAS/共享盘权限和网络闪断问题。
+
+### 备份与启动
+
+- 默认启动脚本为 `run_server.cmd`。
+- FastAPI 明确启动脚本为 `run_fastapi_server.cmd`。
+- 数据库备份使用 `POST /api/system/backup`，仅 Admin 可执行。
+- 备份目录优先使用 `backup_target_path`，为空时使用 `data/backups`。
+- 备份必须使用 SQLite 原生 backup API，不直接复制运行中的数据库文件。

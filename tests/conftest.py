@@ -19,10 +19,12 @@ def client(tmp_path, monkeypatch):
 
     data_dir = tmp_path / "data"
     project_root = tmp_path / "project_root"
+    log_dir = tmp_path / "logs"
     db_path = data_dir / "customer_projects.db"
 
     monkeypatch.setattr(config, "DATA_DIR", data_dir)
     monkeypatch.setattr(config, "DB_PATH", db_path)
+    monkeypatch.setattr(config, "LOG_DIR_PATH", str(log_dir))
     monkeypatch.setattr(database, "DATA_DIR", data_dir)
     monkeypatch.setattr(database, "DB_PATH", db_path)
 

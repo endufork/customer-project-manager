@@ -454,3 +454,48 @@ project-management-platform-architecture-plan-v0.1.md
 完整移动端
 复杂审批流引擎
 ```
+
+## 17. 2026-06-05 FastAPI 稳定化收尾
+
+### 决策内容
+
+FastAPI 底层稳定化阶段完成。当前不继续强化扫描性能，扫描保持轻量，优先准确、安全、可排错。
+
+已落地：
+
+- 日志落盘。
+- 数据库备份 API。
+- 明确启动方式。
+- 严格 Pydantic Schema 测试。
+- 关键接口测试补强。
+- 扫描单文件失败不中断。
+
+### 适用模块
+
+- FastAPI API 网关。
+- 日志与运维。
+- 数据库备份。
+- 项目文件夹扫描。
+- 测试体系。
+
+### 暂不做的内容
+
+- 暂不做实时文件监听。
+- 暂不做复杂扫描性能优化。
+- 暂不做 Admin 页面查看日志和备份。
+- 暂不做自动定时备份。
+
+### 下一步动作
+
+- 进入工作台闭环阶段。
+- 团队试用前确认日志目录、备份目录和备份周期。
+- 后续再做 Windows 开机自启和定时备份。
+
+### 相关文档
+
+```text
+fastapi-stabilization-runbook-v0.1.md
+fastapi-refactor-plan-v0.1.md
+fastapi-refactor-checklist-v0.1.md
+project-management-platform-architecture-plan-v0.1.md
+```

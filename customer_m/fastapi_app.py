@@ -16,9 +16,11 @@ from fastapi.staticfiles import StaticFiles
 from .api.auth import router as auth_router
 from .api.bootstrap import router as bootstrap_router
 from .api.projects import router as projects_router
+from .api.system import router as system_router
 from .api.workbench import router as workbench_router
 from .config import STATIC_DIR
 from .database import init_db
+from .logging_config import configure_logging
 from .api.schemas import HealthPayload
 
 
@@ -63,6 +65,7 @@ def render_index_html() -> str:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    configure_logging()
     init_db()
     yield
 
@@ -72,6 +75,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(auth_router)
 app.include_router(bootstrap_router)
 app.include_router(projects_router)
+app.include_router(system_router)
 app.include_router(workbench_router)
 
 

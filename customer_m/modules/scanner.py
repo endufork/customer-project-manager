@@ -103,6 +103,168 @@ def upsert_file_search(conn: sqlite3.Connection, file_id: str, project_id: str, 
         (file_id, project_id, file_name, extracted_text),
     )
 
+
+def index_project_file(conn: sqlite3.Connection, project_id: str, project_folder: Path, file_path: Path) -> str:
+    file_path_text = str(file_path)
+    exists = conn.execute(
+        "SELECT id, size_bytes, modified_at, content_hash FROM project_files WHERE project_id = ? AND file_path = ?",
+        (project_id, file_path_text),
+    ).fetchone()
+    if exists:
+        stat = file_path.stat()
+        modified_at = file_modified_at(file_path)
+        if exists["size_bytes"] == stat.st_size and exists["modified_at"] == modified_at:
+            return "skipped"
+        content_hash = sha256_file(file_path)
+        category = category_from_project_path(conn, project_folder, file_path)
+        ext = file_path.suffix.lower()
+        is_model = 1 if ext in MODEL_EXTENSIONS else 0
+        text_extracted, extracted_text = extract_text(file_path)
+        conn.execute(
+            """
+            UPDATE project_files
+            SET original_name = ?, current_name = ?, extension = ?, category_code = ?,
+              size_bytes = ?, modified_at = ?, is_3d_model = ?, text_extracted = ?,
+              extracted_text = ?, content_hash = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                file_path.name,
+                file_path.name,
+                ext,
+                category,
+                stat.st_size,
+                modified_at,
+                is_model,
+                text_extracted,
+                extracted_text,
+                content_hash,
+                now_iso(),
+                exists["id"],
+            ),
+        )
+        upsert_file_search(conn, exists["id"], project_id, file_path.name, extracted_text)
+        return "updated"
+
+    category = category_from_project_path(conn, project_folder, file_path)
+    ext = file_path.suffix.lower()
+    is_model = 1 if ext in MODEL_EXTENSIONS else 0
+    text_extracted, extracted_text = extract_text(file_path)
+    stat = file_path.stat()
+    modified_at = file_modified_at(file_path)
+    file_id = make_id()
+    conn.execute(
+        """
+        INSERT INTO project_files (
+          id, project_id, original_name, current_name, extension, category_code,
+          file_path, original_source_path, size_bytes, modified_at, is_3d_model,
+          text_extracted, extracted_text, content_hash, import_method, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'new_project_copy', ?, ?)
+        """,
+        (
+            file_id,
+            project_id,
+            file_path.name,
+            file_path.name,
+            ext,
+            category,
+            file_path_text,
+            stat.st_size,
+            modified_at,
+            is_model,
+            text_extracted,
+            extracted_text,
+            sha256_file(file_path),
+            now_iso(),
+            now_iso(),
+        ),
+    )
+    upsert_file_search(conn, file_id, project_id, file_path.name, extracted_text)
+    return "new"
+
+
+def index_project_group_file(conn: sqlite3.Connection, project_group_id: str, file_path: Path) -> str:
+    file_path_text = str(file_path)
+    exists = conn.execute(
+        "SELECT id, size_bytes, modified_at, content_hash FROM project_group_files WHERE project_group_id = ? AND file_path = ?",
+        (project_group_id, file_path_text),
+    ).fetchone()
+    if exists:
+        stat = file_path.stat()
+        modified_at = file_modified_at(file_path)
+        if exists["size_bytes"] == stat.st_size and exists["modified_at"] == modified_at:
+            return "skipped"
+        category = classify_file(file_path)
+        ext = file_path.suffix.lower()
+        is_model = 1 if ext in MODEL_EXTENSIONS else 0
+        text_extracted, extracted_text = extract_text(file_path)
+        conn.execute(
+            """
+            UPDATE project_group_files
+            SET original_name = ?, current_name = ?, extension = ?, category_code = ?,
+              size_bytes = ?, modified_at = ?, is_3d_model = ?, text_extracted = ?,
+              extracted_text = ?, content_hash = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                file_path.name,
+                file_path.name,
+                ext,
+                category,
+                stat.st_size,
+                modified_at,
+                is_model,
+                text_extracted,
+                extracted_text,
+                sha256_file(file_path),
+                now_iso(),
+                exists["id"],
+            ),
+        )
+        return "updated"
+
+    category = classify_file(file_path)
+    ext = file_path.suffix.lower()
+    is_model = 1 if ext in MODEL_EXTENSIONS else 0
+    text_extracted, extracted_text = extract_text(file_path)
+    stat = file_path.stat()
+    modified_at = file_modified_at(file_path)
+    conn.execute(
+        """
+        INSERT INTO project_group_files (
+          id, project_group_id, original_name, current_name, extension, category_code,
+          file_path, size_bytes, modified_at, is_3d_model, text_extracted,
+          extracted_text, content_hash, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            make_id(),
+            project_group_id,
+            file_path.name,
+            file_path.name,
+            ext,
+            category,
+            file_path_text,
+            stat.st_size,
+            modified_at,
+            is_model,
+            text_extracted,
+            extracted_text,
+            sha256_file(file_path),
+            now_iso(),
+            now_iso(),
+        ),
+    )
+    return "new"
+
+
+def record_file_scan_error(file_errors: list[dict], file_path: Path, exc: OSError) -> None:
+    file_errors.append({"file_path": str(file_path), "error": str(exc)})
+    logger.exception("Failed to scan file path=%s", file_path)
+
+
 def scan_project_folder(conn: sqlite3.Connection, project_id: str) -> dict:
     project = conn.execute(
         "SELECT project_folder_path FROM projects WHERE id = ? AND COALESCE(is_deleted, 0) = 0",
@@ -121,94 +283,27 @@ def scan_project_folder(conn: sqlite3.Connection, project_id: str) -> dict:
     new_count = 0
     updated_count = 0
     skipped_count = 0
+    file_errors: list[dict] = []
     for file_path in files:
-        file_path_text = str(file_path)
-        exists = conn.execute(
-            "SELECT id, size_bytes, modified_at, content_hash FROM project_files WHERE project_id = ? AND file_path = ?",
-            (project_id, file_path_text),
-        ).fetchone()
-        if exists:
-            stat = file_path.stat()
-            modified_at = file_modified_at(file_path)
-            if exists["size_bytes"] == stat.st_size and exists["modified_at"] == modified_at:
-                skipped_count += 1
-                continue
-            content_hash = sha256_file(file_path)
-            category = category_from_project_path(conn, project_folder, file_path)
-            ext = file_path.suffix.lower()
-            is_model = 1 if ext in MODEL_EXTENSIONS else 0
-            text_extracted, extracted_text = extract_text(file_path)
-            conn.execute(
-                """
-                UPDATE project_files
-                SET original_name = ?, current_name = ?, extension = ?, category_code = ?,
-                  size_bytes = ?, modified_at = ?, is_3d_model = ?, text_extracted = ?,
-                  extracted_text = ?, content_hash = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    file_path.name,
-                    file_path.name,
-                    ext,
-                    category,
-                    stat.st_size,
-                    modified_at,
-                    is_model,
-                    text_extracted,
-                    extracted_text,
-                    content_hash,
-                    now_iso(),
-                    exists["id"],
-                ),
-            )
-            upsert_file_search(conn, exists["id"], project_id, file_path.name, extracted_text)
-            updated_count += 1
+        try:
+            outcome = index_project_file(conn, project_id, project_folder, file_path)
+        except OSError as exc:
+            record_file_scan_error(file_errors, file_path, exc)
             continue
-
-        category = category_from_project_path(conn, project_folder, file_path)
-        ext = file_path.suffix.lower()
-        is_model = 1 if ext in MODEL_EXTENSIONS else 0
-        text_extracted, extracted_text = extract_text(file_path)
-        stat = file_path.stat()
-        modified_at = file_modified_at(file_path)
-        file_id = make_id()
-        conn.execute(
-            """
-            INSERT INTO project_files (
-              id, project_id, original_name, current_name, extension, category_code,
-              file_path, original_source_path, size_bytes, modified_at, is_3d_model,
-              text_extracted, extracted_text, content_hash, import_method, created_at, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'new_project_copy', ?, ?)
-            """,
-            (
-                file_id,
-                project_id,
-                file_path.name,
-                file_path.name,
-                ext,
-                category,
-                file_path_text,
-                stat.st_size,
-                modified_at,
-                is_model,
-                text_extracted,
-                extracted_text,
-                sha256_file(file_path),
-                now_iso(),
-                now_iso(),
-            ),
-        )
-        upsert_file_search(conn, file_id, project_id, file_path.name, extracted_text)
-        new_count += 1
+        if outcome == "new":
+            new_count += 1
+        elif outcome == "updated":
+            updated_count += 1
+        else:
+            skipped_count += 1
 
     refresh_project_file_flags(conn, project_id)
-    if new_count or updated_count or removed_count:
+    if new_count or updated_count or removed_count or file_errors:
         create_event(
             conn,
             project_id,
             "folder_scanned",
-            f"扫描项目文件夹，新增 {new_count} 个，更新 {updated_count} 个，移除 {removed_count} 个文件记录",
+            f"扫描项目文件夹，新增 {new_count} 个，更新 {updated_count} 个，移除 {removed_count} 个文件记录，失败 {len(file_errors)} 个",
         )
     result = {
         "total_files": len(files),
@@ -216,6 +311,8 @@ def scan_project_folder(conn: sqlite3.Connection, project_id: str) -> dict:
         "updated_files": updated_count,
         "removed_files": removed_count,
         "skipped_files": skipped_count,
+        "failed_files": len(file_errors),
+        "file_errors": file_errors,
     }
     logger.info("Scanned project folder project_id=%s result=%s", project_id, result)
     return result
@@ -248,82 +345,19 @@ def scan_project_group_shared_folder(conn: sqlite3.Connection, project_group_id:
     new_count = 0
     updated_count = 0
     skipped_count = 0
+    file_errors: list[dict] = []
     for file_path in files:
-        file_path_text = str(file_path)
-        exists = conn.execute(
-            "SELECT id, size_bytes, modified_at, content_hash FROM project_group_files WHERE project_group_id = ? AND file_path = ?",
-            (project_group_id, file_path_text),
-        ).fetchone()
-        if exists:
-            stat = file_path.stat()
-            modified_at = file_modified_at(file_path)
-            if exists["size_bytes"] == stat.st_size and exists["modified_at"] == modified_at:
-                skipped_count += 1
-                continue
-            category = classify_file(file_path)
-            ext = file_path.suffix.lower()
-            is_model = 1 if ext in MODEL_EXTENSIONS else 0
-            text_extracted, extracted_text = extract_text(file_path)
-            conn.execute(
-                """
-                UPDATE project_group_files
-                SET original_name = ?, current_name = ?, extension = ?, category_code = ?,
-                  size_bytes = ?, modified_at = ?, is_3d_model = ?, text_extracted = ?,
-                  extracted_text = ?, content_hash = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    file_path.name,
-                    file_path.name,
-                    ext,
-                    category,
-                    stat.st_size,
-                    modified_at,
-                    is_model,
-                    text_extracted,
-                    extracted_text,
-                    sha256_file(file_path),
-                    now_iso(),
-                    exists["id"],
-                ),
-            )
-            updated_count += 1
+        try:
+            outcome = index_project_group_file(conn, project_group_id, file_path)
+        except OSError as exc:
+            record_file_scan_error(file_errors, file_path, exc)
             continue
-
-        category = classify_file(file_path)
-        ext = file_path.suffix.lower()
-        is_model = 1 if ext in MODEL_EXTENSIONS else 0
-        text_extracted, extracted_text = extract_text(file_path)
-        stat = file_path.stat()
-        modified_at = file_modified_at(file_path)
-        conn.execute(
-            """
-            INSERT INTO project_group_files (
-              id, project_group_id, original_name, current_name, extension, category_code,
-              file_path, size_bytes, modified_at, is_3d_model, text_extracted,
-              extracted_text, content_hash, created_at, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                make_id(),
-                project_group_id,
-                file_path.name,
-                file_path.name,
-                ext,
-                category,
-                file_path_text,
-                stat.st_size,
-                modified_at,
-                is_model,
-                text_extracted,
-                extracted_text,
-                sha256_file(file_path),
-                now_iso(),
-                now_iso(),
-            ),
-        )
-        new_count += 1
+        if outcome == "new":
+            new_count += 1
+        elif outcome == "updated":
+            updated_count += 1
+        else:
+            skipped_count += 1
 
     result = {
         "total_files": len(files),
@@ -331,6 +365,8 @@ def scan_project_group_shared_folder(conn: sqlite3.Connection, project_group_id:
         "updated_files": updated_count,
         "removed_files": removed_count,
         "skipped_files": skipped_count,
+        "failed_files": len(file_errors),
+        "file_errors": file_errors,
     }
     logger.info("Scanned shared project group folder project_group_id=%s result=%s", project_group_id, result)
     return result

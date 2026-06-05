@@ -129,6 +129,12 @@ project-status-link-plan-v0.1.md
 project-management-platform-architecture-plan-v0.1.md
 ```
 
+- FastAPI 稳定化、启动方式、日志落盘、数据库备份和扫描策略记录在：
+
+```text
+fastapi-stabilization-runbook-v0.1.md
+```
+
 - 后续开发过程中，如果发生以下任一情况，应同步更新 `project-management-platform-architecture-plan-v0.1.md`：
   - 需求边界变化。
   - 新增或调整重要功能模块。

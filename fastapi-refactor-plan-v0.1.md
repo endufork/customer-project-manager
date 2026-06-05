@@ -147,7 +147,44 @@ JavaScript syntax check: passed
 
 ### 下一步
 
-- 继续补充扫描流程的单文件失败记录，避免单个文件异常中断整个项目扫描。
 - 优化文件扫描 N+1 查询，把现有文件记录预加载为字典。
-- 增加针对 422 请求校验、文件系统失败、工作台关键写接口的测试。
-- 规划日志落盘策略，区分开发控制台日志和团队试用运维日志。
+- 增加更多工作台关键写接口测试。
+- 规划 Windows 开机自启和定时备份。
+- 明确团队试用时日志和备份目录的实际位置。
+
+## 2026-06-05 稳定化收尾记录
+
+### 已完成
+
+- 新增日志落盘：
+  - 默认路径：`data/logs/app.log`。
+  - 支持 `CUSTOMER_PROJECT_LOG_DIR` 覆盖。
+  - 使用滚动日志，单文件 5 MB，保留 10 个历史文件。
+- 新增数据库备份能力：
+  - `POST /api/system/backup`。
+  - 仅 Admin 可用。
+  - 优先使用 `backup_target_path`，为空时使用 `data/backups`。
+  - 使用 SQLite 原生 backup API。
+- 扫描保持轻量：
+  - 不做实时监听。
+  - 单个文件失败不再中断整个项目扫描。
+  - 扫描结果增加 `failed_files` 和 `file_errors`。
+- 补关键接口测试：
+  - 严格 Schema 额外字段返回 422。
+  - 日志落盘。
+  - 数据库备份 API。
+  - 扫描单文件失败不中断。
+- 新增运维说明：
+
+```text
+fastapi-stabilization-runbook-v0.1.md
+```
+
+### 验证结果
+
+```text
+.\tools\check.cmd
+Python compile check: passed
+pytest: 8 passed
+JavaScript syntax check: passed
+```

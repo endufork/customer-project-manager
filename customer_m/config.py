@@ -7,6 +7,7 @@ DATA_DIR = Path(os.environ.get("CUSTOMER_PROJECT_DATA_DIR", BASE_DIR / "data"))
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = Path(os.environ.get("CUSTOMER_PROJECT_DB_PATH", DATA_DIR / "customer_projects.db"))
 SCHEMA_PATH = BASE_DIR / "mvp-sqlite-schema-v0.2.sql"
+LOG_DIR_PATH = os.environ.get("CUSTOMER_PROJECT_LOG_DIR", "").strip()
 
 AUTH_EMAIL_DOMAIN = os.environ.get("CUSTOMER_AUTH_EMAIL_DOMAIN", "jinxiangsz.com").strip().lower()
 AUTH_INITIAL_ADMIN_EMAIL = os.environ.get("CUSTOMER_AUTH_INITIAL_ADMIN_EMAIL", "rongkai@jinxiangsz.com").strip().lower()
