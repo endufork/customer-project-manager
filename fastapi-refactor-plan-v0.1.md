@@ -4,6 +4,12 @@
 
 把当前基于 `http.server` 的本地服务重构为 FastAPI，以便后续团队试用、接口文档、权限中间件、文件上传、部署运维更清晰。
 
+详细重构清单和代码审查红线见：
+
+```text
+fastapi-refactor-checklist-v0.1.md
+```
+
 ## 为什么要重构
 
 当前 HTTP 层的问题：
@@ -43,6 +49,7 @@ python-multipart
 ```
 
 - 保留旧 `run_server.cmd`，新增 FastAPI 启动脚本。
+- 首批只迁移只读接口，不替换旧服务。
 
 ### 阶段 2：迁移基础接口
 
