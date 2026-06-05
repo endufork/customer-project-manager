@@ -2,7 +2,7 @@ const { test, expect } = require("@playwright/test");
 
 test("workbench action windows open from the task action row", async ({ page }) => {
   await page.goto("/?view=workbench");
-  await expect(page.getByRole("heading", { name: "客户项目资料管理" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "项目管理系统" })).toBeVisible();
   await page.locator("#loginEmailInput").fill("rongkai@jinxiangsz.com");
   await page.getByRole("button", { name: "发送验证码" }).click();
   await expect(page.locator("#authStatus")).toContainText(/验证码/);

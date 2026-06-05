@@ -14,7 +14,7 @@ from .workbench_router import WorkbenchRouterMixin
 
 
 class AppHandler(AuthRouterMixin, ApiRouterMixin, WorkbenchRouterMixin, JsonApiMixin, StaticAssetMixin, SimpleHTTPRequestHandler):
-    server_version = "CustomerProjectPrototype/0.1"
+    server_version = "ProjectManagementSystem/0.1"
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -55,6 +55,6 @@ def main() -> None:
     init_db()
     port = int(os.environ.get("CUSTOMER_PROJECT_PORT", "8765"))
     server = ThreadingHTTPServer(("127.0.0.1", port), AppHandler)
-    safe_print(f"Customer project prototype running at http://127.0.0.1:{port}")
+    safe_print(f"项目管理系统 running at http://127.0.0.1:{port}")
     safe_print(f"Database: {DB_PATH}")
     server.serve_forever()
