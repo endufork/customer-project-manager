@@ -303,7 +303,7 @@ def review_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, u
         )
         record_activity(conn, row["project_id"], "task_completion_confirmed", "确认任务完成", reviewer, task_id=task_id)
         create_event(conn, row["project_id"], "workbench_task_confirmed", "确认任务完成", row["title"])
-        return {"id": task_id, "status": "confirmed"}
+        return {"id": task_id, "project_id": row["project_id"], "status": "confirmed"}
     if action == "rejected":
         reason = _nullable_text(data.get("reject_reason")) or _nullable_text(data.get("review_note"))
         if not reason:
@@ -320,7 +320,7 @@ def review_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, u
         )
         record_activity(conn, row["project_id"], "task_completion_rejected", "驳回任务完成", reason, task_id=task_id)
         create_event(conn, row["project_id"], "workbench_task_rejected", "驳回任务完成", row["title"])
-        return {"id": task_id, "status": "rework"}
+        return {"id": task_id, "project_id": row["project_id"], "status": "rework"}
     raise ValueError("任务确认操作无效")
 
 def delete_task(conn: sqlite3.Connection, task_id: str) -> dict:

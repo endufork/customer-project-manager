@@ -334,7 +334,7 @@ function bindWorkbenchWorkspaceActions(projectId) {
   bindDueDateForms(projectId, workspace);
   bindDeliverableUploads(projectId, workspace);
   bindDeliverableReviewDialog(workspace, () => loadWorkbenchProjects(projectId));
-  bindTaskCompletionReviewDialog(workspace, () => loadWorkbenchProjects(projectId));
+  bindTaskCompletionReviewDialog(workspace, (result = {}) => loadWorkbenchProjects(result.project_id || projectId));
 
   workspace.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", async () => {

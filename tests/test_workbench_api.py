@@ -103,6 +103,19 @@ def test_non_file_task_requires_completion_review(client):
     )
     assert direct_close.status_code == 400
 
+    direct_submit = client.patch(
+        f"/api/workbench/tasks/{task_id}",
+        headers=headers,
+        json={
+            "title": "Customer alignment call",
+            "work_package": "项目管理",
+            "owner_name": "Bob",
+            "status": "submitted",
+            "requires_deliverable": 0,
+        },
+    )
+    assert direct_submit.status_code == 400
+
     submit_response = client.post(
         f"/api/workbench/tasks/{task_id}/completion",
         headers=headers,
@@ -122,6 +135,7 @@ def test_non_file_task_requires_completion_review(client):
     )
     assert review_response.status_code == 200, review_response.text
     assert review_response.json()["status"] == "confirmed"
+    assert review_response.json()["project_id"] == project_id
 
     detail_response = client.get(f"/api/workbench/projects/{project_id}", headers=headers)
     task = next(item for item in detail_response.json()["tasks"] if item["id"] == task_id)

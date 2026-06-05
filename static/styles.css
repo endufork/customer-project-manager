@@ -13,6 +13,10 @@
   --shadow: 0 8px 24px rgba(20, 31, 43, 0.08);
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .auth-view {
   min-height: 100vh;
   display: grid;
@@ -1574,6 +1578,12 @@ tr.project-row:focus {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
   align-items: center;
+}
+
+.field-note {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .task-status {

@@ -107,6 +107,25 @@ function renderBlockedIssueOptions(issues = [], task = {}) {
   `;
 }
 
+function renderEditableTaskStatusOptions(selectedStatus) {
+  const manualStatuses = new Set(["not_started", "in_progress", "waiting_info", "blocked", "rework", "cancelled"]);
+  return optionItems(
+    (state.bootstrap?.workbench_task_statuses || []).filter((item) => manualStatuses.has(item.code)),
+    selectedStatus,
+  );
+}
+
+function renderTaskStatusEditor(task) {
+  const workflowStatuses = new Set(["submitted", "confirmed", "completed"]);
+  if (workflowStatuses.has(task.status)) {
+    return `
+      <input value="${escapeHtml(workbenchTaskStatusName(task.status))}" disabled />
+      <span class="field-note">流程状态由提交、确认、驳回按钮自动生成。</span>
+    `;
+  }
+  return `<select name="status">${renderEditableTaskStatusOptions(task.status)}</select>`;
+}
+
 function renderWorkbenchTask(task, issues = []) {
   const deliverables = task.deliverables || [];
   const owner = task.owner_name || "未指派";
@@ -156,7 +175,7 @@ function renderWorkbenchTask(task, issues = []) {
           </label>
           <label>
             状态
-            <select name="status">${optionItems(state.bootstrap?.workbench_task_statuses || [], task.status)}</select>
+            ${renderTaskStatusEditor(task)}
           </label>
           <label>
             Due Date
@@ -237,12 +256,7 @@ function renderTaskCompletionReviewDialog() {
         <form id="taskCompletionReviewForm" class="workbench-panel deliverable-review-form">
           <input name="task_id" type="hidden" />
           <input name="status" type="hidden" />
-          <div class="deliverable-flow-strip" aria-label="完成说明确认路径">
-            <span>工程师提交</span>
-            <span>PM确认</span>
-            <span>关闭/返工</span>
-          </div>
-          <p id="taskCompletionReviewHint" class="deliverable-review-hint">确认后，该任务会从未完成列表移出。</p>
+          <p id="taskCompletionReviewHint" class="deliverable-review-hint">该操作只处理已提交的完成说明。确认后任务关闭，驳回后任务回到需返工。</p>
           <label id="taskCompletionRejectReasonLabel" hidden>
             驳回原因
             <textarea name="reject_reason" rows="3" placeholder="例如说明不完整、需要补充客户确认、任务实际未完成"></textarea>
@@ -261,14 +275,22 @@ function openTaskCompletionReviewDialog(button, status) {
   const dialog = $("#taskCompletionReviewDialog");
   const form = $("#taskCompletionReviewForm");
   if (!dialog || !form) return false;
+  const taskId = button.dataset.taskId || "";
+  if (!taskId) {
+    showToast("任务ID缺失，请刷新页面后重试");
+    return true;
+  }
   const isReject = status === "rejected";
   form.reset();
-  form.elements.task_id.value = button.dataset.taskId || "";
+  dialog.dataset.taskId = taskId;
+  dialog.dataset.status = status;
+  form.dataset.taskId = taskId;
+  form.elements.task_id.value = taskId;
   form.elements.status.value = status;
-  $("#taskCompletionReviewTitle").textContent = isReject ? "驳回完成说明" : "确认完成说明";
+  $("#taskCompletionReviewTitle").textContent = isReject ? "驳回完成说明" : "确认任务完成";
   $("#taskCompletionReviewMeta").textContent = button.dataset.taskTitle || "任务完成说明";
   $("#taskCompletionReviewHint").textContent = isReject
-    ? "驳回后任务会进入返工，并把原因写入任务备注和执行日志。"
+    ? "驳回后任务会进入需返工，并把原因写入任务备注和执行日志。"
     : "确认后任务会关闭，并从待确认完成说明中移出。";
   $("#taskCompletionRejectReasonLabel").hidden = !isReject;
   form.elements.reject_reason.required = isReject;
@@ -470,10 +492,16 @@ function bindTaskCompletionReviewDialog(workspace, reload) {
   if (!form) return;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    event.stopPropagation();
     const button = event.submitter;
     if (button) button.disabled = true;
     try {
       const status = form.elements.status.value;
+      const taskId = form.dataset.taskId || form.elements.task_id.value || workspace.querySelector("#taskCompletionReviewDialog")?.dataset.taskId || "";
+      if (!taskId) {
+        showToast("任务ID缺失，请刷新页面后重试");
+        return;
+      }
       const body = { status, confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM" };
       if (status === "rejected") {
         const reason = form.elements.reject_reason.value.trim();
@@ -483,13 +511,13 @@ function bindTaskCompletionReviewDialog(workspace, reload) {
         }
         body.reject_reason = reason;
       }
-      await api(`/api/workbench/tasks/${encodeURIComponent(form.elements.task_id.value)}/completion`, {
+      const result = await api(`/api/workbench/tasks/${encodeURIComponent(taskId)}/completion`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
       closeWorkbenchDialog("#taskCompletionReviewDialog");
       showToast(status === "confirmed" ? "任务已确认关闭" : "任务已驳回，进入返工");
-      await reload();
+      await reload(result);
     } catch (error) {
       showToast(error.message);
     } finally {
