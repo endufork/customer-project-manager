@@ -178,6 +178,15 @@ def update_task(conn: sqlite3.Connection, task_id: str, data: dict) -> dict:
         completed_at = now
     if status not in {"confirmed", "completed"}:
         completed_at = None
+    work_package = _clean_work_package(data.get("work_package")) if "work_package" in data else row["work_package"]
+    phase_code = _nullable_text(data.get("phase_code")) if "phase_code" in data else row["phase_code"]
+    description = _nullable_text(data.get("description")) if "description" in data else row["description"]
+    owner_name = _nullable_text(data.get("owner_name")) if "owner_name" in data else row["owner_name"]
+    due_date = _date_or_none(data.get("due_date")) if "due_date" in data else row["due_date"]
+    is_required = _bool_value(data.get("is_required")) if "is_required" in data else row["is_required"]
+    requires_deliverable = _bool_value(data.get("requires_deliverable")) if "requires_deliverable" in data else row["requires_deliverable"]
+    blocked_reason = _nullable_text(data.get("blocked_reason")) if "blocked_reason" in data else row["blocked_reason"]
+    notes = _nullable_text(data.get("notes")) if "notes" in data else row["notes"]
     conn.execute(
         """
         UPDATE execution_tasks
@@ -200,21 +209,21 @@ def update_task(conn: sqlite3.Connection, task_id: str, data: dict) -> dict:
         WHERE id = ?
         """,
         (
-            _clean_work_package(data.get("work_package")),
-            _nullable_text(data.get("phase_code")),
+            work_package,
+            phase_code,
             title,
-            _nullable_text(data.get("description")),
-            _nullable_text(data.get("owner_name")),
+            description,
+            owner_name,
             status,
-            _date_or_none(data.get("due_date")),
+            due_date,
             started_at,
             submitted_at,
             confirmed_at,
             completed_at,
-            0 if data.get("is_required") == "0" else 1,
-            _bool_value(data.get("requires_deliverable")),
-            _nullable_text(data.get("blocked_reason")),
-            _nullable_text(data.get("notes")),
+            is_required,
+            requires_deliverable,
+            blocked_reason,
+            notes,
             now,
             task_id,
         ),
@@ -255,7 +264,7 @@ def submit_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, u
         )
         record_activity(conn, row["project_id"], "task_completion_direct_confirmed", "提交并确认任务完成", detail, task_id=task_id)
         create_event(conn, row["project_id"], "workbench_task_confirmed", "提交并确认任务完成", row["title"])
-        return {"id": task_id, "submitted": True, "direct_confirmed": True, "status": "confirmed"}
+        return {"id": task_id, "project_id": row["project_id"], "submitted": True, "direct_confirmed": True, "status": "confirmed"}
     conn.execute(
         """
         UPDATE execution_tasks
@@ -269,7 +278,7 @@ def submit_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, u
     )
     record_activity(conn, row["project_id"], "task_completion_submitted", "提交完成说明", detail, task_id=task_id)
     create_event(conn, row["project_id"], "workbench_task_submitted", "提交完成说明", row["title"])
-    return {"id": task_id, "submitted": True, "status": "submitted"}
+    return {"id": task_id, "project_id": row["project_id"], "submitted": True, "status": "submitted"}
 
 def review_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, user: dict | None = None) -> dict:
     row = _task_row(conn, task_id)

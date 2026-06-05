@@ -50,9 +50,9 @@ def _integrity_error(exc: sqlite3.IntegrityError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"数据约束错误：{exc}")
 
 
-def _model_data(body) -> dict:
+def _model_data(body, *, exclude_unset: bool = False) -> dict:
     if callable(getattr(body, "model_dump", None)):
-        return body.model_dump()
+        return body.model_dump(exclude_unset=exclude_unset)
     return body.dict()
 
 
@@ -217,7 +217,7 @@ def patch_completion(
 def patch_task(task_id: str, body: WorkbenchTaskRequest, _: dict = Depends(engineer_or_pm_user)) -> dict:
     try:
         with db_connect() as conn:
-            data = guard_regular_task_due_date_update(conn, task_id, _model_data(body))
+            data = guard_regular_task_due_date_update(conn, task_id, _model_data(body, exclude_unset=True))
             payload = update_task(conn, task_id, data)
             conn.commit()
         return payload

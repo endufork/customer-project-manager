@@ -158,6 +158,7 @@ def test_pm_can_submit_and_confirm_non_file_task_in_one_step(client):
     assert submit_response.status_code == 201, submit_response.text
     assert submit_response.json()["status"] == "confirmed"
     assert submit_response.json()["direct_confirmed"] is True
+    assert submit_response.json()["project_id"] == project_id
 
     inbox_response = client.get("/api/workbench/inbox?role=pm&view=submitted", headers=headers)
     assert inbox_response.status_code == 200, inbox_response.text
@@ -168,6 +169,44 @@ def test_pm_can_submit_and_confirm_non_file_task_in_one_step(client):
     assert task["status"] == "confirmed"
     assert task["confirmed_at"]
     assert task["completed_at"]
+
+
+def test_task_update_without_due_date_preserves_existing_due_date(client):
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "Fixture design",
+            "work_package": "机械设计",
+            "owner_name": "Bob",
+            "due_date": "2026-06-12",
+            "requires_deliverable": 1,
+        },
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+
+    update_response = client.patch(
+        f"/api/workbench/tasks/{task_id}",
+        headers=headers,
+        json={
+            "title": "Fixture design updated",
+            "work_package": "机械设计",
+            "owner_name": "Bob",
+            "status": "in_progress",
+            "requires_deliverable": 1,
+        },
+    )
+    assert update_response.status_code == 200, update_response.text
+
+    detail_response = client.get(f"/api/workbench/projects/{project_id}", headers=headers)
+    task = next(item for item in detail_response.json()["tasks"] if item["id"] == task_id)
+    assert task["title"] == "Fixture design updated"
+    assert task["status"] == "in_progress"
+    assert task["due_date"] == "2026-06-12"
 
 
 def test_blocked_task_auto_creates_task_issue(client):

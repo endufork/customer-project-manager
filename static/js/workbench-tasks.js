@@ -160,7 +160,10 @@ function renderWorkbenchTask(task, issues = []) {
           </label>
           <label>
             Due Date
-            <input name="due_date_display" type="date" value="${escapeHtml(task.due_date || "")}" disabled />
+            <span class="inline-field-action">
+              <input name="due_date_display" type="date" value="${escapeHtml(task.due_date || "")}" disabled />
+              <button type="button" class="secondary slim-inline" data-action="open-due-date-dialog" data-task-id="${escapeHtml(task.id)}">修改</button>
+            </span>
           </label>
           <label class="checkline compact-check">
             <input name="requires_deliverable" type="checkbox" value="1"${task.requires_deliverable ? " checked" : ""} />
@@ -212,7 +215,7 @@ function renderTaskCompletionForm(task) {
   }
   const submitText = userHasRole("pm") ? "提交并确认" : "提交完成说明";
   return `
-    <form class="task-completion-form" data-task-id="${escapeHtml(task.id)}">
+    <form class="task-completion-form" data-task-id="${escapeHtml(task.id)}" data-project-id="${escapeHtml(task.project_id || "")}">
       <textarea name="completion_note" rows="2" placeholder="填写完成说明，例如 已完成客户资料确认并同步给PM" required></textarea>
       <input name="submitted_by" placeholder="提交人" value="${escapeHtml($("#workbenchOwnerInput").value.trim() || task.owner_name || "")}" />
       <button type="submit" class="secondary compact-submit">${submitText}</button>
@@ -437,12 +440,17 @@ function bindTaskCompletionForms(projectId, workspace) {
         if (userHasRole("pm")) {
           payload.direct_confirm = true;
         }
-        await api(`/api/workbench/tasks/${encodeURIComponent(form.dataset.taskId)}/completion`, {
+        const result = await api(`/api/workbench/tasks/${encodeURIComponent(form.dataset.taskId)}/completion`, {
           method: "POST",
           body: JSON.stringify(payload),
         });
         showToast(userHasRole("pm") ? "任务已提交并确认关闭" : "完成说明已提交，等待PM确认");
-        await loadWorkbenchProjects(projectId);
+        const reloadProjectId = result.project_id || form.dataset.projectId || projectId || state.workbenchProjectId;
+        if (reloadProjectId) {
+          await loadWorkbenchProjects(reloadProjectId);
+        } else {
+          await loadWorkbench();
+        }
       } catch (error) {
         showToast(error.message);
       } finally {
