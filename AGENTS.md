@@ -129,6 +129,14 @@ project-status-link-plan-v0.1.md
 project-management-platform-architecture-plan-v0.1.md
 ```
 
+- 后续开发过程中，如果发生以下任一情况，应同步更新 `project-management-platform-architecture-plan-v0.1.md`：
+  - 需求边界变化。
+  - 新增或调整重要功能模块。
+  - 软件架构、模块边界、数据流、权限边界变化。
+  - 实施优先级或阶段计划变化。
+  - 引入新的外部系统集成，例如邮件、BOM、采购系统、ERP、报表导出。
+- 如果变化只是代码级 bug 修复、文案调整或局部样式优化，且不影响整体需求和架构，可以不更新该架构计划文档。
+
 ## 后续代码开发固化规则
 
 ### 开发前
