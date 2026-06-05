@@ -4,6 +4,7 @@ import sqlite3
 
 from ..config import STATUS_DATE_FIELD_BY_STATUS, STATUS_DATE_LABELS
 from ..database import row_to_dict
+from .workbench_common import _enrich_project_summaries
 
 
 def status_date_label(status_code: str) -> str:
@@ -97,6 +98,7 @@ def list_project_records(conn: sqlite3.Connection, query: dict[str, list[str]]) 
         LIMIT 200
     """
     rows = [enrich_project_status_date(row_to_dict(row)) for row in conn.execute(sql, params)]
+    rows = _enrich_project_summaries(conn, rows)
     kpis = row_to_dict(
         conn.execute(
             """

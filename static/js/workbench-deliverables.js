@@ -10,6 +10,55 @@ function renderInboxDeliverablesSection(deliverables) {
   `;
 }
 
+function renderInboxTaskCompletionsSection(tasks) {
+  return `
+    <div class="workbench-section-title inbox-section-title">
+      <h3>待确认完成说明</h3>
+      <span>${escapeHtml(tasks.length)} 个</span>
+    </div>
+    <div class="my-task-list inbox-deliverable-list">
+      ${tasks.length ? tasks.map((task) => renderInboxTaskCompletionCard(task)).join("") : `<div class="empty small-empty">暂无待确认完成说明</div>`}
+    </div>
+  `;
+}
+
+function renderInboxTaskCompletionCard(task) {
+  const projectName = task.equipment_name || task.project_name || "";
+  const customerLine = [
+    task.customer_name || "",
+    task.site_name || "",
+    task.project_group_name || "",
+  ].filter(Boolean).join(" · ");
+  const projectMeta = [
+    task.current_number || task.intake_no || "",
+    task.work_package || "",
+    task.owner_name || "",
+  ].filter(Boolean).join(" · ");
+  return `
+    <article class="my-task-card submitted" data-task-id="${escapeHtml(task.id)}">
+      <div class="my-task-main">
+        <div>
+          <strong>${escapeHtml(task.title || "任务完成说明")}</strong>
+          <span class="subtext">${escapeHtml(projectMeta)}</span>
+          <span class="subtext">${escapeHtml(customerLine)}${projectName ? ` · ${escapeHtml(projectName)}` : ""}</span>
+        </div>
+        <div class="my-task-status">
+          <span class="task-status submitted">待确认</span>
+          <span class="subtext">${escapeHtml(task.submitted_at || "")}</span>
+        </div>
+      </div>
+      <div class="my-task-foot">
+        <span class="inline-actions">
+          <button type="button" class="secondary slim-inline" data-action="open-inbox-project" data-project-id="${escapeHtml(task.project_id)}">打开项目</button>
+          <button type="button" class="secondary slim-inline" data-action="confirm-inbox-task-completion" data-task-id="${escapeHtml(task.id)}">确认</button>
+          <button type="button" class="danger slim-inline" data-action="reject-inbox-task-completion" data-task-id="${escapeHtml(task.id)}">驳回</button>
+        </span>
+      </div>
+      ${task.notes ? `<p class="my-task-note">${escapeHtml(task.notes)}</p>` : ""}
+    </article>
+  `;
+}
+
 function renderInboxDeliverableCard(item) {
   const projectName = item.equipment_name || item.project_name || "";
   const customerLine = [

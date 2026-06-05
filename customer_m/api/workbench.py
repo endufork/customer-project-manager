@@ -20,7 +20,9 @@ from ..modules.workbench import (
     request_due_date_change,
     review_deliverable,
     review_due_date_change,
+    review_task_completion,
     submit_task_file,
+    submit_task_completion,
     update_issue,
     update_task,
 )
@@ -29,6 +31,8 @@ from .schemas import (
     DeliverableReviewRequest,
     DueDateChangeRequest,
     DueDateReviewRequest,
+    TaskCompletionRequest,
+    TaskCompletionReviewRequest,
     WorkbenchIssueRequest,
     WorkbenchTaskRequest,
     WorkbenchTemplateRequest,
@@ -167,6 +171,40 @@ def add_due_date_request(
     try:
         with db_connect() as conn:
             payload = request_due_date_change(conn, task_id, _model_data(body), user)
+            conn.commit()
+        return payload
+    except ValueError as exc:
+        raise _bad_request(exc) from exc
+    except sqlite3.IntegrityError as exc:
+        raise _integrity_error(exc) from exc
+
+
+@router.post("/tasks/{task_id}/completion", status_code=status.HTTP_201_CREATED)
+def submit_completion(
+    task_id: str,
+    body: TaskCompletionRequest,
+    user: dict = Depends(engineer_or_pm_user),
+) -> dict:
+    try:
+        with db_connect() as conn:
+            payload = submit_task_completion(conn, task_id, _model_data(body), user)
+            conn.commit()
+        return payload
+    except ValueError as exc:
+        raise _bad_request(exc) from exc
+    except sqlite3.IntegrityError as exc:
+        raise _integrity_error(exc) from exc
+
+
+@router.patch("/tasks/{task_id}/completion")
+def patch_completion(
+    task_id: str,
+    body: TaskCompletionReviewRequest,
+    user: dict = Depends(pm_user),
+) -> dict:
+    try:
+        with db_connect() as conn:
+            payload = review_task_completion(conn, task_id, _model_data(body), user)
             conn.commit()
         return payload
     except ValueError as exc:

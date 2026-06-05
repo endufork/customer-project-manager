@@ -97,6 +97,12 @@ function renderWorkbenchTask(task) {
     ? `<button type="button" class="danger slim-inline" data-action="delete-task" data-task-id="${escapeHtml(task.id)}">删除</button>`
     : "";
   const dueDateButtonText = userHasRole("pm") ? "修改Due Date" : pendingDueRequest ? "查看改期" : "申请改期";
+  const taskCompletionActions = !task.requires_deliverable && task.status === "submitted" && userHasRole("pm")
+    ? `
+      <button type="button" class="secondary slim-inline" data-action="confirm-task-completion" data-task-id="${escapeHtml(task.id)}">确认完成</button>
+      <button type="button" class="danger slim-inline" data-action="reject-task-completion" data-task-id="${escapeHtml(task.id)}">驳回</button>
+    `
+    : "";
   return `
     <article class="workbench-task ${escapeHtml(task.status)}" data-task-id="${escapeHtml(task.id)}">
       <div class="task-readable">
@@ -146,21 +152,44 @@ function renderWorkbenchTask(task) {
           </label>
           <div class="task-actions">
             <button type="button" class="secondary slim-inline" data-action="save-task" data-task-id="${escapeHtml(task.id)}">保存任务</button>
+            ${taskCompletionActions}
           </div>
         </form>
-        <form class="deliverable-upload-form" data-task-id="${escapeHtml(task.id)}">
-          <input type="file" name="file" required />
-          <select name="category_code">${optionItems(state.bootstrap?.file_categories || [], "solution", (item) => item.code, (item) => item.name)}</select>
-          <input name="version_note" placeholder="版本说明，可选" />
-          <input name="submitted_by" placeholder="提交人" value="${escapeHtml($("#workbenchOwnerInput").value.trim() || task.owner_name || "")}" />
-          <button type="submit">提交文件</button>
-        </form>
+        ${task.requires_deliverable ? renderDeliverableUploadForm(task) : renderTaskCompletionForm(task)}
         <div class="deliverable-list">
           ${deliverables.length ? deliverables.map((item) => renderDeliverableItem(item)).join("") : `<div class="empty small-empty">暂无交付文件</div>`}
         </div>
       </details>
       ${renderDueDateDialog(task)}
     </article>
+  `;
+}
+
+function renderDeliverableUploadForm(task) {
+  return `
+    <form class="deliverable-upload-form" data-task-id="${escapeHtml(task.id)}">
+      <input type="file" name="file" required />
+      <select name="category_code">${optionItems(state.bootstrap?.file_categories || [], "solution", (item) => item.code, (item) => item.name)}</select>
+      <input name="version_note" placeholder="版本说明，可选" />
+      <input name="submitted_by" placeholder="提交人" value="${escapeHtml($("#workbenchOwnerInput").value.trim() || task.owner_name || "")}" />
+      <button type="submit">提交文件</button>
+    </form>
+  `;
+}
+
+function renderTaskCompletionForm(task) {
+  if (taskDone(task)) {
+    return `<div class="empty small-empty">任务已关闭</div>`;
+  }
+  if (task.status === "submitted") {
+    return `<div class="empty small-empty">完成说明已提交，等待 PM 确认。</div>`;
+  }
+  return `
+    <form class="task-completion-form" data-task-id="${escapeHtml(task.id)}">
+      <textarea name="completion_note" rows="2" placeholder="填写完成说明，例如 已完成客户资料确认并同步给PM" required></textarea>
+      <input name="submitted_by" placeholder="提交人" value="${escapeHtml($("#workbenchOwnerInput").value.trim() || task.owner_name || "")}" />
+      <button type="submit" class="secondary compact-submit">提交完成说明</button>
+    </form>
   `;
 }
 
@@ -315,6 +344,28 @@ function bindTaskForms(projectId, workspace) {
   });
 }
 
+function bindTaskCompletionForms(projectId, workspace) {
+  workspace.querySelectorAll(".task-completion-form").forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = event.submitter;
+      if (button) button.disabled = true;
+      try {
+        await api(`/api/workbench/tasks/${encodeURIComponent(form.dataset.taskId)}/completion`, {
+          method: "POST",
+          body: JSON.stringify(formDataFromContainer(form)),
+        });
+        showToast("完成说明已提交，等待PM确认");
+        await loadWorkbenchProjects(projectId);
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+  });
+}
+
 async function handleTaskAction(action, button, projectId) {
   if (action === "open-task-dialog") {
     openWorkbenchDialog("#taskDialog");
@@ -354,6 +405,26 @@ async function handleTaskAction(action, button, projectId) {
     if (!confirm("确定删除这个任务吗？")) return true;
     await api(`/api/workbench/tasks/${encodeURIComponent(button.dataset.taskId)}`, { method: "DELETE", body: "{}" });
     showToast("任务已删除");
+    await loadWorkbenchProjects(projectId);
+    return true;
+  }
+  if (action === "confirm-task-completion") {
+    await api(`/api/workbench/tasks/${encodeURIComponent(button.dataset.taskId)}/completion`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "confirmed", confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM" }),
+    });
+    showToast("任务已确认关闭");
+    await loadWorkbenchProjects(projectId);
+    return true;
+  }
+  if (action === "reject-task-completion") {
+    const reason = prompt("请输入驳回原因");
+    if (!reason || !reason.trim()) return true;
+    await api(`/api/workbench/tasks/${encodeURIComponent(button.dataset.taskId)}/completion`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "rejected", reject_reason: reason.trim(), confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM" }),
+    });
+    showToast("任务已驳回，进入返工");
     await loadWorkbenchProjects(projectId);
     return true;
   }

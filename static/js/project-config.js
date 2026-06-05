@@ -8,5 +8,6 @@ const DEFAULT_PROJECT_COLUMNS = [
   "project_name",
   "status_name",
   "current_status_date",
+  "workbench_summary",
   "markers",
 ];

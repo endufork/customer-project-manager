@@ -15,7 +15,14 @@ from .workbench_queries import (
     list_workbench_projects,
     list_workbench_tasks,
 )
-from .workbench_tasks import apply_template, create_task, delete_task, update_task
+from .workbench_tasks import (
+    apply_template,
+    create_task,
+    delete_task,
+    review_task_completion,
+    submit_task_completion,
+    update_task,
+)
 
 __all__ = [
     "apply_template",
@@ -33,7 +40,9 @@ __all__ = [
     "request_due_date_change",
     "review_deliverable",
     "review_due_date_change",
+    "review_task_completion",
     "submit_task_file",
+    "submit_task_completion",
     "update_issue",
     "update_task",
 ]

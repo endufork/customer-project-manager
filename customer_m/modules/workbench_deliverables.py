@@ -186,6 +186,8 @@ def review_deliverable(conn: sqlite3.Connection, deliverable_id: str, data: dict
     row = conn.execute("SELECT * FROM task_deliverables WHERE id = ?", (deliverable_id,)).fetchone()
     if row is None:
         raise ValueError("交付物不存在")
+    if row["status"] != "submitted":
+        raise ValueError("只能确认或驳回待确认的交付物；驳回后必须重新提交文件")
     action = (data.get("status") or data.get("action") or "").strip()
     now = now_iso()
     if action == "confirmed":

@@ -50,7 +50,7 @@ async function api(path, options = {}) {
     if (response.status === 401 && typeof showAuthView === "function") {
       showAuthView();
     }
-    throw new Error(payload.error || "请求失败");
+    throw new Error(payload.detail || payload.error || "请求失败");
   }
   return payload;
 }
@@ -70,7 +70,7 @@ async function uploadApi(path, formData) {
     if (response.status === 401 && typeof showAuthView === "function") {
       showAuthView();
     }
-    throw new Error(payload.error || "上传失败");
+    throw new Error(payload.detail || payload.error || "上传失败");
   }
   return payload;
 }

@@ -106,6 +106,19 @@ class WorkbenchTaskRequest(_StrictRequest):
     notes: str | None = None
 
 
+class TaskCompletionRequest(_StrictRequest):
+    completion_note: str | None = None
+    submitted_by: str | None = None
+
+
+class TaskCompletionReviewRequest(_StrictRequest):
+    status: str | None = None
+    action: str | None = None
+    confirmed_by: str | None = None
+    reject_reason: str | None = None
+    review_note: str | None = None
+
+
 class WorkbenchIssueRequest(_StrictRequest):
     task_id: str | None = None
     scope: str | None = None

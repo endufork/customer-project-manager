@@ -10,6 +10,7 @@ const PROJECT_COLUMNS = [
   { key: "project_name", label: "项目名", sort: "project_name", render: projectNameHtml },
   { key: "status_name", label: "状态", sort: "status_name", render: (project) => escapeHtml(project.status_name || "") },
   { key: "current_status_date", label: "日期", sort: "current_status_date", render: (project) => escapeHtml(statusDateValue(project)) },
+  { key: "workbench_summary", label: "执行", sort: "workbench_summary", render: workbenchSummaryHtml },
   { key: "currency_code", label: "币种", sort: "currency_code", render: (project) => escapeHtml(project.currency_code || "") },
   { key: "file_count", label: "文件", sort: "file_count", render: (project) => escapeHtml(project.file_count || 0) },
   { key: "markers", label: "标记", sort: "markers", render: markersHtml },
@@ -178,6 +179,16 @@ function sortableValue(project, key) {
   if (key === "markers") {
     return [project.has_po ? "PO" : "", project.has_3d_model ? "模型" : "", !project.equipment_no ? "待补WO号" : ""].join(" ");
   }
+  if (key === "workbench_summary") {
+    return [
+      Number(project.overdue_tasks || 0),
+      Number(project.blocked_tasks || 0),
+      Number(project.high_issues || 0),
+      Number(project.submitted_tasks || 0),
+      project.current_due_date || "",
+      project.next_action || "",
+    ].join(" ");
+  }
   return String(project[key] ?? "").toLocaleLowerCase("zh-CN");
 }
 
@@ -243,6 +254,30 @@ function markersHtml(project) {
     !project.equipment_no ? `<span class="tag warn">待补WO号</span>` : "",
   ].join(" ");
   return markers || `<span class="tag neutral">普通</span>`;
+}
+
+function workbenchSummaryHtml(project) {
+  const taskTotal = Number(project.task_total || 0);
+  const tags = [];
+  if (taskTotal) {
+    tags.push(`<span class="tag neutral">${escapeHtml(project.task_done || 0)}/${escapeHtml(taskTotal)}</span>`);
+  }
+  if (project.overdue_tasks) {
+    tags.push(`<span class="tag danger">超期 ${escapeHtml(project.overdue_tasks)}</span>`);
+  }
+  if (project.blocked_tasks) {
+    tags.push(`<span class="tag warn">阻塞 ${escapeHtml(project.blocked_tasks)}</span>`);
+  }
+  if (project.submitted_tasks) {
+    tags.push(`<span class="tag">待确认 ${escapeHtml(project.submitted_tasks)}</span>`);
+  }
+  if (project.high_issues) {
+    tags.push(`<span class="tag danger">高风险</span>`);
+  }
+  const next = project.next_action
+    ? `<div class="subtext">${escapeHtml(project.next_action)}${project.current_due_date ? ` · ${escapeHtml(project.current_due_date)}` : ""}</div>`
+    : "";
+  return tags.length ? `<div class="summary-tags">${tags.join(" ")}</div>${next}` : `<span class="tag neutral">未生成任务</span>`;
 }
 
 function renderProjects(projects = sortedProjects()) {
