@@ -1,6 +1,6 @@
 """Pydantic models for the FastAPI migration."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class HealthPayload(BaseModel):
@@ -54,8 +54,7 @@ class SettingsUpdateRequest(BaseModel):
 
 
 class ProjectMutationRequest(BaseModel):
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class DeleteProjectRequest(BaseModel):
@@ -63,8 +62,7 @@ class DeleteProjectRequest(BaseModel):
 
 
 class WorkbenchMutationRequest(BaseModel):
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class WorkbenchTemplateRequest(BaseModel):

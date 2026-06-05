@@ -136,6 +136,9 @@ def _today() -> str:
 def _soon() -> str:
     return (date.today() + timedelta(days=7)).isoformat()
 
+def _placeholders(values: list[str]) -> str:
+    return ",".join("?" for _ in values)
+
 def record_activity(
     conn: sqlite3.Connection,
     project_id: str,
@@ -243,6 +246,115 @@ def _last_activity_at(conn: sqlite3.Connection, project_id: str) -> str:
     ).fetchone()
     return (row and row["last_activity_at"]) or ""
 
+def _task_stats_by_project(conn: sqlite3.Connection, project_ids: list[str]) -> dict[str, dict]:
+    if not project_ids:
+        return {}
+    done_sql = _done_sql()
+    placeholders = _placeholders(project_ids)
+    rows = conn.execute(
+        f"""
+        SELECT
+          project_id,
+          COUNT(*) AS task_total,
+          COALESCE(SUM(CASE WHEN status IN ({done_sql}) THEN 1 ELSE 0 END), 0) AS task_done,
+          COALESCE(SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked_tasks,
+          COALESCE(SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END), 0) AS submitted_tasks,
+          COALESCE(SUM(CASE WHEN due_date < ? AND status NOT IN ({done_sql}) THEN 1 ELSE 0 END), 0) AS overdue_tasks,
+          MIN(CASE WHEN status NOT IN ({done_sql}) THEN due_date ELSE NULL END) AS current_due_date
+        FROM execution_tasks
+        WHERE project_id IN ({placeholders})
+        GROUP BY project_id
+        """,
+        [_today(), *project_ids],
+    ).fetchall()
+    return {row["project_id"]: row_to_dict(row) for row in rows}
+
+def _equipment_issue_stats_by_project(conn: sqlite3.Connection, project_ids: list[str]) -> dict[str, dict]:
+    if not project_ids:
+        return {}
+    placeholders = _placeholders(project_ids)
+    rows = conn.execute(
+        f"""
+        SELECT
+          project_id,
+          COUNT(*) AS issue_total,
+          COALESCE(SUM(CASE WHEN status IN ('open', 'following') THEN 1 ELSE 0 END), 0) AS open_issues,
+          COALESCE(SUM(CASE WHEN severity = 'high' AND status IN ('open', 'following') THEN 1 ELSE 0 END), 0) AS high_issues
+        FROM execution_issues
+        WHERE project_id IN ({placeholders}) AND scope <> 'product'
+        GROUP BY project_id
+        """,
+        project_ids,
+    ).fetchall()
+    return {row["project_id"]: row_to_dict(row) for row in rows}
+
+def _product_issue_stats_by_group(conn: sqlite3.Connection, group_ids: list[str]) -> dict[str, dict]:
+    if not group_ids:
+        return {}
+    placeholders = _placeholders(group_ids)
+    rows = conn.execute(
+        f"""
+        SELECT
+          source_project.project_group_id,
+          COUNT(*) AS issue_total,
+          COALESCE(SUM(CASE WHEN ei.status IN ('open', 'following') THEN 1 ELSE 0 END), 0) AS open_issues,
+          COALESCE(SUM(CASE WHEN ei.severity = 'high' AND ei.status IN ('open', 'following') THEN 1 ELSE 0 END), 0) AS high_issues
+        FROM execution_issues ei
+        JOIN projects source_project ON source_project.id = ei.project_id
+        WHERE ei.scope = 'product'
+          AND source_project.project_group_id IN ({placeholders})
+          AND COALESCE(source_project.is_deleted, 0) = 0
+        GROUP BY source_project.project_group_id
+        """,
+        group_ids,
+    ).fetchall()
+    return {row["project_group_id"]: row_to_dict(row) for row in rows}
+
+def _current_tasks_by_project(conn: sqlite3.Connection, project_ids: list[str]) -> dict[str, dict]:
+    if not project_ids:
+        return {}
+    done_sql = _done_sql()
+    placeholders = _placeholders(project_ids)
+    rows = conn.execute(
+        f"""
+        SELECT id, project_id, title, owner_name, status, due_date, created_at
+        FROM execution_tasks
+        WHERE project_id IN ({placeholders}) AND status NOT IN ({done_sql})
+        ORDER BY
+          project_id,
+          CASE status
+            WHEN 'blocked' THEN 0
+            WHEN 'submitted' THEN 1
+            WHEN 'rework' THEN 2
+            WHEN 'waiting_info' THEN 3
+            WHEN 'in_progress' THEN 4
+            ELSE 5
+          END,
+          COALESCE(due_date, '9999-12-31'),
+          created_at
+        """,
+        project_ids,
+    ).fetchall()
+    current: dict[str, dict] = {}
+    for row in rows:
+        current.setdefault(row["project_id"], row_to_dict(row))
+    return current
+
+def _last_activity_by_project(conn: sqlite3.Connection, project_ids: list[str]) -> dict[str, str]:
+    if not project_ids:
+        return {}
+    placeholders = _placeholders(project_ids)
+    rows = conn.execute(
+        f"""
+        SELECT project_id, MAX(created_at) AS last_activity_at
+        FROM execution_activity_logs
+        WHERE project_id IN ({placeholders})
+        GROUP BY project_id
+        """,
+        project_ids,
+    ).fetchall()
+    return {row["project_id"]: row["last_activity_at"] or "" for row in rows}
+
 def _enrich_project_summary(conn: sqlite3.Connection, project: dict) -> dict:
     task_stats = _task_stats(conn, project["id"])
     issue_stats = _issue_stats(conn, project)
@@ -258,3 +370,42 @@ def _enrich_project_summary(conn: sqlite3.Connection, project: dict) -> dict:
     project["next_task_id"] = current_task.get("id") if current_task else ""
     project["last_activity_at"] = _last_activity_at(conn, project["id"]) or project.get("updated_at") or project.get("created_at")
     return project
+
+def _enrich_project_summaries(conn: sqlite3.Connection, projects: list[dict]) -> list[dict]:
+    if not projects:
+        return projects
+
+    project_ids = [project["id"] for project in projects]
+    group_ids = sorted(
+        {
+            project.get("project_group_id")
+            for project in projects
+            if project.get("project_group_id")
+        }
+    )
+    task_stats_by_project = _task_stats_by_project(conn, project_ids)
+    equipment_issues_by_project = _equipment_issue_stats_by_project(conn, project_ids)
+    product_issues_by_group = _product_issue_stats_by_group(conn, group_ids)
+    current_tasks_by_project = _current_tasks_by_project(conn, project_ids)
+    last_activity_by_project = _last_activity_by_project(conn, project_ids)
+
+    for project in projects:
+        project.update(task_stats_by_project.get(project["id"], {}))
+        equipment_stats = equipment_issues_by_project.get(project["id"], {})
+        product_stats = product_issues_by_group.get(project.get("project_group_id"), {})
+        project["issue_total"] = int(equipment_stats.get("issue_total") or 0) + int(product_stats.get("issue_total") or 0)
+        project["open_issues"] = int(equipment_stats.get("open_issues") or 0) + int(product_stats.get("open_issues") or 0)
+        project["high_issues"] = int(equipment_stats.get("high_issues") or 0) + int(product_stats.get("high_issues") or 0)
+        current_task = current_tasks_by_project.get(project["id"])
+        project["current_number"] = _project_number(project)
+        project["workbench_area"] = _project_area(project)
+        project["workbench_phase"] = STATUS_TO_PHASE.get(project.get("status_code") or "", "inq_intake")
+        project["current_owner"] = current_task.get("owner_name") if current_task else ""
+        project["next_action"] = current_task.get("title") if current_task else ""
+        project["next_task_id"] = current_task.get("id") if current_task else ""
+        project["last_activity_at"] = (
+            last_activity_by_project.get(project["id"])
+            or project.get("updated_at")
+            or project.get("created_at")
+        )
+    return projects

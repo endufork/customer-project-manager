@@ -4,6 +4,7 @@ This module is the FastAPI entry point for the project management system.
 Business behavior stays in customer_m.modules; API files only adapt HTTP calls.
 """
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Response
@@ -56,17 +57,18 @@ def render_index_html() -> str:
     return html
 
 
-app = FastAPI(title="项目管理系统", version="0.1.0")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="项目管理系统", version="0.1.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(auth_router)
 app.include_router(bootstrap_router)
 app.include_router(projects_router)
 app.include_router(workbench_router)
-
-
-@app.on_event("startup")
-def startup() -> None:
-    init_db()
 
 
 @app.middleware("http")

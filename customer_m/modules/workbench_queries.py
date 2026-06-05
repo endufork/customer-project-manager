@@ -8,6 +8,7 @@ from .workbench_common import (
     DONE_STATUSES,
     _done_sql,
     _enrich_project_summary,
+    _enrich_project_summaries,
     _issue_filter,
     _project_area,
     _project_number,
@@ -55,11 +56,11 @@ def list_workbench_projects(conn: sqlite3.Connection, query: dict[str, list[str]
 
     where = "WHERE " + " AND ".join(filters) if filters else ""
     rows = [
-        _enrich_project_summary(conn, row_to_dict(row))
+        row_to_dict(row)
         for row in conn.execute(
             f"""
             SELECT p.id, p.intake_no, p.equipment_no, p.equipment_name, p.project_name,
-              p.project_nature, p.status_code, s.name AS status_name, p.expected_delivery_date,
+              p.project_nature, p.project_group_id, p.status_code, s.name AS status_name, p.expected_delivery_date,
               p.project_folder_path, p.created_at, p.updated_at,
               c.name AS customer_name, cg.name AS customer_group_name,
               cs.name AS site_name, pg.name AS project_group_name, co.name AS contact_name
@@ -77,6 +78,7 @@ def list_workbench_projects(conn: sqlite3.Connection, query: dict[str, list[str]
             params,
         )
     ]
+    rows = _enrich_project_summaries(conn, rows)
 
     if area_filter:
         rows = [project for project in rows if project["workbench_area"] == area_filter]
@@ -169,6 +171,7 @@ def list_workbench_tasks(conn: sqlite3.Connection, query: dict[str, list[str]]) 
           p.equipment_name,
           p.project_name,
           p.project_nature,
+          p.project_group_id,
           p.status_code,
           p.expected_delivery_date,
           p.project_folder_path,
@@ -204,8 +207,12 @@ def list_workbench_tasks(conn: sqlite3.Connection, query: dict[str, list[str]]) 
         params,
     ):
         task = row_to_dict(row)
-        project = _enrich_project_summary(
-            conn,
+        rows.append(task)
+
+    projects_by_id: dict[str, dict] = {}
+    for task in rows:
+        projects_by_id.setdefault(
+            task["project_id"],
             {
                 "id": task["project_id"],
                 "intake_no": task.get("intake_no"),
@@ -213,6 +220,7 @@ def list_workbench_tasks(conn: sqlite3.Connection, query: dict[str, list[str]]) 
                 "equipment_name": task.get("equipment_name"),
                 "project_name": task.get("project_name"),
                 "project_nature": task.get("project_nature"),
+                "project_group_id": task.get("project_group_id"),
                 "status_code": task.get("status_code"),
                 "expected_delivery_date": task.get("expected_delivery_date"),
                 "project_folder_path": task.get("project_folder_path"),
@@ -225,11 +233,16 @@ def list_workbench_tasks(conn: sqlite3.Connection, query: dict[str, list[str]]) 
                 "contact_name": task.get("contact_name"),
             },
         )
-        task["current_number"] = project["current_number"]
-        task["workbench_area"] = project["workbench_area"]
+    enriched_projects = {
+        project["id"]: project
+        for project in _enrich_project_summaries(conn, list(projects_by_id.values()))
+    }
+    for task in rows:
+        project = enriched_projects.get(task["project_id"], {})
+        task["current_number"] = project.get("current_number") or _project_number(task)
+        task["workbench_area"] = project.get("workbench_area") or _project_area(task)
         task["project_open_issues"] = project.get("open_issues", 0)
         task["project_high_issues"] = project.get("high_issues", 0)
-        rows.append(task)
 
     if view == "inq":
         rows = [task for task in rows if task["workbench_area"] == "inq"]

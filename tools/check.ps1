@@ -114,12 +114,71 @@ function Test-JavaScript {
     }
 }
 
+function Test-PythonModule {
+    param(
+        [string]$Python,
+        [string]$ModuleName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Python)) {
+        return $false
+    }
+    & $Python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('$ModuleName') else 1)" *> $null
+    return $LASTEXITCODE -eq 0
+}
+
+function Resolve-PythonWithModule {
+    param([string]$ModuleName)
+
+    $candidates = @()
+    if (-not [string]::IsNullOrWhiteSpace($env:CUSTOMER_PROJECT_PYTHON)) {
+        $candidates += $env:CUSTOMER_PROJECT_PYTHON
+    }
+
+    $pathPython = Get-Command python -ErrorAction SilentlyContinue
+    if ($pathPython) {
+        $candidates += $pathPython.Source
+    }
+
+    $resolved = Resolve-Python
+    if (-not [string]::IsNullOrWhiteSpace($resolved)) {
+        $candidates += $resolved
+    }
+
+    foreach ($candidate in ($candidates | Select-Object -Unique)) {
+        if (Test-PythonModule $candidate $ModuleName) {
+            return $candidate
+        }
+    }
+    return ""
+}
+
+function Test-Pytest {
+    $python = Resolve-PythonWithModule "pytest"
+    if ([string]::IsNullOrWhiteSpace($python)) {
+        throw "Pytest was not found. Install test dependencies with: python -m pip install -r requirements.txt"
+        return
+    }
+
+    $testsDir = Join-Path $RepoRoot "tests"
+    if (-not (Test-Path $testsDir)) {
+        return
+    }
+
+    Write-Host "Running Python tests..."
+    & $python -m pytest -q
+    if ($LASTEXITCODE -ne 0) {
+        throw "Pytest failed."
+    }
+}
+
 Write-Host ""
 Write-Host "Customer Project Manager checks"
 Write-Host "Mode: $Mode"
 Show-BranchGuidance
 Assert-NoRiskFiles
 Test-PythonCompile
+Test-Pytest
 Test-JavaScript
 Write-Host "Checks passed."
 Write-Host ""
