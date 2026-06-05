@@ -5,7 +5,9 @@
 ## 分支规则
 
 - `main` 代表当前可用、相对稳定的版本。
-- 小修小补可以直接在 `main` 上提交，例如文案、轻量 bug、文档补充。
+- 当前团队试用和持续集成主工作分支是 `codex/team-trial-auth`。
+- 小修小补如果只影响稳定资料库基线，可以直接在 `main` 上提交，例如文案、轻量 bug、文档补充。
+- 但涉及工作台、权限、团队试用、FastAPI、部署、项目状态联动等功能时，不要从旧 `main` 直接开发，应从 `codex/team-trial-auth` 新开 `codex/*` 分支。
 - 新功能、较大结构调整、实验方向使用 `codex/*` 分支。
 - 分支命名示例：
 
@@ -103,6 +105,23 @@ continuous-optimization-roadmap-v0.1.md
 - 项目资料库负责“项目事实”，项目执行工作台负责“执行过程”，不要把两类职责混在一起。
 - UI 优化默认以减轻工程师和 PM 负担为目标，优先展示“下一步该做什么”和“哪里需要处理”。
 - 大功能仍使用 `codex/*` 分支讨论和实现；主分支只承载稳定版本、文档补充和轻量维护。
+- 分支变动和同步规则记录在：
+
+```text
+branch-change-management-v0.1.md
+```
+
+- FastAPI 重构计划记录在：
+
+```text
+fastapi-refactor-plan-v0.1.md
+```
+
+- 项目库状态与项目执行联动计划记录在：
+
+```text
+project-status-link-plan-v0.1.md
+```
 
 ## 后续代码开发固化规则
 
@@ -114,9 +133,10 @@ continuous-optimization-roadmap-v0.1.md
 git status --short --branch
 ```
 
-- `main` 只承载当前可用、相对稳定的项目资料库版本。
-- 工程工作台、权限、备份、导出、解析引擎等较大功能必须放在 `codex/*` 分支。
-- 开发工作台时优先使用 `codex/engineering-workbench-mvp` 或后续同类工作台分支。
+- `main` 只承载当前可用、相对稳定的项目资料库基线。
+- `codex/team-trial-auth` 是当前集成主工作分支。
+- 工程工作台、权限、备份、导出、解析引擎、FastAPI、项目状态联动等较大功能必须从 `codex/team-trial-auth` 新开 `codex/*` 分支。
+- 旧的 `codex/engineering-workbench-mvp`、`codex/workbench-*` 分支只作为历史参考或必要同步目标，不再作为新功能起点。
 
 ### 业务边界
 
