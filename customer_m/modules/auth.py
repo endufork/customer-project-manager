@@ -246,7 +246,34 @@ def list_users(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
         """,
         (search, f"%{search}%", f"%{search}%"),
     ).fetchall()
-    return {"users": [user_payload(conn, row["id"]) for row in rows]}
+    if not rows:
+        return {"users": []}
+
+    user_ids = [row["id"] for row in rows]
+    placeholders = ",".join("?" for _ in user_ids)
+    role_rows = conn.execute(
+        f"""
+        SELECT user_id, role_code
+        FROM user_roles
+        WHERE user_id IN ({placeholders})
+        ORDER BY role_code
+        """,
+        user_ids,
+    ).fetchall()
+    roles_by_user = {user_id: [] for user_id in user_ids}
+    for role_row in role_rows:
+        roles_by_user.setdefault(role_row["user_id"], []).append(role_row["role_code"])
+
+    users = []
+    for row in rows:
+        payload = row_to_dict(row)
+        roles = roles_by_user.get(row["id"], [])
+        payload["roles"] = roles
+        payload["is_admin"] = "admin" in roles
+        payload["is_pm"] = "pm" in roles or "admin" in roles
+        payload["is_engineer"] = "engineer" in roles
+        users.append(payload)
+    return {"users": users}
 
 
 def update_user(conn: sqlite3.Connection, user_id: str, data: dict) -> dict:

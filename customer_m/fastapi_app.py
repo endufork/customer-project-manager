@@ -10,6 +10,7 @@ from fastapi import FastAPI, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from .api.auth import router as auth_router
 from .api.bootstrap import router as bootstrap_router
 from .api.projects import router as projects_router
 from .config import STATIC_DIR
@@ -56,6 +57,7 @@ def render_index_html() -> str:
 
 app = FastAPI(title="项目管理系统", version="0.1.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.include_router(auth_router)
 app.include_router(bootstrap_router)
 app.include_router(projects_router)
 
