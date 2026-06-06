@@ -110,7 +110,13 @@ function renderWorkbenchProjectList(selectedId = state.workbenchProjectId) {
     })
     .join("");
   list.querySelectorAll("[data-project-id]").forEach((button) => {
-    button.addEventListener("click", () => openWorkbenchProject(button.dataset.projectId).catch(console.error));
+    button.addEventListener("click", () => {
+      try {
+        openWorkbenchProject(requireDataset(button, "projectId", "项目ID")).catch(console.error);
+      } catch (error) {
+        showToast(error.message);
+      }
+    });
   });
 }
 
@@ -263,7 +269,7 @@ function bindMyTodoActions() {
   $("#workbenchWorkspace").querySelectorAll("[data-action='open-my-task-project'], [data-action='open-inbox-project']").forEach((button) => {
     button.addEventListener("click", async () => {
       state.workbenchMode = "projects";
-      await loadWorkbenchProjects(button.dataset.projectId);
+      await loadWorkbenchProjects(requireDataset(button, "projectId", "项目ID"));
     });
   });
   $("#workbenchWorkspace").querySelectorAll("[data-action='confirm-inbox-deliverable'], [data-action='reject-inbox-deliverable']").forEach((button) => {
@@ -279,6 +285,7 @@ function bindMyTodoActions() {
     button.addEventListener("click", async () => {
       try {
         const status = button.dataset.action.startsWith("confirm") ? "confirmed" : "rejected";
+        requireDataset(button, "taskId", "任务ID");
         openTaskCompletionReviewDialog(button, status);
       } catch (error) {
         showToast(error.message);
@@ -302,11 +309,13 @@ function bindLogDrawer(workspace) {
 
 async function handleWorkbenchShellAction(action, projectId) {
   if (action === "open-folder") {
+    if (!projectId) throw new Error("项目ID缺失，请刷新页面后重试");
     await api(`/api/projects/${encodeURIComponent(projectId)}/open-folder`, { method: "POST", body: "{}" });
     showToast("已打开项目文件夹");
     return true;
   }
   if (action === "open-library-detail") {
+    if (!projectId) throw new Error("项目ID缺失，请刷新页面后重试");
     await openDetail(projectId);
     return true;
   }

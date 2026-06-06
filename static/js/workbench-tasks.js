@@ -129,7 +129,8 @@ function renderTaskStatusEditor(task) {
 function renderWorkbenchTask(task, issues = []) {
   const deliverables = task.deliverables || [];
   const owner = task.owner_name || "未指派";
-  const due = task.due_date || "未设置Due Date";
+  const dueDate = workbenchDateValue(task.due_date || task.current_due_date);
+  const due = dueDate || "未设置Due Date";
   const workPackage = task.work_package || "未分组";
   const pendingDueRequest = latestPendingDueDateRequest(task);
   const deleteButton = userHasRole("pm")
@@ -147,7 +148,7 @@ function renderWorkbenchTask(task, issues = []) {
       <div class="task-readable">
         <div class="task-readable-main">
           <strong>${escapeHtml(task.title)}</strong>
-          <span class="subtext">${escapeHtml(workPackage)} · ${escapeHtml(owner)} · <span class="${dueClass(task.due_date || "")}">${escapeHtml(due)}</span>${task.requires_deliverable ? " · 需要文件" : ""}</span>
+          <span class="subtext">${escapeHtml(workPackage)} · ${escapeHtml(owner)} · <span class="${dueClass(dueDate)}">${escapeHtml(due)}</span>${task.requires_deliverable ? " · 需要文件" : ""}</span>
         </div>
         <div class="task-actions">
           <span class="task-status ${escapeHtml(task.status)}">${escapeHtml(workbenchTaskStatusName(task.status))}</span>
@@ -180,7 +181,7 @@ function renderWorkbenchTask(task, issues = []) {
           <label>
             Due Date
             <span class="inline-field-action">
-              <input name="due_date_display" type="date" value="${escapeHtml(task.due_date || "")}" disabled />
+              <input name="due_date_display" type="date" value="${escapeHtml(dueDate)}" disabled />
               <button type="button" class="secondary slim-inline" data-action="open-due-date-dialog" data-task-id="${escapeHtml(task.id)}">修改</button>
             </span>
           </label>
@@ -275,11 +276,7 @@ function openTaskCompletionReviewDialog(button, status) {
   const dialog = $("#taskCompletionReviewDialog");
   const form = $("#taskCompletionReviewForm");
   if (!dialog || !form) return false;
-  const taskId = button.dataset.taskId || "";
-  if (!taskId) {
-    showToast("任务ID缺失，请刷新页面后重试");
-    return true;
-  }
+  const taskId = requireDataset(button, "taskId", "任务ID");
   const isReject = status === "rejected";
   form.reset();
   dialog.dataset.taskId = taskId;
@@ -301,7 +298,8 @@ function openTaskCompletionReviewDialog(button, status) {
 }
 
 function renderMyTaskCard(task) {
-  const due = task.due_date || "未设置Due Date";
+  const dueDate = workbenchDateValue(task.due_date || task.current_due_date);
+  const due = dueDate || "未设置Due Date";
   const projectName = task.equipment_name || task.project_name || "";
   const customerLine = [
     task.customer_name || "",
@@ -323,7 +321,7 @@ function renderMyTaskCard(task) {
         </div>
         <div class="my-task-status">
           <span class="task-status ${escapeHtml(task.status)}">${escapeHtml(workbenchTaskStatusName(task.status))}</span>
-          <span class="${dueClass(task.due_date || "")}">${escapeHtml(due)}</span>
+          <span class="${dueClass(dueDate)}">${escapeHtml(due)}</span>
         </div>
       </div>
       <div class="my-task-foot">
@@ -341,10 +339,13 @@ function renderMyTaskCard(task) {
 }
 
 async function saveWorkbenchTask(form, projectId) {
+  if (!form) throw new Error("任务表单缺失，请刷新页面后重试");
+  const taskId = form.dataset.taskId || "";
+  if (!taskId) throw new Error("任务ID缺失，请刷新页面后重试");
   const button = form.querySelector("[data-action='save-task']");
   if (button) button.disabled = true;
   try {
-    await api(`/api/workbench/tasks/${encodeURIComponent(form.dataset.taskId)}`, {
+    await api(`/api/workbench/tasks/${encodeURIComponent(taskId)}`, {
       method: "PATCH",
       body: JSON.stringify(formDataFromContainer(form)),
     });
@@ -458,11 +459,13 @@ function bindTaskCompletionForms(projectId, workspace) {
       const button = event.submitter;
       if (button) button.disabled = true;
       try {
+        const taskId = form.dataset.taskId || "";
+        if (!taskId) throw new Error("任务ID缺失，请刷新页面后重试");
         const payload = formDataFromContainer(form);
         if (userHasRole("pm")) {
           payload.direct_confirm = true;
         }
-        const result = await api(`/api/workbench/tasks/${encodeURIComponent(form.dataset.taskId)}/completion`, {
+        const result = await api(`/api/workbench/tasks/${encodeURIComponent(taskId)}/completion`, {
           method: "POST",
           body: JSON.stringify(payload),
         });
@@ -498,10 +501,7 @@ function bindTaskCompletionReviewDialog(workspace, reload) {
     try {
       const status = form.elements.status.value;
       const taskId = form.dataset.taskId || form.elements.task_id.value || workspace.querySelector("#taskCompletionReviewDialog")?.dataset.taskId || "";
-      if (!taskId) {
-        showToast("任务ID缺失，请刷新页面后重试");
-        return;
-      }
+      if (!taskId) throw new Error("任务ID缺失，请刷新页面后重试");
       const body = { status, confirmed_by: $("#workbenchOwnerInput").value.trim() || "PM" };
       if (status === "rejected") {
         const reason = form.elements.reject_reason.value.trim();
@@ -563,16 +563,19 @@ async function handleTaskAction(action, button, projectId) {
   }
   if (action === "delete-task") {
     if (!confirm("确定删除这个任务吗？")) return true;
-    await api(`/api/workbench/tasks/${encodeURIComponent(button.dataset.taskId)}`, { method: "DELETE", body: "{}" });
+    const taskId = requireDataset(button, "taskId", "任务ID");
+    await api(`/api/workbench/tasks/${encodeURIComponent(taskId)}`, { method: "DELETE", body: "{}" });
     showToast("任务已删除");
     await loadWorkbenchProjects(projectId);
     return true;
   }
   if (action === "confirm-task-completion") {
+    requireDataset(button, "taskId", "任务ID");
     openTaskCompletionReviewDialog(button, "confirmed");
     return true;
   }
   if (action === "reject-task-completion") {
+    requireDataset(button, "taskId", "任务ID");
     openTaskCompletionReviewDialog(button, "rejected");
     return true;
   }

@@ -17,13 +17,14 @@ function renderDueDateDialog(task) {
   const title = isPm ? "修改Due Date" : "申请改期";
   const submitText = isPm ? "确认修改" : "提交申请";
   const dialogId = `dueDateDialog-${task.id}`;
+  const dueDate = workbenchDateValue(task.due_date || task.current_due_date);
   return `
     <dialog id="${escapeHtml(dialogId)}" class="workbench-dialog due-date-dialog">
       <div class="workbench-dialog-shell">
         <div class="workbench-dialog-header">
           <div>
             <h3>${title}</h3>
-            <span class="subtext">${escapeHtml(task.title)} · 当前 ${escapeHtml(task.due_date || "未设置")}</span>
+            <span class="subtext">${escapeHtml(task.title)} · 当前 ${escapeHtml(dueDate || "未设置")}</span>
           </div>
           <button type="button" class="secondary slim-inline" data-action="close-due-date-dialog" data-dialog-id="${escapeHtml(dialogId)}">关闭</button>
         </div>
@@ -33,7 +34,7 @@ function renderDueDateDialog(task) {
             <form class="due-date-request-form" data-task-id="${escapeHtml(task.id)}">
               <label>
                 新 Due Date
-                <input name="proposed_due_date" type="date" value="${escapeHtml(task.due_date || "")}" required />
+                <input name="proposed_due_date" type="date" value="${escapeHtml(dueDate)}" required />
               </label>
               <label>
                 修改理由
@@ -178,7 +179,8 @@ async function reviewDueDateRequest(button, status, reload) {
     if (!reason) return;
     body.review_note = reason;
   }
-  await api(`/api/workbench/due-date-requests/${encodeURIComponent(button.dataset.requestId)}`, {
+  const requestId = requireDataset(button, "requestId", "改期申请ID");
+  await api(`/api/workbench/due-date-requests/${encodeURIComponent(requestId)}`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });
@@ -188,7 +190,8 @@ async function reviewDueDateRequest(button, status, reload) {
 
 async function handleDueDateAction(action, button, projectId) {
   if (action === "open-due-date-dialog") {
-    openWorkbenchDialog(`#dueDateDialog-${button.dataset.taskId}`);
+    const taskId = requireDataset(button, "taskId", "任务ID");
+    openWorkbenchDialog(`#dueDateDialog-${taskId}`);
     return true;
   }
   if (action === "close-due-date-dialog") {
@@ -196,10 +199,12 @@ async function handleDueDateAction(action, button, projectId) {
     return true;
   }
   if (action === "approve-due-date-request") {
+    requireDataset(button, "requestId", "改期申请ID");
     await reviewDueDateRequest(button, "approved", () => state.workbenchMode === "tasks" ? loadWorkbenchTasks() : loadWorkbenchProjects(projectId));
     return true;
   }
   if (action === "reject-due-date-request") {
+    requireDataset(button, "requestId", "改期申请ID");
     await reviewDueDateRequest(button, "rejected", () => state.workbenchMode === "tasks" ? loadWorkbenchTasks() : loadWorkbenchProjects(projectId));
     return true;
   }

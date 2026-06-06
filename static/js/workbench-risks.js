@@ -150,7 +150,8 @@ async function handleIssueAction(action, button, projectId) {
   }
   if (action === "save-issue") {
     const form = button.closest(".issue-item");
-    await api(`/api/workbench/issues/${encodeURIComponent(button.dataset.issueId)}`, {
+    const issueId = requireDataset(button, "issueId", "风险ID");
+    await api(`/api/workbench/issues/${encodeURIComponent(issueId)}`, {
       method: "PATCH",
       body: JSON.stringify(formDataFromContainer(form)),
     });
@@ -160,7 +161,8 @@ async function handleIssueAction(action, button, projectId) {
   }
   if (action === "delete-issue") {
     if (!confirm("确定删除这个风险/问题吗？")) return true;
-    await api(`/api/workbench/issues/${encodeURIComponent(button.dataset.issueId)}`, { method: "DELETE", body: "{}" });
+    const issueId = requireDataset(button, "issueId", "风险ID");
+    await api(`/api/workbench/issues/${encodeURIComponent(issueId)}`, { method: "DELETE", body: "{}" });
     showToast("风险/问题已删除");
     await loadWorkbenchProjects(projectId);
     return true;

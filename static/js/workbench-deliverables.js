@@ -177,8 +177,10 @@ function openDeliverableReviewDialog(button, status) {
   const form = $("#deliverableReviewForm");
   if (!dialog || !form) return false;
   const isReject = status === "rejected";
+  const deliverableId = requireDataset(button, "deliverableId", "交付物ID");
   form.reset();
-  form.elements.deliverable_id.value = button.dataset.deliverableId || "";
+  form.dataset.deliverableId = deliverableId;
+  form.elements.deliverable_id.value = deliverableId;
   form.elements.status.value = status;
   $("#deliverableReviewTitle").textContent = isReject ? "驳回交付物" : "确认交付物";
   const fileName = button.dataset.fileName || "交付文件";
@@ -238,7 +240,9 @@ function bindDeliverableReviewDialog(workspace, reload) {
         }
         body.reject_reason = reason;
       }
-      await api(`/api/workbench/deliverables/${encodeURIComponent(form.elements.deliverable_id.value)}`, {
+      const deliverableId = form.dataset.deliverableId || form.elements.deliverable_id.value || "";
+      if (!deliverableId) throw new Error("交付物ID缺失，请刷新页面后重试");
+      await api(`/api/workbench/deliverables/${encodeURIComponent(deliverableId)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });

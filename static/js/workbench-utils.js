@@ -34,6 +34,16 @@ function workbenchAreaName(areaCode) {
   return (state.bootstrap?.workbench_areas || []).find((item) => item.code === areaCode)?.name || areaCode || "";
 }
 
+function workbenchDateValue(value) {
+  return String(value || "").trim().slice(0, 10);
+}
+
+function requireDataset(button, key, label) {
+  const value = button?.dataset?.[key] || "";
+  if (value) return value;
+  throw new Error(`${label}缺失，请刷新页面后重试`);
+}
+
 function workbenchRole() {
   if (state.auth.user) {
     return preferredWorkbenchRole();

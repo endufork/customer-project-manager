@@ -269,6 +269,13 @@ git status --short --branch
 engineering-workbench-gap-plan-v0.1.md
 ```
 
+- 工作台 bug 记录在：
+
+```text
+workbench-bug-log-v0.1.md
+```
+
+- 后续每次发现、修复工作台相关 bug，都要追加记录现象、根因、修复、验证和剩余风险。
 - 下一阶段重点不是继续堆页面入口，而是打通：
 
 ```text
