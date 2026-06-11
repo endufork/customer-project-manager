@@ -7,6 +7,32 @@ from ..database import row_to_dict
 from .workbench_common import _enrich_project_summaries
 
 
+def _number_search_pattern(search: str) -> str:
+    if search.isdigit():
+        return f"%{search}%"
+    return f"{search}%"
+
+
+def _has_project_number_match(conn: sqlite3.Connection, search: str) -> bool:
+    pattern = _number_search_pattern(search)
+    return bool(
+        conn.execute(
+            """
+            SELECT 1
+            FROM projects p
+            WHERE COALESCE(p.is_deleted, 0) = 0
+              AND (
+                p.intake_no LIKE ?
+                OR p.equipment_no LIKE ?
+                OR p.related_legacy_no LIKE ?
+              )
+            LIMIT 1
+            """,
+            (pattern, pattern, pattern),
+        ).fetchone()
+    )
+
+
 def status_date_label(status_code: str) -> str:
     return STATUS_DATE_LABELS.get(status_code, "状态日期")
 
@@ -38,25 +64,35 @@ def list_project_records(conn: sqlite3.Connection, query: dict[str, list[str]]) 
     needs_equipment = (query.get("needs_equipment", [""])[0] or "").strip()
 
     if search:
-        like = f"%{search}%"
-        filters.append(
-            """
-            (
-              p.intake_no LIKE ?
-              OR p.equipment_no LIKE ?
-              OR p.equipment_name LIKE ?
-              OR p.project_name LIKE ?
-              OR p.project_nature LIKE ?
-              OR p.related_legacy_no LIKE ?
-              OR c.name LIKE ?
-              OR cg.name LIKE ?
-              OR cs.name LIKE ?
-              OR pg.name LIKE ?
-              OR co.name LIKE ?
+        if _has_project_number_match(conn, search):
+            number_like = _number_search_pattern(search)
+            filters.append(
+                """
+                (
+                  p.intake_no LIKE ?
+                  OR p.equipment_no LIKE ?
+                  OR p.related_legacy_no LIKE ?
+                )
+                """
             )
-            """
-        )
-        params.extend([like, like, like, like, like, like, like, like, like, like, like])
+            params.extend([number_like, number_like, number_like])
+        else:
+            like = f"%{search}%"
+            filters.append(
+                """
+                (
+                  p.equipment_name LIKE ?
+                  OR p.project_name LIKE ?
+                  OR p.project_nature LIKE ?
+                  OR c.name LIKE ?
+                  OR cg.name LIKE ?
+                  OR cs.name LIKE ?
+                  OR pg.name LIKE ?
+                  OR co.name LIKE ?
+                )
+                """
+            )
+            params.extend([like, like, like, like, like, like, like, like])
     if status:
         filters.append("p.status_code = ?")
         params.append(status)
