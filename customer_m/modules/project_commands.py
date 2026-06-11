@@ -371,6 +371,7 @@ def rename_project_folder_to_wo(conn: sqlite3.Connection, project_id: str) -> di
     current = Path(project["project_folder_path"])
     equipment_no = project["equipment_no"]
     if current.name.startswith(equipment_no):
+        ensure_standard_dirs(current, conn)
         return {
             "renamed": False,
             "project_folder_path": str(current),

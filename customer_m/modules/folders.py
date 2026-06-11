@@ -206,12 +206,11 @@ def cleanup_empty_parent_dirs(conn: sqlite3.Connection, start_path: Path) -> lis
             current.relative_to(root)
         except ValueError:
             break
-        if current.exists() and current.is_dir():
-            for child in sorted((path for path in current.rglob("*") if path.is_dir()), key=lambda path: len(path.parts), reverse=True):
-                try:
-                    child.rmdir()
-                except OSError as exc:
-                    logger.debug("Skip non-empty child folder during cleanup path=%s error=%s", child, exc)
+        if not current.exists():
+            current = current.parent.resolve(strict=False)
+            continue
+        if not current.is_dir():
+            break
         try:
             current.rmdir()
         except OSError as exc:
@@ -270,6 +269,7 @@ def move_project_folder_if_needed(
             cleanup_empty_parent_dirs(conn, old_parent)
         else:
             ensure_standard_dirs(target, conn)
+        ensure_standard_dirs(target, conn)
     except OSError as exc:
         logger.exception(
             "Failed to move project folder project_id=%s current=%s target=%s",
