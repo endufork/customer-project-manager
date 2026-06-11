@@ -202,8 +202,8 @@ def _issue_stats(conn: sqlite3.Connection, project: dict) -> dict:
         f"""
         SELECT
           COUNT(*) AS issue_total,
-          COALESCE(SUM(CASE WHEN status IN ('open', 'following') THEN 1 ELSE 0 END), 0) AS open_issues,
-          COALESCE(SUM(CASE WHEN severity = 'high' AND status IN ('open', 'following') THEN 1 ELSE 0 END), 0) AS high_issues
+          COALESCE(SUM(CASE WHEN status IN ('open', 'following', 'resolved') THEN 1 ELSE 0 END), 0) AS open_issues,
+          COALESCE(SUM(CASE WHEN severity = 'high' AND status IN ('open', 'following', 'resolved') THEN 1 ELSE 0 END), 0) AS high_issues
         FROM execution_issues
         WHERE {issue_where}
         """,
@@ -278,8 +278,8 @@ def _equipment_issue_stats_by_project(conn: sqlite3.Connection, project_ids: lis
         SELECT
           project_id,
           COUNT(*) AS issue_total,
-          COALESCE(SUM(CASE WHEN status IN ('open', 'following') THEN 1 ELSE 0 END), 0) AS open_issues,
-          COALESCE(SUM(CASE WHEN severity = 'high' AND status IN ('open', 'following') THEN 1 ELSE 0 END), 0) AS high_issues
+          COALESCE(SUM(CASE WHEN status IN ('open', 'following', 'resolved') THEN 1 ELSE 0 END), 0) AS open_issues,
+          COALESCE(SUM(CASE WHEN severity = 'high' AND status IN ('open', 'following', 'resolved') THEN 1 ELSE 0 END), 0) AS high_issues
         FROM execution_issues
         WHERE project_id IN ({placeholders}) AND scope <> 'product'
         GROUP BY project_id
@@ -297,8 +297,8 @@ def _product_issue_stats_by_group(conn: sqlite3.Connection, group_ids: list[str]
         SELECT
           source_project.project_group_id,
           COUNT(*) AS issue_total,
-          COALESCE(SUM(CASE WHEN ei.status IN ('open', 'following') THEN 1 ELSE 0 END), 0) AS open_issues,
-          COALESCE(SUM(CASE WHEN ei.severity = 'high' AND ei.status IN ('open', 'following') THEN 1 ELSE 0 END), 0) AS high_issues
+          COALESCE(SUM(CASE WHEN ei.status IN ('open', 'following', 'resolved') THEN 1 ELSE 0 END), 0) AS open_issues,
+          COALESCE(SUM(CASE WHEN ei.severity = 'high' AND ei.status IN ('open', 'following', 'resolved') THEN 1 ELSE 0 END), 0) AS high_issues
         FROM execution_issues ei
         JOIN projects source_project ON source_project.id = ei.project_id
         WHERE ei.scope = 'product'

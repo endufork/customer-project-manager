@@ -88,7 +88,7 @@ function renderTaskCreateForm() {
 }
 
 function renderBlockedIssueOptions(issues = [], task = {}) {
-  const selectedIssue = issues.find((issue) => issue.task_id === task.id && ["open", "following"].includes(issue.status));
+  const selectedIssue = issues.find((issue) => issue.task_id === task.id && ["open", "following", "resolved"].includes(issue.status));
   const selectedId = selectedIssue?.id || "";
   const options = issues.filter((issue) => {
     if (!["open", "following"].includes(issue.status)) return false;
@@ -126,8 +126,23 @@ function renderTaskStatusEditor(task) {
   return `<select name="status">${renderEditableTaskStatusOptions(task.status)}</select>`;
 }
 
+function taskNextActionText(task, linkedIssue) {
+  if (task.status === "blocked") {
+    return linkedIssue
+      ? `阻塞处理中：先处理风险「${linkedIssue.title}」`
+      : "阻塞处理中：保存后系统会自动生成任务级风险";
+  }
+  if (task.status === "submitted") return "已提交，等待 PM 确认";
+  if (task.status === "rework") return "需返工：补充后重新提交";
+  if (task.status === "waiting_info") return "等待资料：补充信息后继续推进";
+  if (taskDone(task)) return "任务已关闭";
+  return task.requires_deliverable ? "下一步：上传交付文件" : "下一步：提交完成说明";
+}
+
 function renderWorkbenchTask(task, issues = []) {
   const deliverables = task.deliverables || [];
+  const linkedIssue = issues.find((issue) => issue.task_id === task.id && ["open", "following", "resolved"].includes(issue.status));
+  const nextAction = taskNextActionText(task, linkedIssue);
   const owner = task.owner_name || "未指派";
   const dueDate = workbenchDateValue(task.due_date || task.current_due_date);
   const due = dueDate || "未设置Due Date";
@@ -149,6 +164,7 @@ function renderWorkbenchTask(task, issues = []) {
         <div class="task-readable-main">
           <strong>${escapeHtml(task.title)}</strong>
           <span class="subtext">${escapeHtml(workPackage)} · ${escapeHtml(owner)} · <span class="${dueClass(dueDate)}">${escapeHtml(due)}</span>${task.requires_deliverable ? " · 需要文件" : ""}</span>
+          <span class="task-next-step">${escapeHtml(nextAction)}</span>
         </div>
         <div class="task-actions">
           <span class="task-status ${escapeHtml(task.status)}">${escapeHtml(workbenchTaskStatusName(task.status))}</span>
@@ -156,8 +172,15 @@ function renderWorkbenchTask(task, issues = []) {
           ${deleteButton}
         </div>
       </div>
+      ${linkedIssue ? `
+        <div class="task-risk-strip">
+          <span class="tag ${linkedIssue.severity === "high" ? "danger" : linkedIssue.severity === "medium" ? "warn" : "neutral"}">关联风险</span>
+          <strong>${escapeHtml(linkedIssue.title)}</strong>
+          <span class="subtext">${escapeHtml(workbenchIssueStatusName(linkedIssue.status))}${linkedIssue.resolution ? ` · ${escapeHtml(linkedIssue.resolution)}` : ""}</span>
+        </div>
+      ` : ""}
       <details class="task-deliverable-panel">
-        <summary>编辑任务 / 提交文件 ${deliverables.length ? `(${escapeHtml(deliverables.length)} 个文件)` : ""}</summary>
+        <summary>${taskDone(task) ? "查看任务记录" : "处理任务"} ${deliverables.length ? `· ${escapeHtml(deliverables.length)} 个文件` : ""}</summary>
         <form class="workbench-task-form" data-task-id="${escapeHtml(task.id)}">
           <label>
             任务
@@ -190,15 +213,25 @@ function renderWorkbenchTask(task, issues = []) {
             需要文件
           </label>
           <label>
-            备注/阻塞说明
+            备注
             <input name="notes" value="${escapeHtml(task.notes || "")}" placeholder="备注/阻塞说明" />
           </label>
-          <label>
-            关联阻塞风险
-            <select name="linked_issue_id">
-              ${renderBlockedIssueOptions(issues, task)}
-            </select>
-          </label>
+          <div class="blocked-risk-box" data-blocked-risk-section${task.status === "blocked" ? "" : " hidden"}>
+            <div>
+              <strong>任务阻塞会自动生成风险</strong>
+              <span class="subtext">填写阻塞原因即可；只有确实属于已有风险时才选择关联。</span>
+            </div>
+            <label>
+              阻塞原因
+              <input name="blocked_reason" value="${escapeHtml(task.blocked_reason || "")}" placeholder="例如客户3D数据未提供、物料延期、权限未开放" />
+            </label>
+            <label>
+              可选：使用已有风险
+              <select name="linked_issue_id">
+                ${renderBlockedIssueOptions(issues, task)}
+              </select>
+            </label>
+          </div>
           <div class="task-actions">
             <button type="button" class="secondary slim-inline" data-action="save-task" data-task-id="${escapeHtml(task.id)}">保存任务</button>
             ${taskCompletionActions}
@@ -216,13 +249,19 @@ function renderWorkbenchTask(task, issues = []) {
 
 function renderDeliverableUploadForm(task) {
   return `
-    <form class="deliverable-upload-form" data-task-id="${escapeHtml(task.id)}">
-      <input type="file" name="file" required />
-      <select name="category_code">${optionItems(state.bootstrap?.file_categories || [], "solution", (item) => item.code, (item) => item.name)}</select>
-      <input name="version_note" placeholder="版本说明，可选" />
-      <input name="submitted_by" placeholder="提交人" value="${escapeHtml($("#workbenchOwnerInput").value.trim() || task.owner_name || "")}" />
-      <button type="submit">提交文件</button>
-    </form>
+    <section class="task-submit-box">
+      <div class="task-submit-heading">
+        <strong>提交交付文件</strong>
+        <span class="subtext">上传后进入 PM 待确认，确认后任务关闭；驳回后进入返工。</span>
+      </div>
+      <form class="deliverable-upload-form" data-task-id="${escapeHtml(task.id)}">
+        <input type="file" name="file" required />
+        <select name="category_code">${optionItems(state.bootstrap?.file_categories || [], "solution", (item) => item.code, (item) => item.name)}</select>
+        <input name="version_note" placeholder="版本说明，可选" />
+        <input name="submitted_by" placeholder="提交人" value="${escapeHtml($("#workbenchOwnerInput").value.trim() || task.owner_name || "")}" />
+        <button type="submit">提交文件</button>
+      </form>
+    </section>
   `;
 }
 
@@ -235,11 +274,17 @@ function renderTaskCompletionForm(task) {
   }
   const submitText = userHasRole("pm") ? "提交并确认" : "提交完成说明";
   return `
-    <form class="task-completion-form" data-task-id="${escapeHtml(task.id)}" data-project-id="${escapeHtml(task.project_id || "")}">
-      <textarea name="completion_note" rows="2" placeholder="填写完成说明，例如 已完成客户资料确认并同步给PM" required></textarea>
-      <input name="submitted_by" placeholder="提交人" value="${escapeHtml($("#workbenchOwnerInput").value.trim() || task.owner_name || "")}" />
-      <button type="submit" class="secondary compact-submit">${submitText}</button>
-    </form>
+    <section class="task-submit-box">
+      <div class="task-submit-heading">
+        <strong>提交完成说明</strong>
+        <span class="subtext">${userHasRole("pm") ? "PM可直接确认关闭；工程师提交后等待PM确认。" : "提交后进入 PM 待确认，确认后任务关闭。"}</span>
+      </div>
+      <form class="task-completion-form" data-task-id="${escapeHtml(task.id)}" data-project-id="${escapeHtml(task.project_id || "")}">
+        <textarea name="completion_note" rows="2" placeholder="填写完成说明，例如 已完成客户资料确认并同步给PM" required></textarea>
+        <input name="submitted_by" placeholder="提交人" value="${escapeHtml($("#workbenchOwnerInput").value.trim() || task.owner_name || "")}" />
+        <button type="submit" class="secondary compact-submit">${submitText}</button>
+      </form>
+    </section>
   `;
 }
 
@@ -445,6 +490,16 @@ function bindTaskDialog(workspace) {
 
 function bindTaskForms(projectId, workspace) {
   workspace.querySelectorAll(".workbench-task-form").forEach((form) => {
+    const statusSelect = form.querySelector("select[name='status']");
+    const blockedSection = form.querySelector("[data-blocked-risk-section]");
+    const refreshBlockedSection = () => {
+      if (!blockedSection || !statusSelect) return;
+      blockedSection.hidden = statusSelect.value !== "blocked";
+    };
+    if (statusSelect) {
+      statusSelect.addEventListener("change", refreshBlockedSection);
+      refreshBlockedSection();
+    }
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       await saveWorkbenchTask(form, projectId);

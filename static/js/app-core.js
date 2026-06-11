@@ -9,6 +9,7 @@ const state = {
   visibleColumns: [],
   sort: { key: "created_at", direction: "desc" },
   detailLastFocused: null,
+  toastTimer: null,
   auth: { token: null, user: null },
   appReady: false,
 };

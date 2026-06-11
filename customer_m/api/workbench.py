@@ -239,10 +239,10 @@ def patch_due_date_request(request_id: str, body: DueDateReviewRequest, user: di
 
 
 @router.patch("/issues/{issue_id}")
-def patch_issue(issue_id: str, body: WorkbenchIssueRequest, _: dict = Depends(pm_user)) -> dict:
+def patch_issue(issue_id: str, body: WorkbenchIssueRequest, user: dict = Depends(engineer_or_pm_user)) -> dict:
     try:
         with db_connect() as conn:
-            payload = update_issue(conn, issue_id, _model_data(body))
+            payload = update_issue(conn, issue_id, _model_data(body, exclude_unset=True), user)
             conn.commit()
         return payload
     except ValueError as exc:

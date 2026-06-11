@@ -46,11 +46,14 @@ test("workbench action windows open from the task action row", async ({ page }) 
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "风险/异常" })).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "创建风险" })).toBeVisible();
-  await expect(dialog.locator("select[name='scope']")).toBeVisible();
-  await expect(dialog.locator("select[name='scope']")).toContainText("产品/产线");
-  await expect(dialog.locator("select[name='scope']")).toContainText("当前设备");
-  await expect(dialog.locator("select[name='scope']")).toContainText("具体任务");
-  await expect(dialog.getByRole("heading", { name: "当前风险列表" })).toBeVisible();
+  const riskScopeSelect = dialog.locator("#workbenchIssueForm select[name='scope']");
+  await expect(riskScopeSelect).toBeVisible();
+  await expect(riskScopeSelect).toContainText("产品/产线");
+  await expect(riskScopeSelect).toContainText("当前设备");
+  await expect(riskScopeSelect).toContainText("具体任务");
+  await expect(dialog.getByRole("heading", { name: "待处理风险" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "待PM确认关闭" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "已关闭/已接受" })).toBeVisible();
 
   await dialog.getByRole("button", { name: "关闭" }).click();
   await expect(dialog).not.toBeVisible();

@@ -132,7 +132,7 @@ function renderWorkbenchWorkspace(payload) {
   const pendingDeliverables = deliverables.filter((item) => item.status === "submitted");
   const showPmDeliverables = canReviewDeliverables();
   const canManageTasks = userHasRole("pm");
-  const openIssueCount = issues.filter((issue) => ["open", "following"].includes(issue.status)).length;
+  const openIssueCount = issues.filter((issue) => ["open", "following", "resolved"].includes(issue.status)).length;
   $("#workbenchWorkspace").innerHTML = `
     <div class="workbench-header">
       <div>
@@ -192,6 +192,7 @@ function renderMyTodoWorkspace(payload = {}, options = {}) {
   const deliverables = payload.deliverables || [];
   const taskCompletions = payload.task_completions || [];
   const dueDateRequests = payload.due_date_requests || [];
+  const riskReviews = payload.risk_reviews || [];
   const role = payload.role || workbenchRole();
   const owner = $("#workbenchOwnerInput").value.trim();
   if (options.ownerRequired) {
@@ -216,7 +217,7 @@ function renderMyTodoWorkspace(payload = {}, options = {}) {
       </div>
     </div>
     <div class="workbench-summary-grid">
-      <div><span>${escapeHtml(isPm ? deliverables.length + taskCompletions.length + dueDateRequests.length : tasks.length)}</span><small>${isPm ? "待处理审批" : "未完成任务"}</small></div>
+      <div><span>${escapeHtml(isPm ? deliverables.length + taskCompletions.length + dueDateRequests.length + riskReviews.length : tasks.length)}</span><small>${isPm ? "待处理审批" : "未完成任务"}</small></div>
       <div><span>${escapeHtml(overdueCount)}</span><small>已超期</small></div>
       <div><span>${escapeHtml(tasks.filter((task) => ["blocked", "waiting_info", "rework"].includes(task.status)).length)}</span><small>阻塞/待资料/返工</small></div>
       <div><span>${escapeHtml(isPm ? tasks.length : tasks.filter((task) => task.requires_deliverable).length)}</span><small>${isPm ? "我的任务" : "需要文件"}</small></div>
@@ -224,9 +225,11 @@ function renderMyTodoWorkspace(payload = {}, options = {}) {
     <section class="workbench-main my-task-surface">
       ${renderDeliverableReviewDialog()}
       ${renderTaskCompletionReviewDialog()}
+      ${isPm ? renderIssueReviewDialog() : ""}
       ${isPm ? renderInboxDeliverablesSection(deliverables) : ""}
       ${isPm ? renderInboxTaskCompletionsSection(taskCompletions) : ""}
       ${isPm ? renderInboxDueDateSection(dueDateRequests) : ""}
+      ${isPm ? renderInboxRiskReviewsSection(riskReviews) : ""}
       <div class="workbench-section-title">
         <h3>${isPm ? "我负责的任务" : "任务列表"}</h3>
         <span>${escapeHtml(tasks.length)} 个</span>
@@ -266,6 +269,7 @@ function renderLogDrawer(logs) {
 function bindMyTodoActions() {
   bindDeliverableReviewDialog($("#workbenchWorkspace"), () => loadWorkbenchTasks());
   bindTaskCompletionReviewDialog($("#workbenchWorkspace"), () => loadWorkbenchTasks());
+  bindRiskDialog($("#workbenchWorkspace"));
   $("#workbenchWorkspace").querySelectorAll("[data-action='open-my-task-project'], [data-action='open-inbox-project']").forEach((button) => {
     button.addEventListener("click", async () => {
       state.workbenchMode = "projects";
@@ -296,6 +300,15 @@ function bindMyTodoActions() {
     button.addEventListener("click", async () => {
       try {
         await handleDueDateAction(button.dataset.action, button, button.dataset.projectId || state.workbenchProjectId);
+      } catch (error) {
+        showToast(error.message);
+      }
+    });
+  });
+  $("#workbenchWorkspace").querySelectorAll("[data-action='close-inbox-issue'], [data-action='accept-inbox-issue'], [data-action='reopen-inbox-issue']").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        await handleIssueAction(button.dataset.action, button, button.dataset.projectId || state.workbenchProjectId);
       } catch (error) {
         showToast(error.message);
       }

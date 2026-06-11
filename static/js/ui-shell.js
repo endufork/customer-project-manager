@@ -1,11 +1,19 @@
 function showToast(message) {
   const region = $("#toastRegion") || document.body;
+  if (state.toastTimer) {
+    clearTimeout(state.toastTimer);
+    state.toastTimer = null;
+  }
+  region.querySelectorAll(".toast").forEach((item) => item.remove());
   const node = document.createElement("div");
   node.className = "toast";
   node.setAttribute("role", "status");
   node.textContent = message;
   region.appendChild(node);
-  setTimeout(() => node.remove(), 2600);
+  state.toastTimer = setTimeout(() => {
+    node.remove();
+    state.toastTimer = null;
+  }, 2200);
 }
 
 function closeDetailPane({ restoreFocus = true } = {}) {

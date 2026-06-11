@@ -250,6 +250,135 @@ def test_blocked_task_auto_creates_task_issue(client):
     assert linked_issue["severity"] == "high"
 
 
+def test_updating_task_to_blocked_auto_creates_task_issue(client):
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "Fixture debug",
+            "work_package": "调试",
+            "owner_name": "Bob",
+            "status": "in_progress",
+        },
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+
+    update_response = client.patch(
+        f"/api/workbench/tasks/{task_id}",
+        headers=headers,
+        json={
+            "title": "Fixture debug",
+            "work_package": "调试",
+            "owner_name": "Bob",
+            "status": "blocked",
+            "blocked_reason": "Customer PLC access is unavailable.",
+        },
+    )
+    assert update_response.status_code == 200, update_response.text
+
+    detail_response = client.get(f"/api/workbench/projects/{project_id}", headers=headers)
+    issues = detail_response.json()["issues"]
+    linked_issue = next(item for item in issues if item["task_id"] == task_id)
+    assert linked_issue["scope"] == "task"
+    assert linked_issue["status"] == "open"
+    assert "Customer PLC access" in linked_issue["resolution"]
+
+
+def test_task_risk_resolution_enters_pm_inbox_and_unblocks_task(client):
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "Wait for 3D data",
+            "work_package": "前期方案",
+            "owner_name": "Bob",
+            "status": "blocked",
+            "blocked_reason": "Customer 3D data is missing.",
+        },
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+
+    detail_response = client.get(f"/api/workbench/projects/{project_id}", headers=headers)
+    issue = next(item for item in detail_response.json()["issues"] if item["task_id"] == task_id)
+
+    resolve_response = client.patch(
+        f"/api/workbench/issues/{issue['id']}",
+        headers=headers,
+        json={"status": "resolved", "resolution": "Customer supplied 3D data and Bob checked it."},
+    )
+    assert resolve_response.status_code == 200, resolve_response.text
+    assert resolve_response.json()["status"] == "resolved"
+
+    inbox_response = client.get("/api/workbench/inbox?role=pm&view=submitted", headers=headers)
+    assert inbox_response.status_code == 200, inbox_response.text
+    assert any(item["id"] == issue["id"] for item in inbox_response.json()["risk_reviews"])
+
+    close_response = client.patch(
+        f"/api/workbench/issues/{issue['id']}",
+        headers=headers,
+        json={"status": "closed", "review_note": "Confirmed by PM.", "task_next_status": "in_progress"},
+    )
+    assert close_response.status_code == 200, close_response.text
+    assert close_response.json()["status"] == "closed"
+
+    final_detail = client.get(f"/api/workbench/projects/{project_id}", headers=headers)
+    task = next(item for item in final_detail.json()["tasks"] if item["id"] == task_id)
+    closed_issue = next(item for item in final_detail.json()["issues"] if item["id"] == issue["id"])
+    assert task["status"] == "in_progress"
+    assert closed_issue["status"] == "closed"
+    assert closed_issue["closed_at"]
+
+
+def test_pm_reopens_resolved_risk_and_keeps_task_blocked(client):
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "Wait for customer sample",
+            "work_package": "前期方案",
+            "owner_name": "Bob",
+            "status": "blocked",
+            "blocked_reason": "Customer sample is missing.",
+        },
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+    detail_response = client.get(f"/api/workbench/projects/{project_id}", headers=headers)
+    issue = next(item for item in detail_response.json()["issues"] if item["task_id"] == task_id)
+
+    resolve_response = client.patch(
+        f"/api/workbench/issues/{issue['id']}",
+        headers=headers,
+        json={"status": "resolved", "resolution": "Supplier says sample will arrive tomorrow."},
+    )
+    assert resolve_response.status_code == 200, resolve_response.text
+
+    reopen_response = client.patch(
+        f"/api/workbench/issues/{issue['id']}",
+        headers=headers,
+        json={"status": "following", "review_note": "Sample not received yet."},
+    )
+    assert reopen_response.status_code == 200, reopen_response.text
+    assert reopen_response.json()["status"] == "following"
+
+    final_detail = client.get(f"/api/workbench/projects/{project_id}", headers=headers)
+    task = next(item for item in final_detail.json()["tasks"] if item["id"] == task_id)
+    reopened_issue = next(item for item in final_detail.json()["issues"] if item["id"] == issue["id"])
+    assert task["status"] == "blocked"
+    assert reopened_issue["status"] == "following"
+
+
 def test_blocked_task_can_link_existing_issue(client):
     headers = auth_headers(client)
     project_id = create_project(client, headers)

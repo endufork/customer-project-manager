@@ -132,6 +132,8 @@ class WorkbenchIssueRequest(_StrictRequest):
     status: str | None = None
     due_date: str | None = None
     resolution: str | None = None
+    review_note: str | None = None
+    task_next_status: str | None = None
 
 
 class DueDateChangeRequest(_StrictRequest):

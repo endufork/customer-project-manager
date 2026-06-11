@@ -1543,6 +1543,28 @@ tr.project-row:focus {
   overflow-wrap: anywhere;
 }
 
+.task-next-step {
+  color: #2d4f43;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-risk-strip {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 0.6fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid #f7c78d;
+  border-radius: 6px;
+  background: #fffaf2;
+}
+
+.task-risk-strip strong {
+  overflow-wrap: anywhere;
+}
+
 .workbench-task.blocked {
   border-color: #f7c78d;
   background: #fffaf2;
@@ -1571,6 +1593,23 @@ tr.project-row:focus {
 
 .workbench-task-form .task-actions {
   align-self: end;
+}
+
+.blocked-risk-box {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.9fr) minmax(220px, 1fr) minmax(220px, 1fr);
+  gap: 8px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid #f7c78d;
+  border-radius: 6px;
+  background: #fffaf2;
+}
+
+.blocked-risk-box > div {
+  display: grid;
+  gap: 3px;
 }
 
 .inline-field-action {
@@ -1624,6 +1663,35 @@ tr.project-row:focus {
   cursor: pointer;
   color: var(--muted);
   font-weight: 700;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-deliverable-panel summary:hover {
+  color: var(--accent-strong);
+}
+
+.task-submit-box {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.task-submit-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.task-submit-heading strong {
+  font-size: 13px;
 }
 
 .deliverable-upload-form {
@@ -1631,7 +1699,18 @@ tr.project-row:focus {
   grid-template-columns: minmax(160px, 1fr) 130px minmax(120px, 0.8fr) minmax(100px, 0.6fr) auto;
   gap: 8px;
   align-items: end;
-  margin: 8px 0;
+  margin: 0;
+}
+
+.task-completion-form {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(120px, 0.4fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.task-completion-form textarea {
+  min-height: 44px;
 }
 
 .deliverable-item,
@@ -1862,6 +1941,14 @@ tr.project-row:focus {
   pointer-events: auto;
 }
 
+.inbox-deliverable-list .small-empty {
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: #fbfcfd;
+}
+
 .confirm-dialog {
   width: min(460px, calc(100vw - 32px));
   padding: 0;
@@ -1913,10 +2000,14 @@ tr.project-row:focus {
   .template-action-grid,
   .template-picker-row,
   .template-task-row,
+  .task-risk-strip,
+  .blocked-risk-box,
   .workbench-create-form,
   .issue-create-form,
   .workbench-task-form,
   .deliverable-upload-form,
+  .task-completion-form,
+  .task-submit-heading,
   .issue-item,
   .issue-edit-grid {
     display: grid;

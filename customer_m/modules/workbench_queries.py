@@ -407,6 +407,80 @@ def list_pending_task_completions(conn: sqlite3.Connection, query: dict[str, lis
         rows.append(task)
     return rows
 
+def list_pending_risk_reviews(conn: sqlite3.Connection, query: dict[str, list[str]]) -> list[dict]:
+    filters = ["ei.status = 'resolved'", "COALESCE(p.is_deleted, 0) = 0"]
+    params: list[str] = []
+    search = (query.get("search", [""])[0] or "").strip()
+    view = (query.get("view", [""])[0] or "all").strip()
+
+    if view not in {"", "all", "submitted", "blocked", "high_risk"}:
+        return []
+    if view == "high_risk":
+        filters.append("ei.severity = 'high'")
+    if search:
+        like = f"%{search}%"
+        filters.append(
+            """
+            (
+              ei.title LIKE ?
+              OR ei.owner_name LIKE ?
+              OR t.title LIKE ?
+              OR p.intake_no LIKE ?
+              OR p.equipment_no LIKE ?
+              OR p.equipment_name LIKE ?
+              OR p.project_name LIKE ?
+              OR c.name LIKE ?
+              OR cs.name LIKE ?
+              OR pg.name LIKE ?
+            )
+            """
+        )
+        params.extend([like, like, like, like, like, like, like, like, like, like])
+
+    where = "WHERE " + " AND ".join(filters)
+    rows = []
+    for row in conn.execute(
+        f"""
+        SELECT
+          ei.*,
+          t.title AS task_title,
+          t.status AS task_status,
+          p.intake_no,
+          p.equipment_no,
+          p.equipment_name,
+          p.project_name,
+          p.project_nature,
+          p.status_code,
+          p.expected_delivery_date,
+          p.project_folder_path,
+          c.name AS customer_name,
+          cg.name AS customer_group_name,
+          cs.name AS site_name,
+          pg.name AS project_group_name,
+          co.name AS contact_name
+        FROM execution_issues ei
+        JOIN projects p ON p.id = ei.project_id
+        JOIN customers c ON c.id = p.customer_id
+        LEFT JOIN execution_tasks t ON t.id = ei.task_id
+        LEFT JOIN customer_groups cg ON cg.id = p.customer_group_id
+        LEFT JOIN customer_sites cs ON cs.id = p.site_id
+        LEFT JOIN project_groups pg ON pg.id = p.project_group_id
+        LEFT JOIN contacts co ON co.id = p.contact_id
+        {where}
+        ORDER BY
+          CASE ei.severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+          COALESCE(ei.due_date, '9999-12-31'),
+          ei.updated_at DESC
+        LIMIT 300
+        """,
+        params,
+    ):
+        issue = row_to_dict(row)
+        issue["current_number"] = _project_number(issue)
+        issue["workbench_area"] = _project_area(issue)
+        rows.append(issue)
+    return rows
+
 def list_workbench_inbox(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
     role = (query.get("role", ["engineer"])[0] or "engineer").strip().lower()
     if role not in {"engineer", "pm"}:
@@ -421,10 +495,11 @@ def list_workbench_inbox(conn: sqlite3.Connection, query: dict[str, list[str]]) 
     deliverables = list_pending_deliverables(conn, query) if role == "pm" else []
     task_completions = list_pending_task_completions(conn, query) if role == "pm" else []
     due_date_requests = list_due_date_requests(conn, query) if role == "pm" else []
+    risk_reviews = list_pending_risk_reviews(conn, query) if role == "pm" else []
     kpis = {
-        "total": len(tasks) + len(deliverables) + len(task_completions) + len(due_date_requests),
+        "total": len(tasks) + len(deliverables) + len(task_completions) + len(due_date_requests) + len(risk_reviews),
         "blocked": task_payload["kpis"].get("blocked", 0),
-        "submitted": len(deliverables) + len(task_completions) + len(due_date_requests) if role == "pm" else task_payload["kpis"].get("submitted", 0),
+        "submitted": len(deliverables) + len(task_completions) + len(due_date_requests) + len(risk_reviews) if role == "pm" else task_payload["kpis"].get("submitted", 0),
         "overdue": task_payload["kpis"].get("overdue", 0),
     }
     return {
@@ -433,6 +508,7 @@ def list_workbench_inbox(conn: sqlite3.Connection, query: dict[str, list[str]]) 
         "deliverables": deliverables,
         "task_completions": task_completions,
         "due_date_requests": due_date_requests,
+        "risk_reviews": risk_reviews,
         "kpis": kpis,
     }
 
