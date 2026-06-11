@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-11T00:00:00+08:00",
+  "title": "Design System: 项目管理系统",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "System Background",
+        "canonical": "#f6f7f9",
+        "tonalRamp": ["#17202a", "#344054", "#697586", "#b9c3cf", "#d8dee6", "#eef2f6", "#f6f7f9", "#ffffff"]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Operational Green",
+        "canonical": "#1f6f5b",
+        "tonalRamp": ["#09231c", "#155443", "#1f6f5b", "#3b8a74", "#7ab7a6", "#cfe6de", "#eef5f2", "#f6faf8"]
+      },
+      "blue": {
+        "role": "secondary",
+        "displayName": "Summary Blue",
+        "canonical": "#245a9c",
+        "tonalRamp": ["#0b1d33", "#183d6c", "#245a9c", "#3a75bb", "#7fa7d7", "#d7e6f6", "#eef5fc", "#f8fbff"]
+      },
+      "warn": {
+        "role": "warning",
+        "displayName": "Amber Warning",
+        "canonical": "#a15c00",
+        "tonalRamp": ["#2c1600", "#704000", "#a15c00", "#c98222", "#f0b862", "#fff2d8", "#fff8eb", "#fffdf8"]
+      },
+      "danger": {
+        "role": "danger",
+        "displayName": "Safety Red",
+        "canonical": "#b42318",
+        "tonalRamp": ["#3a0805", "#8f1d14", "#b42318", "#d74b42", "#f3aaa5", "#fff0ef", "#fff7f6", "#fffafa"]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Application title and major page heading only."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel headings and major section titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Tables, cards, forms, and detail content."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels and compact control labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel-shadow",
+        "value": "0 8px 24px rgba(20, 31, 43, 0.08)",
+        "purpose": "Top-level page panels only."
+      },
+      {
+        "name": "auth-shadow",
+        "value": "0 18px 45px rgba(15, 23, 42, 0.1)",
+        "purpose": "Login card only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "150ms ease",
+        "purpose": "Hover, focus, and simple state transitions."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "960px"
+      },
+      {
+        "name": "narrow",
+        "value": "900px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Committed action button for create, save, submit, and confirm.",
+      "html": "<button class=\"ds-btn-primary\">保存修改</button>",
+      "css": ".ds-btn-primary { min-height: 36px; border: 1px solid #1f6f5b; background: #1f6f5b; color: #fff; padding: 7px 13px; border-radius: 6px; font: 700 14px/1.45 Microsoft YaHei, Segoe UI, Arial, sans-serif; cursor: pointer; } .ds-btn-primary:hover { background: #155443; border-color: #155443; } .ds-btn-primary:focus-visible { outline: 3px solid rgba(31,111,91,.34); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Utility button for refresh, open folder, cancel, and secondary navigation.",
+      "html": "<button class=\"ds-btn-secondary\">刷新</button>",
+      "css": ".ds-btn-secondary { min-height: 36px; border: 1px solid #b9c3cf; background: #fff; color: #17202a; padding: 7px 13px; border-radius: 6px; font: 700 14px/1.45 Microsoft YaHei, Segoe UI, Arial, sans-serif; cursor: pointer; } .ds-btn-secondary:hover { background: #eef2f6; } .ds-btn-secondary:focus-visible { outline: 3px solid rgba(31,111,91,.34); outline-offset: 2px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive or negative workflow action.",
+      "html": "<button class=\"ds-btn-danger\">驳回</button>",
+      "css": ".ds-btn-danger { min-height: 36px; border: 1px solid #b42318; background: #b42318; color: #fff; padding: 7px 13px; border-radius: 6px; font: 700 14px/1.45 Microsoft YaHei, Segoe UI, Arial, sans-serif; cursor: pointer; } .ds-btn-danger:hover { background: #8f1d14; border-color: #8f1d14; } .ds-btn-danger:focus-visible { outline: 3px solid rgba(180,35,24,.34); outline-offset: 2px; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Standard text, date, and select field vocabulary.",
+      "html": "<label class=\"ds-field\">WO号<input class=\"ds-input\" placeholder=\"SC1290\" /></label>",
+      "css": ".ds-field { display: grid; gap: 6px; color: #344054; font: 600 13px/1.35 Microsoft YaHei, Segoe UI, Arial, sans-serif; } .ds-input { width: 100%; min-height: 36px; border: 1px solid #b9c3cf; background: #fff; color: #17202a; padding: 7px 9px; border-radius: 6px; font: 400 14px/1.45 Microsoft YaHei, Segoe UI, Arial, sans-serif; } .ds-input:focus-visible { outline: 3px solid rgba(31,111,91,.34); border-color: #1f6f5b; outline-offset: 1px; }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "refersTo": "status-chip",
+      "description": "Compact status marker with text plus semantic color.",
+      "html": "<span class=\"ds-chip ds-chip-warning\">阻塞</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 7px; border-radius: 999px; background: #eef2f6; color: #465466; font: 700 12px/1.35 Microsoft YaHei, Segoe UI, Arial, sans-serif; white-space: nowrap; } .ds-chip-warning { background: #fff2d8; color: #a15c00; } .ds-chip-success { background: #e9f3ef; color: #155443; } .ds-chip-danger { background: #fff0ef; color: #b42318; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Operations Ledger",
+    "overview": "This interface is a working ledger for project facts and execution state. It should feel clear, disciplined, and practical.",
+    "keyCharacteristics": [
+      "Dense but ordered information for repeated daily use.",
+      "Clear separation between project facts and execution process.",
+      "Status and risk are visible through text plus color.",
+      "Controls use familiar browser patterns.",
+      "Destructive and recovery-sensitive actions are visually distinct."
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "Operational Green is for current selection and committed action only. Do not use it as decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Status Pairing Rule",
+        "body": "Every warning, risk, success, or pending state must include text, not just color.",
+        "section": "colors"
+      },
+      {
+        "name": "The Fixed Scale Rule",
+        "body": "Product screens use fixed rem/px scale, not fluid hero typography.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Work Surface Rule",
+        "body": "Task cards, table rows, and filters stay flat. If every item casts a shadow, nothing is important.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the UI quiet, utilitarian, and work-focused.",
+      "Do show the next operational decision first.",
+      "Do use exact action labels.",
+      "Do keep destructive actions red and recovery-sensitive.",
+      "Do preserve the separation between project facts and execution process."
+    ],
+    "donts": [
+      "Don't make this look like a marketing website, landing page, SaaS hero page, or decorative dashboard.",
+      "Don't use oversized hero sections or promotional copy.",
+      "Don't use excessive cards, nested cards, decorative shadows, or visual noise.",
+      "Don't use dense unstructured tables that expose everything at once without priority.",
+      "Don't make engineers fill unnecessary fields before they can update real work state."
+    ]
+  }
+}

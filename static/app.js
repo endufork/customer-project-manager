@@ -100,11 +100,7 @@ function bindEvents() {
   });
   $("#navLibraryButton").addEventListener("click", () => switchView("library"));
   $("#navCreateButton").addEventListener("click", () => switchView("create"));
-  $("#navWorkbenchButton").addEventListener("click", () => {
-    if (isWorkbenchFocusMode() || !openWorkbenchWindow()) {
-      switchView("workbench");
-    }
-  });
+  $("#navWorkbenchButton").addEventListener("click", () => switchView("workbench"));
   $("#listCreateButton").addEventListener("click", () => switchView("create"));
   $("#backToLibraryButton").addEventListener("click", () => switchView("library"));
   $("#refreshButton").addEventListener("click", loadProjects);

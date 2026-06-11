@@ -11,6 +11,9 @@
   --warn: #a15c00;
   --blue: #245a9c;
   --shadow: 0 8px 24px rgba(20, 31, 43, 0.08);
+  --focus-ring: rgba(31, 111, 91, 0.34);
+  --disabled-bg: #eef2f6;
+  --disabled-text: #8a96a6;
 }
 
 [hidden] {
@@ -497,7 +500,8 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  outline: 2px solid rgba(31, 111, 91, 0.22);
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 1px;
   border-color: var(--accent);
 }
 
@@ -510,10 +514,42 @@ button {
   border-radius: 6px;
   cursor: pointer;
   font-weight: 700;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
 button:hover {
   background: var(--accent-strong);
+}
+
+button:focus-visible,
+summary:focus-visible,
+.tab-button:focus-visible,
+.workbench-project-card:focus-visible,
+.column-picker summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+button:disabled {
+  background: var(--disabled-bg);
+  border-color: var(--line);
+  color: var(--disabled-text);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: var(--disabled-bg);
+  color: var(--muted);
+  border-color: var(--line);
 }
 
 button.secondary {
@@ -542,6 +578,17 @@ button.danger {
 
 button.danger:hover {
   background: #8f1d14;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 .actions,
@@ -702,7 +749,7 @@ tr.project-row:hover {
 }
 
 tr.project-row:focus {
-  outline: 2px solid rgba(31, 111, 91, 0.22);
+  outline: 3px solid var(--focus-ring);
   outline-offset: -2px;
   background: #f7faf9;
 }
@@ -1886,7 +1933,7 @@ tr.project-row:focus {
 }
 
 .detail-pane:focus {
-  outline: 2px solid rgba(31, 111, 91, 0.22);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
