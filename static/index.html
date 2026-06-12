@@ -47,13 +47,54 @@
     </header>
 
     <nav class="view-tabs" aria-label="主要页面">
-      <button id="navLibraryButton" type="button" class="tab-button active" data-view="library">项目库</button>
+      <button id="navBoardButton" type="button" class="tab-button active" data-view="board">项目看板</button>
+      <button id="navLibraryButton" type="button" class="tab-button" data-view="library">项目库</button>
       <button id="navCreateButton" type="button" class="tab-button" data-view="create">新建项目</button>
       <button id="navWorkbenchButton" type="button" class="tab-button" data-view="workbench">项目执行</button>
       <button id="navAdminButton" type="button" class="tab-button" data-view="admin" hidden>用户管理</button>
     </nav>
 
     <main class="workspace">
+      <section id="boardView" class="board-page page-view active" aria-labelledby="board-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="board-title">项目看板</h2>
+            <span class="muted">超期 · 阻塞 · 待确认 · 当前责任人 · 下一步</span>
+          </div>
+          <div class="heading-actions">
+            <button id="boardRefreshButton" type="button" class="secondary">刷新</button>
+          </div>
+        </div>
+
+        <div id="boardKpis" class="board-kpis" aria-label="看板指标"></div>
+
+        <div class="board-toolbar">
+          <div class="board-filter-group" aria-label="看板筛选">
+            <button type="button" class="active" data-board-filter="all">全部</button>
+            <button type="button" data-board-filter="attention">需要处理</button>
+            <button type="button" data-board-filter="due_soon">本周到期</button>
+            <button type="button" data-board-filter="overdue">超期</button>
+            <button type="button" data-board-filter="blocked">阻塞/风险</button>
+            <button type="button" data-board-filter="pending">待确认</button>
+            <button type="button" data-board-filter="mine">我的相关</button>
+            <button type="button" data-board-filter="inq">INQ</button>
+            <button type="button" data-board-filter="wo">WO</button>
+          </div>
+          <input id="boardSearchInput" placeholder="搜索编号、客户、产品、设备" />
+        </div>
+
+        <div class="board-layout">
+          <section class="board-list-surface" aria-label="项目看板列表">
+            <div id="boardProjectList" class="board-project-list">
+              <div class="empty">正在加载...</div>
+            </div>
+          </section>
+          <aside id="boardSnapshot" class="board-snapshot" aria-label="项目快照">
+            <div class="empty">请选择一个项目查看快照</div>
+          </aside>
+        </div>
+      </section>
+
       <section id="entryView" class="entry-panel page-view" aria-labelledby="entry-title" hidden>
         <div class="section-heading">
           <div>
@@ -187,7 +228,7 @@
         </form>
       </section>
 
-      <section id="libraryView" class="list-panel page-view active" aria-labelledby="list-title">
+      <section id="libraryView" class="list-panel page-view" aria-labelledby="list-title" hidden>
         <div class="section-heading">
           <h2 id="list-title">项目库</h2>
           <div class="heading-actions">
@@ -340,6 +381,7 @@
     <script src="/static/js/workbench-tasks.js"></script>
     <script src="/static/js/workbench-risks.js"></script>
     <script src="/static/js/workbench-view.js"></script>
+    <script src="/static/js/workbench-board.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>

@@ -33,6 +33,7 @@ function showAuthenticatedApp() {
   const user = state.auth.user;
   $("#authUserBadge").textContent = user.display_name || user.email.split("@")[0];
   const canManageProjects = userHasRole("pm");
+  $("#navLibraryButton").hidden = !canManageProjects;
   $("#navCreateButton").hidden = !canManageProjects;
   $("#listCreateButton").hidden = !canManageProjects;
   $("#saveSettingsButton").disabled = !userHasRole("admin");

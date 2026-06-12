@@ -98,12 +98,14 @@ function bindEvents() {
     renderColumnPicker();
     renderProjects();
   });
+  $("#navBoardButton").addEventListener("click", () => switchView("board"));
   $("#navLibraryButton").addEventListener("click", () => switchView("library"));
   $("#navCreateButton").addEventListener("click", () => switchView("create"));
   $("#navWorkbenchButton").addEventListener("click", () => switchView("workbench"));
   $("#listCreateButton").addEventListener("click", () => switchView("create"));
   $("#backToLibraryButton").addEventListener("click", () => switchView("library"));
   $("#refreshButton").addEventListener("click", loadProjects);
+  $("#boardRefreshButton").addEventListener("click", () => loadProjectBoard().catch(console.error));
   $("#workbenchRefreshButton").addEventListener("click", () => loadWorkbench().catch(console.error));
   $("#workbenchProjectsModeButton").addEventListener("click", () => {
     state.workbenchMode = "projects";
@@ -119,6 +121,13 @@ function bindEvents() {
   $("#filterSite").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterStatus").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterNeedsEquipment").addEventListener("change", () => loadProjects().catch(console.error));
+  $("#boardSearchInput").addEventListener("input", debounce(() => loadProjectBoard().catch(console.error), 300));
+  document.querySelectorAll("[data-board-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.boardFilter = button.dataset.boardFilter || "all";
+      loadProjectBoard().catch(console.error);
+    });
+  });
   $("#workbenchSearchInput").addEventListener("input", debounce(() => loadWorkbench().catch(console.error), 300));
   $("#workbenchOwnerInput").addEventListener("input", debounce(() => {
     localStorage.setItem(WORKBENCH_OWNER_STORAGE_KEY, $("#workbenchOwnerInput").value.trim());
@@ -146,7 +155,8 @@ async function startAuthenticatedApp() {
   } else if (!$("#adminView").hidden) {
     await loadUsers();
   } else {
-    await loadProjects();
+    switchView("board", false);
+    await loadProjectBoard();
   }
   state.appReady = true;
 }

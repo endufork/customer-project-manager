@@ -12,6 +12,7 @@ from ..modules.workbench import (
     delete_issue,
     delete_task,
     get_workbench_project,
+    list_workbench_board,
     guard_regular_task_due_date_update,
     list_due_date_requests,
     list_workbench_inbox,
@@ -34,6 +35,7 @@ from .schemas import (
     TaskCompletionRequest,
     TaskCompletionReviewRequest,
     WorkbenchIssueRequest,
+    WorkbenchBoardPayload,
     WorkbenchTaskRequest,
     WorkbenchTemplateRequest,
 )
@@ -68,6 +70,12 @@ def engineer_or_pm_user(user: dict = Depends(current_user)) -> dict:
 def workbench_projects(request: Request, _: dict = Depends(current_user)) -> dict:
     with db_connect() as conn:
         return list_workbench_projects(conn, query_as_lists(request))
+
+
+@router.get("/board", response_model=WorkbenchBoardPayload)
+def workbench_board(request: Request, user: dict = Depends(current_user)) -> dict:
+    with db_connect() as conn:
+        return list_workbench_board(conn, query_as_lists(request), user)
 
 
 @router.get("/inbox")

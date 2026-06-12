@@ -1,5 +1,6 @@
 """Execution workbench workflow facade."""
 
+from .workbench_board import list_workbench_board
 from .workbench_deliverables import review_deliverable, submit_task_file
 from .workbench_due_dates import (
     guard_regular_task_due_date_update,
@@ -33,6 +34,7 @@ __all__ = [
     "get_workbench_project",
     "guard_regular_task_due_date_update",
     "list_due_date_requests",
+    "list_workbench_board",
     "list_pending_deliverables",
     "list_workbench_inbox",
     "list_workbench_projects",

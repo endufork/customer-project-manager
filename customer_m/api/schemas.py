@@ -172,3 +172,78 @@ class ProjectDetailPayload(BaseModel):
     files: list[dict] = Field(default_factory=list)
     shared_files: list[dict] = Field(default_factory=list)
     events: list[dict] = Field(default_factory=list)
+
+
+class WorkbenchBoardLog(BaseModel):
+    project_id: str | None = None
+    activity_type: str | None = None
+    title: str | None = None
+    detail: str | None = None
+    created_at: str | None = None
+
+
+class WorkbenchBoardProject(BaseModel):
+    id: str
+    current_number: str | None = None
+    intake_no: str | None = None
+    equipment_no: str | None = None
+    customer_name: str | None = None
+    customer_group_name: str | None = None
+    site_name: str | None = None
+    project_group_name: str | None = None
+    equipment_name: str | None = None
+    project_name: str | None = None
+    project_nature: str | None = None
+    status_code: str | None = None
+    status_name: str | None = None
+    workbench_area: str | None = None
+    workbench_phase: str | None = None
+    board_status: str
+    board_status_label: str
+    board_group: str
+    board_group_label: str
+    board_flags: list[str] = Field(default_factory=list)
+    board_priority: int
+    current_owner: str | None = None
+    next_action: str | None = None
+    next_task_id: str | None = None
+    current_due_date: str | None = None
+    expected_delivery_date: str | None = None
+    task_total: int = 0
+    task_done: int = 0
+    overdue_tasks: int = 0
+    blocked_tasks: int = 0
+    waiting_info_tasks: int = 0
+    rework_tasks: int = 0
+    in_progress_tasks: int = 0
+    due_soon_tasks: int = 0
+    open_issues: int = 0
+    high_issues: int = 0
+    pending_deliverables: int = 0
+    pending_completions: int = 0
+    pending_due_date_requests: int = 0
+    pending_risk_reviews: int = 0
+    pending_total: int = 0
+    recent_logs: list[WorkbenchBoardLog] = Field(default_factory=list)
+
+
+class WorkbenchBoardGroup(BaseModel):
+    key: str
+    label: str
+    count: int
+
+
+class WorkbenchBoardKpis(BaseModel):
+    active_projects: int = 0
+    due_soon_tasks: int = 0
+    overdue_tasks: int = 0
+    blocked_projects: int = 0
+    pending_confirmations: int = 0
+    high_risk_projects: int = 0
+
+
+class WorkbenchBoardPayload(BaseModel):
+    kpis: WorkbenchBoardKpis
+    projects: list[WorkbenchBoardProject] = Field(default_factory=list)
+    groups: list[WorkbenchBoardGroup] = Field(default_factory=list)
+    current_user: dict = Field(default_factory=dict)

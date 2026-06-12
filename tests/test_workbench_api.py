@@ -73,6 +73,51 @@ def test_workbench_project_list_uses_aggregated_summary(client):
     assert project["current_owner"] == "Bob"
 
 
+def test_workbench_board_aggregates_project_attention_state(client):
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "Prepare fixture concept",
+            "work_package": "前期方案",
+            "owner_name": "Bob",
+            "status": "blocked",
+            "due_date": "2026-06-03",
+            "requires_deliverable": 0,
+            "blocked_reason": "Customer 3D data is missing.",
+        },
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+
+    submit_response = client.post(
+        f"/api/workbench/tasks/{task_id}/completion",
+        headers=headers,
+        json={"completion_note": "Concept direction checked by phone.", "submitted_by": "Bob"},
+    )
+    assert submit_response.status_code == 201, submit_response.text
+
+    board_response = client.get("/api/workbench/board", headers=headers)
+    assert board_response.status_code == 200, board_response.text
+
+    payload = board_response.json()
+    project = next(item for item in payload["projects"] if item["id"] == project_id)
+    assert payload["kpis"]["active_projects"] >= 1
+    assert payload["kpis"]["overdue_tasks"] >= 1
+    assert payload["kpis"]["pending_confirmations"] >= 1
+    assert project["board_group"] == "attention"
+    assert project["board_status"] == "overdue"
+    assert "超期" in project["board_flags"]
+    assert "高风险" in project["board_flags"]
+    assert project["pending_completions"] >= 1
+    assert project["current_owner"] == "Bob"
+    assert project["next_action"] == "Prepare fixture concept"
+    assert project["recent_logs"]
+
+
 def test_non_file_task_requires_completion_review(client):
     headers = auth_headers(client)
     project_id = create_project(client, headers)
