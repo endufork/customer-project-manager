@@ -279,6 +279,45 @@ CREATE TABLE IF NOT EXISTS execution_activity_logs (
   FOREIGN KEY (issue_id) REFERENCES execution_issues(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  display_name TEXT,
+  status TEXT NOT NULL DEFAULT 'enabled',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_login_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_roles (
+  user_id TEXT NOT NULL,
+  role_code TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, role_code),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS login_codes (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL COLLATE NOCASE,
+  code_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  used_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  last_seen_at TEXT,
+  revoked_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS quotes (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
@@ -387,6 +426,10 @@ CREATE INDEX IF NOT EXISTS idx_execution_issues_project_id ON execution_issues(p
 CREATE INDEX IF NOT EXISTS idx_execution_issues_status ON execution_issues(status);
 CREATE INDEX IF NOT EXISTS idx_execution_issues_severity ON execution_issues(severity);
 CREATE INDEX IF NOT EXISTS idx_execution_logs_project_id ON execution_activity_logs(project_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role_code ON user_roles(role_code);
+CREATE INDEX IF NOT EXISTS idx_login_codes_email ON login_codes(email);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_quotes_project_id ON quotes(project_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_orders_project_id ON purchase_orders(project_id);
 CREATE INDEX IF NOT EXISTS idx_todos_project_id ON todos(project_id);

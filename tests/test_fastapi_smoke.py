@@ -20,6 +20,28 @@ def test_protected_routes_require_login(client):
         assert response.json()["detail"] == "请先登录"
 
 
+def test_base_schema_contains_auth_tables(tmp_path):
+    import sqlite3
+    from pathlib import Path
+
+    db_path = tmp_path / "schema-auth.db"
+    schema_sql = Path("mvp-sqlite-schema-v0.2.sql").read_text(encoding="utf-8")
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(schema_sql)
+        tables = {
+            row[0]
+            for row in conn.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table'
+                """
+            )
+        }
+
+    assert {"users", "user_roles", "login_codes", "auth_sessions"}.issubset(tables)
+
+
 def test_login_code_dev_flow(client):
     email = "rongkai@jinxiangsz.com"
     code_response = client.post("/api/auth/request-code", json={"email": email})
@@ -108,6 +130,38 @@ def test_admin_role_does_not_implicitly_grant_pm_permissions(client):
 
     pm_response = client.get("/api/workbench/pm-inbox", headers=admin_only_headers)
     assert pm_response.status_code == 403
+
+
+def test_user_patch_without_roles_preserves_existing_roles(client):
+    initial_email = "rongkai@jinxiangsz.com"
+    code_payload = client.post("/api/auth/request-code", json={"email": initial_email}).json()
+    login_payload = client.post(
+        "/api/auth/login",
+        json={"email": initial_email, "code": code_payload["dev_code"]},
+    ).json()
+    admin_headers = {"Authorization": f"Bearer {login_payload['token']}"}
+
+    target_email = "engineer-preserve@jinxiangsz.com"
+    client.post("/api/auth/request-code", json={"email": target_email})
+    users_payload = client.get("/api/users", headers=admin_headers).json()
+    target_user = next(user for user in users_payload["users"] if user["email"] == target_email)
+
+    role_response = client.patch(
+        f"/api/users/{target_user['id']}",
+        headers=admin_headers,
+        json={"display_name": "Engineer Preserve", "status": "enabled", "roles": ["engineer"]},
+    )
+    assert role_response.status_code == 200, role_response.text
+    assert role_response.json()["roles"] == ["engineer"]
+
+    name_response = client.patch(
+        f"/api/users/{target_user['id']}",
+        headers=admin_headers,
+        json={"display_name": "Engineer Renamed"},
+    )
+    assert name_response.status_code == 200, name_response.text
+    assert name_response.json()["display_name"] == "Engineer Renamed"
+    assert name_response.json()["roles"] == ["engineer"]
 
 
 def test_configured_smtp_failure_does_not_return_dev_code_or_persist_code(client, monkeypatch):

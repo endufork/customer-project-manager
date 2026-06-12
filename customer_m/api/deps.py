@@ -3,7 +3,7 @@
 from collections.abc import Iterator
 import sqlite3
 
-from fastapi import Header, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 
 from ..database import db_connect
 from ..modules.auth import authenticate_token
@@ -23,10 +23,13 @@ def bearer_token(authorization: str = Header(default="")) -> str:
     return ""
 
 
-def current_user(token: str = Header(default="", alias="Authorization")) -> dict:
+def current_user(
+    token: str = Header(default="", alias="Authorization"),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
     clean_token = token[7:].strip() if token.lower().startswith("bearer ") else ""
-    with db_connect() as conn:
-        user = authenticate_token(conn, clean_token)
+    user = authenticate_token(conn, clean_token)
+    if user is not None:
         conn.commit()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")

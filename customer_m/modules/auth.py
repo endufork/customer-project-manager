@@ -306,30 +306,31 @@ def list_users(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
 
 
 def update_user(conn: sqlite3.Connection, user_id: str, data: dict) -> dict:
-    row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     if row is None:
         raise ValueError("用户不存在")
-    display_name = str(data.get("display_name", "")).strip()
-    status = str(data.get("status", "enabled")).strip() or "enabled"
+    display_name = str(data.get("display_name", row["display_name"] or "")).strip()
+    status = str(data.get("status", row["status"] or "enabled")).strip() or "enabled"
     if status not in ("enabled", "disabled"):
         raise ValueError("用户状态无效")
-    roles = data.get("roles", [])
-    if isinstance(roles, str):
-        roles = [item.strip() for item in roles.split(",") if item.strip()]
-    roles = [role for role in roles if role in VALID_ROLES]
-    if not roles:
-        roles = ["readonly"]
     now = now_iso()
     conn.execute(
         "UPDATE users SET display_name = ?, status = ?, updated_at = ? WHERE id = ?",
         (display_name, status, now, user_id),
     )
-    conn.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
-    for role in sorted(set(roles)):
-        conn.execute(
-            "INSERT INTO user_roles (user_id, role_code, created_at) VALUES (?, ?, ?)",
-            (user_id, role, now),
-        )
+    if "roles" in data:
+        roles = data.get("roles", [])
+        if isinstance(roles, str):
+            roles = [item.strip() for item in roles.split(",") if item.strip()]
+        roles = [role for role in roles if role in VALID_ROLES]
+        if not roles:
+            roles = ["readonly"]
+        conn.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
+        for role in sorted(set(roles)):
+            conn.execute(
+                "INSERT INTO user_roles (user_id, role_code, created_at) VALUES (?, ?, ?)",
+                (user_id, role, now),
+            )
     payload = user_payload(conn, user_id)
     if payload is None:
         raise ValueError("用户不存在")
