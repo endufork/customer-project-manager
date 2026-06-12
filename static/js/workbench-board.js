@@ -18,6 +18,14 @@ const BOARD_STATUS_CLASS = {
   closed: "muted",
 };
 
+const RISK_KPI_DEFINITIONS = [
+  { key: "active", label: "打开风险", view: "active" },
+  { key: "high", label: "高风险", view: "high" },
+  { key: "overdue", label: "超期", view: "overdue" },
+  { key: "due_soon", label: "本周到期", view: "due_soon" },
+  { key: "resolved", label: "待PM确认", view: "resolved" },
+];
+
 function boardOwnerName() {
   return state.auth.user?.display_name || state.auth.user?.email?.split("@")[0] || $("#workbenchOwnerInput")?.value.trim() || "";
 }
@@ -33,6 +41,11 @@ function boardQueryParams() {
 }
 
 async function loadProjectBoard(selectProjectId = state.boardSelectedProjectId) {
+  renderBoardMode();
+  if (state.boardMode === "risks") {
+    await loadRiskOverview();
+    return;
+  }
   updateBoardFilterButtons();
   const payload = await api(`/api/workbench/board?${boardQueryParams().toString()}`);
   state.boardPayload = payload;
@@ -44,10 +57,29 @@ async function loadProjectBoard(selectProjectId = state.boardSelectedProjectId) 
   renderBoardSnapshot(selectedId);
 }
 
+function renderBoardMode() {
+  const riskMode = state.boardMode === "risks";
+  $("#boardProjectsModeButton").classList.toggle("active", !riskMode);
+  $("#boardRisksModeButton").classList.toggle("active", riskMode);
+  $("#boardKpis").hidden = riskMode;
+  $("#riskKpis").hidden = !riskMode;
+  $("#boardProjectToolbar").hidden = riskMode;
+  $("#riskToolbar").hidden = !riskMode;
+  $("#boardProjectLayout").hidden = riskMode;
+  $("#riskOverviewLayout").hidden = !riskMode;
+}
+
 function updateBoardFilterButtons() {
   const filter = state.boardFilter || "all";
   document.querySelectorAll("[data-board-filter]").forEach((button) => {
     button.classList.toggle("active", button.dataset.boardFilter === filter);
+  });
+}
+
+function updateRiskFilterButtons() {
+  const filter = state.boardRiskFilter || "active";
+  document.querySelectorAll("[data-risk-filter]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.riskFilter === filter);
   });
 }
 
@@ -62,6 +94,162 @@ function renderBoardKpis(kpis = {}) {
     button.addEventListener("click", () => {
       state.boardFilter = button.dataset.boardKpiView || "all";
       loadProjectBoard().catch(console.error);
+    });
+  });
+}
+
+function riskQueryParams() {
+  const params = new URLSearchParams();
+  const search = $("#riskSearchInput").value.trim();
+  const view = state.boardRiskFilter || "active";
+  if (search) params.set("search", search);
+  if (view) params.set("view", view);
+  return params;
+}
+
+async function loadRiskOverview(selectRiskId = state.boardSelectedRiskId) {
+  updateRiskFilterButtons();
+  const payload = await api(`/api/workbench/risks?${riskQueryParams().toString()}`);
+  state.boardRiskPayload = payload;
+  state.boardRisks = payload.risks || [];
+  renderRiskKpis(payload.kpis || {});
+  const selectedExists = state.boardRisks.some((risk) => risk.id === selectRiskId);
+  const selectedId = selectedExists ? selectRiskId : state.boardRisks[0]?.id || null;
+  renderRiskOverviewList(selectedId);
+  renderRiskSnapshot(selectedId);
+}
+
+function renderRiskKpis(kpis = {}) {
+  $("#riskKpis").innerHTML = RISK_KPI_DEFINITIONS.map((item) => `
+    <button type="button" class="board-kpi" data-risk-kpi-view="${escapeHtml(item.view)}">
+      <span>${escapeHtml(kpis[item.key] || 0)}</span>
+      <small>${escapeHtml(item.label)}</small>
+    </button>
+  `).join("");
+  $("#riskKpis").querySelectorAll("[data-risk-kpi-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.boardRiskFilter = button.dataset.riskKpiView || "active";
+      loadRiskOverview().catch(console.error);
+    });
+  });
+}
+
+function renderRiskOverviewList(selectedId = state.boardSelectedRiskId) {
+  const list = $("#riskOverviewList");
+  if (!state.boardRisks.length) {
+    list.innerHTML = `<div class="empty">暂无匹配风险</div>`;
+    return;
+  }
+  list.innerHTML = state.boardRisks.map((risk) => renderRiskRow(risk, selectedId)).join("");
+  list.querySelectorAll("[data-risk-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      renderRiskSnapshot(button.dataset.riskId);
+    });
+  });
+}
+
+function renderRiskRow(risk, selectedId) {
+  const active = risk.id === selectedId ? " active" : "";
+  const statusClass = riskStatusClass(risk);
+  const due = risk.due_date || "";
+  const context = [
+    risk.customer_name || "",
+    risk.site_name || "",
+    risk.project_group_name || "",
+  ].filter(Boolean).join(" · ");
+  return `
+    <button type="button" class="risk-row${active}" data-risk-id="${escapeHtml(risk.id)}">
+      <span class="risk-row-project">
+        <strong>${escapeHtml(risk.current_number || "")}</strong>
+        <small>${escapeHtml(risk.equipment_name || risk.project_name || "")}</small>
+      </span>
+      <span class="risk-row-title">
+        <strong>${escapeHtml(risk.title || "")}</strong>
+        <small>${escapeHtml(context || "未填写客户/产品信息")}</small>
+      </span>
+      <span class="risk-row-scope">
+        <span class="tag neutral">${escapeHtml(risk.scope_label || "")}</span>
+        <small>${escapeHtml(risk.task_title || risk.issue_type || "")}</small>
+      </span>
+      <span class="risk-row-owner">
+        <strong>${escapeHtml(risk.owner_name || "未指定")}</strong>
+        <small>责任人</small>
+      </span>
+      <span class="risk-row-due">
+        <strong class="${dueClass(due)}">${escapeHtml(due || "未设")}</strong>
+        <small>Due Date</small>
+      </span>
+      <span class="risk-row-state">
+        <span class="status-pill ${statusClass}">${escapeHtml(risk.status_label || "")}</span>
+        <small>${escapeHtml(risk.severity_label || "")}风险</small>
+      </span>
+    </button>
+  `;
+}
+
+function riskStatusClass(risk) {
+  if (risk.is_overdue || risk.severity === "high") return "danger";
+  if (risk.status === "resolved" || risk.is_due_soon) return "warn";
+  if (["accepted", "closed"].includes(risk.status)) return "muted";
+  return "neutral";
+}
+
+function renderRiskSnapshot(riskId) {
+  state.boardSelectedRiskId = riskId || null;
+  renderRiskOverviewList(riskId);
+  const risk = state.boardRisks.find((item) => item.id === riskId);
+  if (!risk) {
+    $("#riskSnapshot").innerHTML = `<div class="empty">请选择一个风险查看摘要</div>`;
+    return;
+  }
+  $("#riskSnapshot").innerHTML = `
+    <div class="board-snapshot-head">
+      <div>
+        <h3>${escapeHtml(risk.current_number || "")}</h3>
+        <p>${escapeHtml(risk.title || "")}</p>
+      </div>
+      <span class="status-pill ${riskStatusClass(risk)}">${escapeHtml(risk.status_label || "")}</span>
+    </div>
+    <dl class="board-snapshot-grid">
+      <dt>客户/工厂</dt>
+      <dd>${escapeHtml(risk.customer_name || "")}${risk.site_name ? ` · ${escapeHtml(risk.site_name)}` : ""}</dd>
+      <dt>产品/产线</dt>
+      <dd>${escapeHtml(risk.project_group_name || "未关联")}</dd>
+      <dt>项目/设备</dt>
+      <dd>${escapeHtml(risk.equipment_name || risk.project_name || "")}</dd>
+      <dt>影响范围</dt>
+      <dd>${escapeHtml(risk.scope_label || "")}</dd>
+      <dt>关联任务</dt>
+      <dd>${escapeHtml(risk.task_title || "未关联具体任务")}</dd>
+      <dt>严重度</dt>
+      <dd>${escapeHtml(risk.severity_label || "")}</dd>
+      <dt>责任人</dt>
+      <dd>${escapeHtml(risk.owner_name || "未指定")}</dd>
+      <dt>Due Date</dt>
+      <dd class="${dueClass(risk.due_date || "")}">${escapeHtml(risk.due_date || "未设置")}</dd>
+    </dl>
+    <section class="board-snapshot-section">
+      <h4>处理说明</h4>
+      <p class="risk-resolution-text">${escapeHtml(risk.resolution || "暂无处理说明")}</p>
+    </section>
+    <div class="board-snapshot-actions">
+      <button type="button" data-risk-action="open-workbench-project" data-project-id="${escapeHtml(risk.project_id)}">进入项目执行</button>
+    </div>
+  `;
+  bindRiskSnapshotActions();
+}
+
+function bindRiskSnapshotActions() {
+  $("#riskSnapshot").querySelectorAll("[data-risk-action]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        if (button.dataset.riskAction === "open-workbench-project") {
+          switchView("workbench", false);
+          await loadWorkbenchProjects(button.dataset.projectId);
+        }
+      } catch (error) {
+        showToast(error.message);
+      }
     });
   });
 }
@@ -189,17 +377,6 @@ function renderBoardSnapshot(projectId) {
         ${pendingRows.map(([label, count]) => `
           <span class="${count ? "active" : ""}">${escapeHtml(label)} <strong>${escapeHtml(count || 0)}</strong></span>
         `).join("")}
-      </div>
-    </section>
-    <section class="board-snapshot-section">
-      <h4>最近日志</h4>
-      <div class="board-log-list">
-        ${(project.recent_logs || []).length ? project.recent_logs.map((log) => `
-          <div>
-            <strong>${escapeHtml(log.title || "")}</strong>
-            <small>${escapeHtml(workbenchDateValue(log.created_at || ""))}${log.detail ? ` · ${escapeHtml(log.detail)}` : ""}</small>
-          </div>
-        `).join("") : `<div class="empty small-empty">暂无执行日志</div>`}
       </div>
     </section>
     <div class="board-snapshot-actions">

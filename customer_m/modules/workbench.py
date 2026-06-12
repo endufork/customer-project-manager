@@ -16,6 +16,7 @@ from .workbench_queries import (
     list_workbench_projects,
     list_workbench_tasks,
 )
+from .workbench_risk_overview import list_workbench_risks
 from .workbench_tasks import (
     apply_template,
     create_task,
@@ -38,6 +39,7 @@ __all__ = [
     "list_pending_deliverables",
     "list_workbench_inbox",
     "list_workbench_projects",
+    "list_workbench_risks",
     "list_workbench_tasks",
     "request_due_date_change",
     "review_deliverable",

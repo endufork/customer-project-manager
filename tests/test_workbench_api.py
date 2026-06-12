@@ -115,7 +115,39 @@ def test_workbench_board_aggregates_project_attention_state(client):
     assert project["pending_completions"] >= 1
     assert project["current_owner"] == "Bob"
     assert project["next_action"] == "Prepare fixture concept"
-    assert project["recent_logs"]
+
+
+def test_workbench_risk_overview_lists_cross_project_risks(client):
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "Wait for customer sample",
+            "work_package": "前期方案",
+            "owner_name": "Bob",
+            "status": "blocked",
+            "blocked_reason": "Customer sample is missing.",
+        },
+    )
+    assert task_response.status_code == 201, task_response.text
+
+    risk_response = client.get("/api/workbench/risks?view=high", headers=headers)
+    assert risk_response.status_code == 200, risk_response.text
+
+    payload = risk_response.json()
+    risk = next(item for item in payload["risks"] if item["project_id"] == project_id)
+    assert payload["kpis"]["active"] >= 1
+    assert payload["kpis"]["high"] >= 1
+    assert risk["title"] == "任务阻塞：Wait for customer sample"
+    assert risk["scope"] == "task"
+    assert risk["scope_label"] == "任务"
+    assert risk["severity"] == "high"
+    assert risk["status"] == "open"
+    assert risk["current_number"].startswith("INQ-")
+    assert risk["task_title"] == "Wait for customer sample"
 
 
 def test_non_file_task_requires_completion_review(client):

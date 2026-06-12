@@ -106,6 +106,14 @@ function bindEvents() {
   $("#backToLibraryButton").addEventListener("click", () => switchView("library"));
   $("#refreshButton").addEventListener("click", loadProjects);
   $("#boardRefreshButton").addEventListener("click", () => loadProjectBoard().catch(console.error));
+  $("#boardProjectsModeButton").addEventListener("click", () => {
+    state.boardMode = "projects";
+    loadProjectBoard().catch(console.error);
+  });
+  $("#boardRisksModeButton").addEventListener("click", () => {
+    state.boardMode = "risks";
+    loadProjectBoard().catch(console.error);
+  });
   $("#workbenchRefreshButton").addEventListener("click", () => loadWorkbench().catch(console.error));
   $("#workbenchProjectsModeButton").addEventListener("click", () => {
     state.workbenchMode = "projects";
@@ -122,9 +130,16 @@ function bindEvents() {
   $("#filterStatus").addEventListener("change", () => loadProjects().catch(console.error));
   $("#filterNeedsEquipment").addEventListener("change", () => loadProjects().catch(console.error));
   $("#boardSearchInput").addEventListener("input", debounce(() => loadProjectBoard().catch(console.error), 300));
+  $("#riskSearchInput").addEventListener("input", debounce(() => loadProjectBoard().catch(console.error), 300));
   document.querySelectorAll("[data-board-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.boardFilter = button.dataset.boardFilter || "all";
+      loadProjectBoard().catch(console.error);
+    });
+  });
+  document.querySelectorAll("[data-risk-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.boardRiskFilter = button.dataset.riskFilter || "active";
       loadProjectBoard().catch(console.error);
     });
   });

@@ -34,7 +34,6 @@ def list_workbench_board(conn: sqlite3.Connection, query: dict[str, list[str]], 
 
     task_status = _task_status_stats_by_project(conn, project_ids)
     pending_counts = _pending_counts_by_project(conn, project_ids)
-    logs_by_project = _recent_logs_by_project(conn, project_ids)
     owner = (query.get("owner", [""])[0] or "").strip()
     view = (query.get("view", [""])[0] or "all").strip()
 
@@ -56,7 +55,6 @@ def list_workbench_board(conn: sqlite3.Connection, query: dict[str, list[str]], 
         project["board_group"] = _board_group(project)
         project["board_group_label"] = _board_group_label(project["board_group"])
         project["board_priority"] = _board_priority(project)
-        project["recent_logs"] = logs_by_project.get(project_id, [])
         board_projects.append(project)
 
     board_projects = _filter_board_projects(board_projects, view, owner)
@@ -206,27 +204,6 @@ def _pending_counts_by_project(conn: sqlite3.Connection, project_ids: list[str])
         for row in conn.execute(sql, project_ids):
             counts.setdefault(row["project_id"], {})[field] = int(row["count"] or 0)
     return counts
-
-
-def _recent_logs_by_project(conn: sqlite3.Connection, project_ids: list[str]) -> dict[str, list[dict]]:
-    if not project_ids:
-        return {}
-    placeholders = _placeholders(project_ids)
-    rows = conn.execute(
-        f"""
-        SELECT project_id, activity_type, title, detail, created_at
-        FROM execution_activity_logs
-        WHERE project_id IN ({placeholders})
-        ORDER BY project_id, created_at DESC
-        """,
-        project_ids,
-    ).fetchall()
-    logs: dict[str, list[dict]] = {}
-    for row in rows:
-        bucket = logs.setdefault(row["project_id"], [])
-        if len(bucket) < 5:
-            bucket.append(row_to_dict(row))
-    return logs
 
 
 def _set_count_defaults(project: dict) -> None:

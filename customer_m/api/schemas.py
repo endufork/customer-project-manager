@@ -174,14 +174,6 @@ class ProjectDetailPayload(BaseModel):
     events: list[dict] = Field(default_factory=list)
 
 
-class WorkbenchBoardLog(BaseModel):
-    project_id: str | None = None
-    activity_type: str | None = None
-    title: str | None = None
-    detail: str | None = None
-    created_at: str | None = None
-
-
 class WorkbenchBoardProject(BaseModel):
     id: str
     current_number: str | None = None
@@ -224,7 +216,6 @@ class WorkbenchBoardProject(BaseModel):
     pending_due_date_requests: int = 0
     pending_risk_reviews: int = 0
     pending_total: int = 0
-    recent_logs: list[WorkbenchBoardLog] = Field(default_factory=list)
 
 
 class WorkbenchBoardGroup(BaseModel):
@@ -247,3 +238,56 @@ class WorkbenchBoardPayload(BaseModel):
     projects: list[WorkbenchBoardProject] = Field(default_factory=list)
     groups: list[WorkbenchBoardGroup] = Field(default_factory=list)
     current_user: dict = Field(default_factory=dict)
+
+
+class WorkbenchRiskOverviewItem(BaseModel):
+    id: str
+    project_id: str
+    task_id: str | None = None
+    scope: str | None = None
+    scope_label: str | None = None
+    title: str
+    issue_type: str | None = None
+    source: str | None = None
+    severity: str | None = None
+    severity_label: str | None = None
+    owner_name: str | None = None
+    status: str
+    status_label: str | None = None
+    due_date: str | None = None
+    resolution: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    closed_at: str | None = None
+    task_title: str | None = None
+    task_status: str | None = None
+    current_number: str | None = None
+    workbench_area: str | None = None
+    intake_no: str | None = None
+    equipment_no: str | None = None
+    equipment_name: str | None = None
+    project_name: str | None = None
+    project_nature: str | None = None
+    status_code: str | None = None
+    expected_delivery_date: str | None = None
+    customer_name: str | None = None
+    customer_group_name: str | None = None
+    site_name: str | None = None
+    project_group_name: str | None = None
+    contact_name: str | None = None
+    is_overdue: bool = False
+    is_due_soon: bool = False
+    risk_priority: int = 0
+
+
+class WorkbenchRiskOverviewKpis(BaseModel):
+    active: int = 0
+    high: int = 0
+    overdue: int = 0
+    due_soon: int = 0
+    resolved: int = 0
+
+
+class WorkbenchRiskOverviewPayload(BaseModel):
+    risks: list[WorkbenchRiskOverviewItem] = Field(default_factory=list)
+    kpis: WorkbenchRiskOverviewKpis

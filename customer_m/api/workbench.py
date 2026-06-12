@@ -17,6 +17,7 @@ from ..modules.workbench import (
     list_due_date_requests,
     list_workbench_inbox,
     list_workbench_projects,
+    list_workbench_risks,
     list_workbench_tasks,
     request_due_date_change,
     review_deliverable,
@@ -36,6 +37,7 @@ from .schemas import (
     TaskCompletionReviewRequest,
     WorkbenchIssueRequest,
     WorkbenchBoardPayload,
+    WorkbenchRiskOverviewPayload,
     WorkbenchTaskRequest,
     WorkbenchTemplateRequest,
 )
@@ -76,6 +78,12 @@ def workbench_projects(request: Request, _: dict = Depends(current_user)) -> dic
 def workbench_board(request: Request, user: dict = Depends(current_user)) -> dict:
     with db_connect() as conn:
         return list_workbench_board(conn, query_as_lists(request), user)
+
+
+@router.get("/risks", response_model=WorkbenchRiskOverviewPayload)
+def workbench_risks(request: Request, _: dict = Depends(current_user)) -> dict:
+    with db_connect() as conn:
+        return list_workbench_risks(conn, query_as_lists(request))
 
 
 @router.get("/inbox")

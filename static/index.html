@@ -66,9 +66,15 @@
           </div>
         </div>
 
-        <div id="boardKpis" class="board-kpis" aria-label="看板指标"></div>
+        <div class="board-mode-tabs" aria-label="看板视图">
+          <button id="boardProjectsModeButton" type="button" class="active" data-board-mode="projects">项目总览</button>
+          <button id="boardRisksModeButton" type="button" data-board-mode="risks">风险总览</button>
+        </div>
 
-        <div class="board-toolbar">
+        <div id="boardKpis" class="board-kpis" aria-label="看板指标"></div>
+        <div id="riskKpis" class="board-kpis risk-kpis" aria-label="风险指标" hidden></div>
+
+        <div id="boardProjectToolbar" class="board-toolbar">
           <div class="board-filter-group" aria-label="看板筛选">
             <button type="button" class="active" data-board-filter="all">全部</button>
             <button type="button" data-board-filter="attention">需要处理</button>
@@ -83,7 +89,19 @@
           <input id="boardSearchInput" placeholder="搜索编号、客户、产品、设备" />
         </div>
 
-        <div class="board-layout">
+        <div id="riskToolbar" class="board-toolbar" hidden>
+          <div class="board-filter-group" aria-label="风险筛选">
+            <button type="button" class="active" data-risk-filter="active">打开/跟进/待确认</button>
+            <button type="button" data-risk-filter="high">高风险</button>
+            <button type="button" data-risk-filter="overdue">超期</button>
+            <button type="button" data-risk-filter="due_soon">本周到期</button>
+            <button type="button" data-risk-filter="resolved">待PM确认</button>
+            <button type="button" data-risk-filter="closed">已关闭</button>
+          </div>
+          <input id="riskSearchInput" placeholder="搜索风险、编号、客户、责任人" />
+        </div>
+
+        <div id="boardProjectLayout" class="board-layout">
           <section class="board-list-surface" aria-label="项目看板列表">
             <div id="boardProjectList" class="board-project-list">
               <div class="empty">正在加载...</div>
@@ -91,6 +109,17 @@
           </section>
           <aside id="boardSnapshot" class="board-snapshot" aria-label="项目快照">
             <div class="empty">请选择一个项目查看快照</div>
+          </aside>
+        </div>
+
+        <div id="riskOverviewLayout" class="board-layout" hidden>
+          <section class="board-list-surface" aria-label="跨项目风险列表">
+            <div id="riskOverviewList" class="risk-overview-list">
+              <div class="empty">正在加载...</div>
+            </div>
+          </section>
+          <aside id="riskSnapshot" class="board-snapshot" aria-label="风险快照">
+            <div class="empty">请选择一个风险查看摘要</div>
           </aside>
         </div>
       </section>
