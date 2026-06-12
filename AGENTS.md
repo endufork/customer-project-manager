@@ -95,6 +95,14 @@ __pycache__
 continuous-optimization-roadmap-v0.1.md
 ```
 
+- 项目文档入口和阅读顺序记录在：
+
+```text
+DOCUMENTATION_INDEX.md
+```
+
+- 新增重要文档、模块需求、运行说明或架构计划时，必须同步更新 `DOCUMENTATION_INDEX.md`。
+
 - 每次围绕系统方向、模块边界、权限、工作流、上线部署等形成明确结论后，应更新该文件。
 - 讨论结论需要尽量写清楚：
   - 决策内容
@@ -142,6 +150,7 @@ fastapi-stabilization-runbook-v0.1.md
   - 实施优先级或阶段计划变化。
   - 引入新的外部系统集成，例如邮件、BOM、采购系统、ERP、报表导出。
 - 如果变化只是代码级 bug 修复、文案调整或局部样式优化，且不影响整体需求和架构，可以不更新该架构计划文档。
+- 如果变化涉及代码结构、模块职责或技术边界，应同步更新 `ARCHITECTURE.md`。
 
 ## 后续代码开发固化规则
 
