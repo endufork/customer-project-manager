@@ -62,6 +62,7 @@ customer_m/api/
 - API 文件不承载业务细节。
 - 写接口必须使用明确 Schema。
 - 权限不能只依赖前端隐藏按钮。
+- 角色按后端 `roles` 精确校验；`Admin` 不隐式继承 `PM` 或 `Engineer` 权限。
 
 ## 数据层
 
@@ -124,6 +125,13 @@ customer_m/modules/
 - `auth.py`：用户、角色、验证码、会话。
 - `system_maintenance.py`：备份、系统维护能力。
 
+认证和角色边界：
+
+- 初始管理员邮箱会自动获得 `Admin + PM`，避免系统冷启动后无人分配角色。
+- 新用户默认 `Readonly`，由 Admin 显式分配角色。
+- 验证码错误次数必须在失败路径落库，达到上限后阻断继续尝试。
+- SMTP 发信失败记录日志并降级处理，不能让登录验证码接口直接崩溃。
+
 ## 前端结构
 
 ```text
@@ -146,6 +154,8 @@ static/styles.css
 - `workbench-board.js`：项目看板和风险总览。
 - `pm-inbox.js`：PM 待处理中心。
 - `form-utils.js`、`ui-shell.js`、`workbench-utils.js`、`project-config.js`、`workbench-config.js`：通用辅助和配置。
+
+前端只按 `roles` 判断入口显示和操作能力；同时具备 `PM` 与 `Engineer` 的用户可切换工作台视角。
 
 CSS 目前仍集中在 `static/styles.css`。后续若样式继续增长，应按基础样式、布局、项目库、工作台、看板、PM中心、弹窗、权限页面逐步拆分。
 

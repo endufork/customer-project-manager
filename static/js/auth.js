@@ -11,7 +11,6 @@ function authRoles() {
 
 function userHasRole(...roles) {
   const currentRoles = new Set(authRoles());
-  if (currentRoles.has("admin")) return true;
   return roles.some((role) => currentRoles.has(role));
 }
 
@@ -43,7 +42,7 @@ function showAuthenticatedApp() {
   $("#workbenchOwnerInput").value = owner;
   localStorage.setItem(WORKBENCH_OWNER_STORAGE_KEY, owner);
   $("#workbenchRoleSelect").value = preferredWorkbenchRole();
-  $("#workbenchRoleSelect").disabled = true;
+  $("#workbenchRoleSelect").disabled = !(userHasRole("pm") && userHasRole("engineer"));
 }
 
 async function restoreAuthSession() {

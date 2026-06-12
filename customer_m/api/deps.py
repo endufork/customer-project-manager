@@ -35,7 +35,7 @@ def current_user(token: str = Header(default="", alias="Authorization")) -> dict
 
 def require_roles(user: dict, *roles: str) -> dict:
     user_roles = set(user.get("roles", []))
-    if "admin" in user_roles or user_roles.intersection(roles):
+    if user_roles.intersection(roles):
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="当前账号没有权限执行此操作")
 

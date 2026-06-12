@@ -509,6 +509,53 @@ def test_pm_action_center_aggregates_pending_approvals(client):
     assert all(not (item["id"] == completion_task_id and item["type"] == "completion") for item in refreshed_items)
 
 
+def test_rejected_due_date_request_can_be_resubmitted(client):
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "Mechanical layout",
+            "work_package": "机械设计",
+            "owner_name": "Bob",
+            "due_date": "2026-06-12",
+        },
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+
+    first_request = client.post(
+        f"/api/workbench/tasks/{task_id}/due-date-requests",
+        headers=headers,
+        json={
+            "proposed_due_date": "2026-06-18",
+            "reason": "Customer data arrived late.",
+        },
+    )
+    assert first_request.status_code == 201, first_request.text
+
+    reject_response = client.patch(
+        f"/api/workbench/due-date-requests/{first_request.json()['id']}",
+        headers=headers,
+        json={"status": "rejected", "review_note": "Need supplier confirmation."},
+    )
+    assert reject_response.status_code == 200, reject_response.text
+    assert reject_response.json()["status"] == "rejected"
+
+    second_request = client.post(
+        f"/api/workbench/tasks/{task_id}/due-date-requests",
+        headers=headers,
+        json={
+            "proposed_due_date": "2026-06-20",
+            "reason": "Supplier confirmed the new material arrival date.",
+        },
+    )
+    assert second_request.status_code == 201, second_request.text
+    assert second_request.json()["status"] == "pending"
+
+
 def test_pm_reopens_resolved_risk_and_keeps_task_blocked(client):
     headers = auth_headers(client)
     project_id = create_project(client, headers)

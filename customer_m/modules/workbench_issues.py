@@ -24,7 +24,7 @@ TASK_DONE_STATUSES = {"submitted", "confirmed", "completed", "cancelled"}
 
 def _is_pm(user: dict | None) -> bool:
     roles = set((user or {}).get("roles", []))
-    return bool({"admin", "pm"}.intersection(roles))
+    return "pm" in roles
 
 
 def _actor_name(user: dict | None) -> str:

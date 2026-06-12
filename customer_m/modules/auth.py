@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 import hashlib
+import logging
 import secrets
 import smtplib
 import sqlite3
@@ -26,23 +27,35 @@ from ..utils import make_id, now_iso
 
 
 VALID_ROLES = ("admin", "pm", "engineer", "readonly")
+logger = logging.getLogger(__name__)
+
+
+class AuthStateChangedError(ValueError):
+    """Raised when an auth failure already changed persistent security state."""
 
 
 def _now() -> datetime:
-    return datetime.now().astimezone()
+    return datetime.now(timezone.utc)
 
 
 def _parse_time(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _hash_value(value: str) -> str:
     return hashlib.sha256(f"{AUTH_SECRET}:{value}".encode("utf-8")).hexdigest()
+
+
+def _smtp_configured() -> bool:
+    return bool(SMTP_HOST and SMTP_FROM_EMAIL and SMTP_USERNAME and SMTP_PASSWORD)
 
 
 def normalize_email(email: str) -> str:
@@ -73,12 +86,14 @@ def user_payload(conn: sqlite3.Connection, user_id: str) -> dict | None:
     payload = row_to_dict(row)
     payload["roles"] = roles
     payload["is_admin"] = "admin" in roles
-    payload["is_pm"] = "pm" in roles or "admin" in roles
+    payload["is_pm"] = "pm" in roles
     payload["is_engineer"] = "engineer" in roles
     return payload
 
 
 def ensure_user(conn: sqlite3.Connection, email: str) -> dict:
+    from ..config import AUTH_INITIAL_ADMIN_EMAIL
+
     now = now_iso()
     row = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
     if row is None:
@@ -96,6 +111,13 @@ def ensure_user(conn: sqlite3.Connection, email: str) -> dict:
         )
     else:
         user_id = row["id"]
+    if email == AUTH_INITIAL_ADMIN_EMAIL:
+        conn.execute("UPDATE users SET status = 'enabled', updated_at = ? WHERE id = ?", (now, user_id))
+        for role in ("admin", "pm"):
+            conn.execute(
+                "INSERT OR IGNORE INTO user_roles (user_id, role_code, created_at) VALUES (?, ?, ?)",
+                (user_id, role, now),
+            )
     payload = user_payload(conn, user_id)
     if payload is None:
         raise ValueError("用户不存在")
@@ -129,34 +151,41 @@ def request_login_code(conn: sqlite3.Connection, raw_email: str) -> dict:
         """,
         (make_id(), email, _hash_value(f"{email}:{code}"), expires_at.isoformat(timespec="seconds"), created_at.isoformat(timespec="seconds")),
     )
+    smtp_configured = _smtp_configured()
     sent = send_login_code_email(email, code)
+    if smtp_configured and not sent:
+        raise ValueError("验证码邮件发送失败，请稍后再试或联系管理员")
     payload = {
         "sent": sent,
         "message": "验证码已发送" if sent else "SMTP 未配置，已返回测试验证码",
         "expires_in_seconds": AUTH_CODE_TTL_SECONDS,
     }
-    if not sent:
+    if not sent and not smtp_configured:
         payload["dev_code"] = code
     return payload
 
 
 def send_login_code_email(email: str, code: str) -> bool:
-    if not (SMTP_HOST and SMTP_FROM_EMAIL and SMTP_USERNAME and SMTP_PASSWORD):
+    if not _smtp_configured():
         return False
     message = EmailMessage()
     message["Subject"] = "项目管理系统登录验证码"
     message["From"] = f"{SMTP_FROM_NAME} <{SMTP_FROM_EMAIL}>"
     message["To"] = email
     message.set_content(f"您的登录验证码是：{code}\n\n验证码 {AUTH_CODE_TTL_SECONDS // 60} 分钟内有效。")
-    if SMTP_SECURITY == "starttls":
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
-            smtp.starttls()
-            smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
-            smtp.send_message(message)
-    else:
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
-            smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
-            smtp.send_message(message)
+    try:
+        if SMTP_SECURITY == "starttls":
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
+                smtp.starttls()
+                smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+                smtp.send_message(message)
+        else:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
+                smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+                smtp.send_message(message)
+    except Exception:
+        logger.exception("Failed to send login code email email=%s smtp_host=%s", email, SMTP_HOST)
+        return False
     return True
 
 
@@ -186,7 +215,7 @@ def login_with_code(conn: sqlite3.Connection, raw_email: str, code: str) -> dict
             "UPDATE login_codes SET attempt_count = attempt_count + 1 WHERE id = ?",
             (row["id"],),
         )
-        raise ValueError("验证码不正确")
+        raise AuthStateChangedError("验证码不正确")
 
     user = ensure_user(conn, email)
     if user["status"] != "enabled":
@@ -270,7 +299,7 @@ def list_users(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
         roles = roles_by_user.get(row["id"], [])
         payload["roles"] = roles
         payload["is_admin"] = "admin" in roles
-        payload["is_pm"] = "pm" in roles or "admin" in roles
+        payload["is_pm"] = "pm" in roles
         payload["is_engineer"] = "engineer" in roles
         users.append(payload)
     return {"users": users}

@@ -18,7 +18,7 @@ def _actor_name(user: dict | None) -> str:
 
 def _is_pm(user: dict | None) -> bool:
     roles = set((user or {}).get("roles", []))
-    return bool({"admin", "pm"}.intersection(roles))
+    return "pm" in roles
 
 
 def _task_row(conn: sqlite3.Connection, task_id: str) -> sqlite3.Row:

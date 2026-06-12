@@ -5,7 +5,7 @@ import sqlite3
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ..database import db_connect
-from ..modules.auth import list_users, login_with_code, request_login_code, revoke_token, update_user
+from ..modules.auth import AuthStateChangedError, list_users, login_with_code, request_login_code, revoke_token, update_user
 from .deps import bearer_token, current_user, query_as_lists, require_roles
 from .schemas import (
     CurrentUserPayload,
@@ -55,15 +55,20 @@ def request_code(body: LoginCodeRequest) -> dict:
 
 @router.post("/api/auth/login", response_model=LoginPayload)
 def login(body: LoginRequest) -> dict:
+    conn = db_connect()
     try:
-        with db_connect() as conn:
-            payload = login_with_code(conn, body.email, body.code)
-            conn.commit()
+        payload = login_with_code(conn, body.email, body.code)
+        conn.commit()
         return payload
+    except AuthStateChangedError as exc:
+        conn.commit()
+        raise _bad_request(exc) from exc
     except ValueError as exc:
         raise _bad_request(exc) from exc
     except sqlite3.IntegrityError as exc:
         raise _integrity_error(exc) from exc
+    finally:
+        conn.close()
 
 
 @router.post("/api/auth/logout", response_model=LogoutPayload)
