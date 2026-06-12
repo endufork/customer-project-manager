@@ -414,6 +414,101 @@ def test_task_risk_resolution_enters_pm_inbox_and_unblocks_task(client):
     assert closed_issue["closed_at"]
 
 
+def test_pm_action_center_aggregates_pending_approvals(client):
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+
+    completion_task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "Customer requirement summary",
+            "work_package": "前期方案",
+            "owner_name": "Bob",
+            "requires_deliverable": 0,
+        },
+    )
+    assert completion_task_response.status_code == 201, completion_task_response.text
+    completion_task_id = completion_task_response.json()["id"]
+
+    completion_submit = client.post(
+        f"/api/workbench/tasks/{completion_task_id}/completion",
+        headers=headers,
+        json={"completion_note": "Customer confirmed the concept scope.", "submitted_by": "Bob"},
+    )
+    assert completion_submit.status_code == 201, completion_submit.text
+
+    due_task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "Mechanical layout",
+            "work_package": "机械设计",
+            "owner_name": "Bob",
+            "due_date": "2026-06-12",
+        },
+    )
+    assert due_task_response.status_code == 201, due_task_response.text
+    due_task_id = due_task_response.json()["id"]
+
+    due_request = client.post(
+        f"/api/workbench/tasks/{due_task_id}/due-date-requests",
+        headers=headers,
+        json={
+            "proposed_due_date": "2026-06-18",
+            "reason": "Customer data arrived late.",
+            "impact_note": "May affect debug start.",
+        },
+    )
+    assert due_request.status_code == 201, due_request.text
+
+    blocked_task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={
+            "title": "Wait for sample",
+            "work_package": "前期方案",
+            "owner_name": "Bob",
+            "status": "blocked",
+            "blocked_reason": "Customer sample is missing.",
+        },
+    )
+    assert blocked_task_response.status_code == 201, blocked_task_response.text
+    blocked_task_id = blocked_task_response.json()["id"]
+
+    detail_response = client.get(f"/api/workbench/projects/{project_id}", headers=headers)
+    issue = next(item for item in detail_response.json()["issues"] if item["task_id"] == blocked_task_id)
+    resolve_response = client.patch(
+        f"/api/workbench/issues/{issue['id']}",
+        headers=headers,
+        json={"status": "resolved", "resolution": "Sample received and checked."},
+    )
+    assert resolve_response.status_code == 200, resolve_response.text
+
+    inbox_response = client.get("/api/workbench/pm-inbox", headers=headers)
+    assert inbox_response.status_code == 200, inbox_response.text
+    payload = inbox_response.json()
+    types = {item["type"] for item in payload["items"]}
+    assert {"completion", "due_date", "risk_review"}.issubset(types)
+    assert payload["kpis"]["completions"] >= 1
+    assert payload["kpis"]["due_date_requests"] >= 1
+    assert payload["kpis"]["risk_reviews"] >= 1
+    assert any(item["id"] == completion_task_id and item["type"] == "completion" for item in payload["items"])
+    assert any(item["id"] == due_request.json()["id"] and item["type"] == "due_date" for item in payload["items"])
+    assert any(item["id"] == issue["id"] and item["type"] == "risk_review" for item in payload["items"])
+
+    review_response = client.patch(
+        f"/api/workbench/tasks/{completion_task_id}/completion",
+        headers=headers,
+        json={"status": "confirmed", "confirmed_by": "PM"},
+    )
+    assert review_response.status_code == 200, review_response.text
+
+    refreshed_response = client.get("/api/workbench/pm-inbox", headers=headers)
+    refreshed_items = refreshed_response.json()["items"]
+    assert all(not (item["id"] == completion_task_id and item["type"] == "completion") for item in refreshed_items)
+
+
 def test_pm_reopens_resolved_risk_and_keeps_task_blocked(client):
     headers = auth_headers(client)
     project_id = create_project(client, headers)

@@ -291,3 +291,40 @@ class WorkbenchRiskOverviewKpis(BaseModel):
 class WorkbenchRiskOverviewPayload(BaseModel):
     risks: list[WorkbenchRiskOverviewItem] = Field(default_factory=list)
     kpis: WorkbenchRiskOverviewKpis
+
+
+class WorkbenchPmInboxItem(BaseModel):
+    key: str
+    type: str
+    type_label: str
+    id: str
+    project_id: str
+    task_id: str | None = None
+    project_number: str | None = None
+    project_title: str | None = None
+    customer_line: str | None = None
+    task_title: str | None = None
+    owner_name: str | None = None
+    submitted_by: str | None = None
+    submitted_at: str | None = None
+    status: str | None = None
+    title: str
+    summary: str | None = None
+    primary_action: str | None = None
+    secondary_action: str | None = None
+    due_date: str | None = None
+    severity: str | None = None
+    raw: dict = Field(default_factory=dict)
+
+
+class WorkbenchPmInboxKpis(BaseModel):
+    total: int = 0
+    deliverables: int = 0
+    completions: int = 0
+    due_date_requests: int = 0
+    risk_reviews: int = 0
+
+
+class WorkbenchPmInboxPayload(BaseModel):
+    items: list[WorkbenchPmInboxItem] = Field(default_factory=list)
+    kpis: WorkbenchPmInboxKpis

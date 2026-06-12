@@ -48,6 +48,7 @@
 
     <nav class="view-tabs" aria-label="主要页面">
       <button id="navBoardButton" type="button" class="tab-button active" data-view="board">项目看板</button>
+      <button id="navPmInboxButton" type="button" class="tab-button" data-view="pmInbox" hidden>PM待处理</button>
       <button id="navLibraryButton" type="button" class="tab-button" data-view="library">项目库</button>
       <button id="navCreateButton" type="button" class="tab-button" data-view="create">新建项目</button>
       <button id="navWorkbenchButton" type="button" class="tab-button" data-view="workbench">项目执行</button>
@@ -120,6 +121,42 @@
           </section>
           <aside id="riskSnapshot" class="board-snapshot" aria-label="风险快照">
             <div class="empty">请选择一个风险查看摘要</div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="pmInboxView" class="pm-inbox-page page-view" aria-labelledby="pm-inbox-title" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 id="pm-inbox-title">PM待处理</h2>
+            <span class="muted">待确认文件 · 完成说明 · Due Date 改期 · 风险关闭</span>
+          </div>
+          <div class="heading-actions">
+            <button id="pmInboxRefreshButton" type="button" class="secondary">刷新</button>
+          </div>
+        </div>
+
+        <div id="pmInboxKpis" class="pm-inbox-kpis" aria-label="PM待处理指标"></div>
+
+        <div class="pm-inbox-toolbar">
+          <div class="board-filter-group" aria-label="PM待处理筛选">
+            <button type="button" class="active" data-pm-inbox-filter="all">全部</button>
+            <button type="button" data-pm-inbox-filter="deliverable">待确认文件</button>
+            <button type="button" data-pm-inbox-filter="completion">完成说明</button>
+            <button type="button" data-pm-inbox-filter="due_date">改期申请</button>
+            <button type="button" data-pm-inbox-filter="risk_review">风险关闭</button>
+          </div>
+          <input id="pmInboxSearchInput" placeholder="搜索编号、客户、任务、提交人" />
+        </div>
+
+        <div class="pm-inbox-layout">
+          <section class="pm-inbox-list-surface" aria-label="PM待处理队列">
+            <div id="pmInboxList" class="pm-inbox-list">
+              <div class="empty">正在加载...</div>
+            </div>
+          </section>
+          <aside id="pmInboxPanel" class="pm-inbox-panel" aria-label="待处理详情">
+            <div class="empty">请选择一条待处理事项</div>
           </aside>
         </div>
       </section>
@@ -411,6 +448,7 @@
     <script src="/static/js/workbench-risks.js"></script>
     <script src="/static/js/workbench-view.js"></script>
     <script src="/static/js/workbench-board.js"></script>
+    <script src="/static/js/pm-inbox.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>

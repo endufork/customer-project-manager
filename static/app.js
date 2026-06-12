@@ -99,6 +99,7 @@ function bindEvents() {
     renderProjects();
   });
   $("#navBoardButton").addEventListener("click", () => switchView("board"));
+  $("#navPmInboxButton").addEventListener("click", () => switchView("pmInbox"));
   $("#navLibraryButton").addEventListener("click", () => switchView("library"));
   $("#navCreateButton").addEventListener("click", () => switchView("create"));
   $("#navWorkbenchButton").addEventListener("click", () => switchView("workbench"));
@@ -106,6 +107,7 @@ function bindEvents() {
   $("#backToLibraryButton").addEventListener("click", () => switchView("library"));
   $("#refreshButton").addEventListener("click", loadProjects);
   $("#boardRefreshButton").addEventListener("click", () => loadProjectBoard().catch(console.error));
+  $("#pmInboxRefreshButton").addEventListener("click", () => loadPmInbox().catch(console.error));
   $("#boardProjectsModeButton").addEventListener("click", () => {
     state.boardMode = "projects";
     loadProjectBoard().catch(console.error);
@@ -131,6 +133,7 @@ function bindEvents() {
   $("#filterNeedsEquipment").addEventListener("change", () => loadProjects().catch(console.error));
   $("#boardSearchInput").addEventListener("input", debounce(() => loadProjectBoard().catch(console.error), 300));
   $("#riskSearchInput").addEventListener("input", debounce(() => loadProjectBoard().catch(console.error), 300));
+  $("#pmInboxSearchInput").addEventListener("input", debounce(() => loadPmInbox().catch(console.error), 300));
   document.querySelectorAll("[data-board-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.boardFilter = button.dataset.boardFilter || "all";
@@ -141,6 +144,12 @@ function bindEvents() {
     button.addEventListener("click", () => {
       state.boardRiskFilter = button.dataset.riskFilter || "active";
       loadProjectBoard().catch(console.error);
+    });
+  });
+  document.querySelectorAll("[data-pm-inbox-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.pmInboxFilter = button.dataset.pmInboxFilter || "all";
+      loadPmInbox().catch(console.error);
     });
   });
   $("#workbenchSearchInput").addEventListener("input", debounce(() => loadWorkbench().catch(console.error), 300));

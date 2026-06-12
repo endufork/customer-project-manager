@@ -88,6 +88,15 @@ test("workbench action windows open from the task action row", async ({ page }) 
   await expect(page.locator("#workbenchKpiSubmittedLabel")).toHaveText("待处理审批");
   await expect(page.locator("#workbenchWorkspace")).toContainText("待审批改期");
 
+  await page.goto("/");
+  await page.getByRole("button", { name: "PM待处理" }).click();
+  await expect(page.getByRole("heading", { name: "PM待处理" })).toBeVisible();
+  await expect(page.locator("#pmInboxKpis")).toContainText("全部");
+  await expect(page.locator("#pmInboxKpis")).toContainText("改期申请");
+  await expect(page.locator("#pmInboxList")).toBeVisible();
+  await expect(page.locator("#pmInboxPanel")).toBeVisible();
+  await page.getByRole("button", { name: "项目执行" }).click();
+
   const inboxConfirmDeliverable = page.locator("[data-action='confirm-inbox-deliverable']").first();
   if (await inboxConfirmDeliverable.count()) {
     await inboxConfirmDeliverable.click();

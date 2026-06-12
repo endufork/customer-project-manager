@@ -77,16 +77,19 @@ function renderColumnPicker() {
 
 function switchView(view, refresh = true) {
   const isBoard = view === "board";
+  const isPmInbox = view === "pmInbox";
   const isCreate = view === "create";
   const isWorkbench = view === "workbench";
   const isLibrary = view === "library";
   const isAdmin = view === "admin";
   $("#boardView").hidden = !isBoard;
+  $("#pmInboxView").hidden = !isPmInbox;
   $("#entryView").hidden = !isCreate;
   $("#libraryView").hidden = !isLibrary;
   $("#workbenchView").hidden = !isWorkbench;
   $("#adminView").hidden = !isAdmin;
   $("#navBoardButton").classList.toggle("active", isBoard);
+  $("#navPmInboxButton").classList.toggle("active", isPmInbox);
   $("#navCreateButton").classList.toggle("active", isCreate);
   $("#navLibraryButton").classList.toggle("active", isLibrary);
   $("#navWorkbenchButton").classList.toggle("active", isWorkbench);
@@ -96,6 +99,9 @@ function switchView(view, refresh = true) {
   }
   if (isBoard && refresh) {
     loadProjectBoard().catch(console.error);
+  }
+  if (isPmInbox && refresh) {
+    loadPmInbox().catch(console.error);
   }
   if (isLibrary && refresh) {
     loadProjects().catch(console.error);

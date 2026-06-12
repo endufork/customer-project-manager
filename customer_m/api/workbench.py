@@ -16,6 +16,7 @@ from ..modules.workbench import (
     guard_regular_task_due_date_update,
     list_due_date_requests,
     list_workbench_inbox,
+    list_workbench_pm_inbox,
     list_workbench_projects,
     list_workbench_risks,
     list_workbench_tasks,
@@ -37,6 +38,7 @@ from .schemas import (
     TaskCompletionReviewRequest,
     WorkbenchIssueRequest,
     WorkbenchBoardPayload,
+    WorkbenchPmInboxPayload,
     WorkbenchRiskOverviewPayload,
     WorkbenchTaskRequest,
     WorkbenchTemplateRequest,
@@ -90,6 +92,12 @@ def workbench_risks(request: Request, _: dict = Depends(current_user)) -> dict:
 def workbench_inbox(request: Request, _: dict = Depends(current_user)) -> dict:
     with db_connect() as conn:
         return list_workbench_inbox(conn, query_as_lists(request))
+
+
+@router.get("/pm-inbox", response_model=WorkbenchPmInboxPayload)
+def workbench_pm_inbox(request: Request, _: dict = Depends(pm_user)) -> dict:
+    with db_connect() as conn:
+        return list_workbench_pm_inbox(conn, query_as_lists(request))
 
 
 @router.get("/tasks")
