@@ -1,8 +1,10 @@
 __pycache__/
 *.pyc
+.agents/
 node_modules/
 playwright-report/
 test-results/
+data/
 data/*.db
 data/*.db-*
 server.log
