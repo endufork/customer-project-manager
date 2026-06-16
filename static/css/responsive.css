@@ -1,0 +1,194 @@
+@media (max-width: 960px) {
+  .topbar,
+  .settings,
+  .workspace,
+  .grid.two,
+  .grid.three,
+  .filters,
+  .scan-toolbar,
+  .workbench-toolbar,
+  .workbench-layout,
+  .workbench-columns,
+  .workbench-action-row,
+  .template-action-grid,
+  .template-picker-row,
+  .template-task-row,
+  .task-risk-strip,
+  .blocked-risk-box,
+  .workbench-create-form,
+  .issue-create-form,
+  .workbench-task-form,
+  .deliverable-upload-form,
+  .task-completion-form,
+  .task-submit-heading,
+  .issue-item,
+  .issue-edit-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .scan-buttons {
+    justify-content: stretch;
+  }
+
+  .scan-buttons button {
+    width: 100%;
+  }
+
+  .section-heading {
+    align-items: stretch;
+  }
+
+  .heading-actions {
+    justify-content: flex-start;
+  }
+
+  .column-menu {
+    left: 0;
+    right: auto;
+    width: min(260px, calc(100vw - 56px));
+  }
+
+  .workspace {
+    padding: 14px;
+  }
+
+  .board-kpis {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .board-kpi {
+    min-width: 0;
+  }
+
+  .board-toolbar,
+  .board-layout,
+  .pm-inbox-toolbar,
+  .pm-inbox-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .board-project-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .risk-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .pm-inbox-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pm-inbox-kpi {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .pm-inbox-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .board-row-flags {
+    justify-content: flex-start;
+  }
+
+  .board-mode-tabs {
+    width: 100%;
+  }
+
+  .board-mode-tabs button {
+    flex: 1;
+  }
+
+  .board-snapshot {
+    position: static;
+  }
+
+  .pm-inbox-panel {
+    position: static;
+  }
+
+  .settings {
+    min-width: 0;
+  }
+
+  .entry-panel,
+  .list-panel,
+  .board-page,
+  .workbench-page {
+    min-height: auto;
+  }
+
+  .workbench-sidebar,
+  .workbench-workspace {
+    max-height: none;
+  }
+
+  .workbench-main {
+    border-right: 0;
+  }
+
+  .workbench-kpis,
+  .workbench-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workbench-entry-button,
+  .risk-window-button {
+    width: 100%;
+  }
+
+  .workbench-dialog-header,
+  .log-drawer-header,
+  .issue-readable {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .log-drawer {
+    width: min(420px, 100vw);
+  }
+
+  .detail-pane {
+    top: 14px;
+    right: 14px;
+    width: calc(100vw - 28px);
+    max-height: calc(100vh - 28px);
+  }
+
+  .confirm-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .template-form-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .deliverable-flow-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .workbench-mode-tabs {
+    width: 100%;
+  }
+
+  .workbench-mode-tabs button {
+    flex: 1;
+  }
+
+  .my-task-main,
+  .my-task-foot {
+    display: grid;
+  }
+
+  .my-task-status {
+    justify-items: start;
+  }
+}

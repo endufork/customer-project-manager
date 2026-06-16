@@ -80,6 +80,7 @@ SQLite 当前仍是合理选择，但团队试用必须保持：
 
 - WAL 模式。
 - 合理连接 timeout。
+- FastAPI 请求级连接由 `get_db` 统一关闭；SQLite 连接允许跨线程使用，以适配依赖注入和同步路由的线程调度。
 - 禁止直接永久删除客户资料。
 - 备份位置和周期明确。
 
@@ -138,6 +139,7 @@ customer_m/modules/
 static/index.html
 static/app.js
 static/js/
+static/css/
 static/styles.css
 ```
 
@@ -145,7 +147,10 @@ static/styles.css
 
 - `app-core.js`：全局状态、API 封装、基础工具。
 - `auth.js`：登录、权限、用户管理。
-- `project-library.js`：项目库、项目详情、扫描、编辑。
+- `project-library.js`：项目库入口壳层、页面切换、启动数据加载。
+- `project-library-format.js`：项目编号、标记、状态日期、下拉选项等格式化辅助。
+- `project-library-list.js`：项目库列配置、筛选排序、KPI 和列表渲染。
+- `project-library-detail.js`：项目详情抽屉、编辑、扫描、删除和跳转操作。
 - `workbench-view.js`：项目执行主视图。
 - `workbench-tasks.js`：任务创建、编辑、完成说明。
 - `workbench-deliverables.js`：交付文件上传和确认。
@@ -157,7 +162,17 @@ static/styles.css
 
 前端只按 `roles` 判断入口显示和操作能力；同时具备 `PM` 与 `Engineer` 的用户可切换工作台视角。
 
-CSS 目前仍集中在 `static/styles.css`。后续若样式继续增长，应按基础样式、布局、项目库、工作台、看板、PM中心、弹窗、权限页面逐步拆分。
+CSS 已按页面和职责拆到 `static/css/`：
+
+- `tokens.css`：颜色、基础变量。
+- `auth-admin.css`：登录、用户管理、角色选择。
+- `base-layout.css`：全局壳层、表单、按钮、项目库、通用标签和工具样式。
+- `board-inbox.css`：项目看板、风险总览、PM 待处理中心。
+- `workbench.css`：项目执行工作台、任务、风险、交付物、Due Date、日志抽屉。
+- `overlays-feedback.css`：详情抽屉、toast、确认弹窗。
+- `responsive.css`：移动端和窄屏适配。
+
+`static/styles.css` 保留为兼容入口，只通过 `@import` 引入上述模块。新增样式优先进入对应模块，不再继续堆进单个大文件。
 
 ## 测试结构
 
@@ -201,7 +216,6 @@ npm run test:e2e
 
 中期：
 
-- CSS 主题拆分。
 - 通知中心模块。
 - 报表模块。
 - BOM 管理模块。

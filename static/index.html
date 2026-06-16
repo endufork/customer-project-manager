@@ -4,7 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>项目管理系统</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/css/tokens.css" />
+    <link rel="stylesheet" href="/static/css/auth-admin.css" />
+    <link rel="stylesheet" href="/static/css/base-layout.css" />
+    <link rel="stylesheet" href="/static/css/board-inbox.css" />
+    <link rel="stylesheet" href="/static/css/workbench.css" />
+    <link rel="stylesheet" href="/static/css/overlays-feedback.css" />
+    <link rel="stylesheet" href="/static/css/responsive.css" />
   </head>
   <body>
     <section id="authView" class="auth-view">
@@ -63,13 +69,12 @@
             <span class="muted">超期 · 阻塞 · 待确认 · 当前责任人 · 下一步</span>
           </div>
           <div class="heading-actions">
+            <div class="board-mode-tabs" aria-label="看板视图">
+              <button id="boardProjectsModeButton" type="button" class="active" data-board-mode="projects">项目总览</button>
+              <button id="boardRisksModeButton" type="button" data-board-mode="risks">风险总览</button>
+            </div>
             <button id="boardRefreshButton" type="button" class="secondary">刷新</button>
           </div>
-        </div>
-
-        <div class="board-mode-tabs" aria-label="看板视图">
-          <button id="boardProjectsModeButton" type="button" class="active" data-board-mode="projects">项目总览</button>
-          <button id="boardRisksModeButton" type="button" data-board-mode="risks">风险总览</button>
         </div>
 
         <div id="boardKpis" class="board-kpis" aria-label="看板指标"></div>
@@ -439,6 +444,9 @@
     <script src="/static/js/ui-shell.js"></script>
     <script src="/static/js/form-utils.js"></script>
     <script src="/static/js/project-config.js"></script>
+    <script src="/static/js/project-library-format.js"></script>
+    <script src="/static/js/project-library-list.js"></script>
+    <script src="/static/js/project-library-detail.js"></script>
     <script src="/static/js/project-library.js"></script>
     <script src="/static/js/workbench-config.js"></script>
     <script src="/static/js/workbench-utils.js"></script>

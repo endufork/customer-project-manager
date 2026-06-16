@@ -1,0 +1,23 @@
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-muted: #f8fafc;
+  --line: #d8dee6;
+  --line-strong: #b9c3cf;
+  --text: #17202a;
+  --muted: #697586;
+  --accent: #1f6f5b;
+  --accent-strong: #155443;
+  --warn: #a15c00;
+  --blue: #245a9c;
+  --shadow: 0 8px 24px rgba(20, 31, 43, 0.08);
+  --focus-ring: rgba(31, 111, 91, 0.34);
+  --disabled-bg: #eef2f6;
+  --disabled-text: #8a96a6;
+}
+
+[hidden] {
+  display: none !important;
+}
+
