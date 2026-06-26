@@ -40,6 +40,7 @@ function showAuthenticatedApp() {
   $("#navAdminButton").hidden = !userHasRole("admin");
   const owner = user.display_name || user.email.split("@")[0];
   $("#workbenchOwnerInput").value = owner;
+  $("#workbenchOwnerInput").readOnly = true;
   localStorage.setItem(WORKBENCH_OWNER_STORAGE_KEY, owner);
   $("#workbenchRoleSelect").value = preferredWorkbenchRole();
   $("#workbenchRoleSelect").disabled = !(userHasRole("pm") && userHasRole("engineer"));
@@ -148,13 +149,15 @@ function renderUsers(users) {
         <span>姓名</span>
         <span>状态</span>
         <span>角色</span>
-        <span></span>
+        <span>保存</span>
+        <span>删除</span>
       </div>
       ${users.map((user) => renderUserCard(user)).join("")}
     `
     : `<div class="empty">暂无用户</div>`;
   $("#userList").querySelectorAll(".user-card").forEach((card) => {
     card.querySelector("[data-action='save-user']").addEventListener("click", () => saveUser(card).catch(console.error));
+    card.querySelector("[data-action='delete-user']").addEventListener("click", () => deleteUser(card).catch(console.error));
   });
 }
 
@@ -183,6 +186,9 @@ function renderUserCard(user) {
       <div class="user-card-actions">
         <button type="button" class="secondary slim-inline" data-action="save-user">保存</button>
       </div>
+      <div class="user-card-actions">
+        <button type="button" class="danger slim-inline" data-action="delete-user">删除</button>
+      </div>
     </article>
   `;
 }
@@ -199,5 +205,20 @@ async function saveUser(card) {
     body: JSON.stringify(payload),
   });
   showToast("用户已保存");
+  await loadBootstrap();
+  await loadUsers();
+}
+
+async function deleteUser(card) {
+  const email = card.querySelector(".user-identity strong")?.textContent || "该用户";
+  if (!confirm(`确定删除用户 ${email} 吗？\n\n删除后该用户不能登录，历史任务会保留负责人姓名但解除账号绑定。`)) {
+    return;
+  }
+  await api(`/api/users/${encodeURIComponent(card.dataset.userId)}`, {
+    method: "DELETE",
+    body: "{}",
+  });
+  showToast("用户已删除");
+  await loadBootstrap();
   await loadUsers();
 }

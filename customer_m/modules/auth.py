@@ -12,6 +12,7 @@ from ..config import (
     AUTH_CODE_RESEND_SECONDS,
     AUTH_CODE_TTL_SECONDS,
     AUTH_EMAIL_DOMAIN,
+    AUTH_INITIAL_ADMIN_EMAIL,
     AUTH_SECRET,
     AUTH_SESSION_DAYS,
     SMTP_FROM_EMAIL,
@@ -305,6 +306,29 @@ def list_users(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
     return {"users": users}
 
 
+def list_assignable_users(conn: sqlite3.Connection) -> dict:
+    rows = conn.execute(
+        """
+        SELECT DISTINCT users.*
+        FROM users
+        JOIN user_roles ON user_roles.user_id = users.id
+        WHERE users.status = 'enabled'
+          AND user_roles.role_code IN ('pm', 'engineer')
+        ORDER BY COALESCE(users.display_name, users.email), users.email
+        """
+    ).fetchall()
+    return {
+        "users": [
+            {
+                "id": row["id"],
+                "email": row["email"],
+                "display_name": row["display_name"] or default_display_name(row["email"]),
+            }
+            for row in rows
+        ]
+    }
+
+
 def update_user(conn: sqlite3.Connection, user_id: str, data: dict) -> dict:
     row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     if row is None:
@@ -335,3 +359,31 @@ def update_user(conn: sqlite3.Connection, user_id: str, data: dict) -> dict:
     if payload is None:
         raise ValueError("用户不存在")
     return payload
+
+
+def delete_user(conn: sqlite3.Connection, user_id: str, actor: dict | None = None) -> dict:
+    row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row is None:
+        raise ValueError("用户不存在")
+    if actor and actor.get("id") == user_id:
+        raise ValueError("不能删除当前登录用户")
+    if row["email"].lower() == AUTH_INITIAL_ADMIN_EMAIL.strip().lower():
+        raise ValueError("不能删除初始管理员")
+
+    now = now_iso()
+    conn.execute(
+        """
+        UPDATE execution_tasks
+        SET owner_user_id = NULL,
+            owner_email = NULL,
+            updated_at = ?
+        WHERE owner_user_id = ?
+        """,
+        (now, user_id),
+    )
+    conn.execute("DELETE FROM login_codes WHERE email = ?", (row["email"],))
+    conn.execute("DELETE FROM auth_sessions WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM notifications WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    return {"deleted": True, "id": user_id, "email": row["email"]}

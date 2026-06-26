@@ -210,6 +210,8 @@ CREATE TABLE IF NOT EXISTS execution_tasks (
   title TEXT NOT NULL,
   description TEXT,
   owner_name TEXT,
+  owner_user_id TEXT,
+  owner_email TEXT,
   status TEXT NOT NULL DEFAULT 'not_started',
   due_date TEXT,
   started_at TEXT,
@@ -222,7 +224,8 @@ CREATE TABLE IF NOT EXISTS execution_tasks (
   notes TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE CASCADE ON DELETE CASCADE
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (owner_user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS task_deliverables (

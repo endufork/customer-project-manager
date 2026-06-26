@@ -98,6 +98,8 @@ class WorkbenchTaskRequest(_StrictRequest):
     phase_code: str | None = None
     description: str | None = None
     owner_name: str | None = None
+    owner_user_id: str | None = None
+    owner_email: str | None = None
     status: str | None = None
     due_date: str | None = None
     is_required: str | int | bool | None = None

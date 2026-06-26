@@ -76,6 +76,9 @@ function renderTaskCreateForm() {
         <option value="">工作包</option>
         ${stringOptions(state.bootstrap?.workbench_work_packages || [])}
       </select>
+      <select name="owner_user_id" aria-label="绑定负责人账号">
+        ${assigneeOptions(state.auth.user?.id || "")}
+      </select>
       <input name="owner_name" placeholder="负责人" value="${escapeHtml(owner)}" />
       <input name="due_date" type="date" />
       <label class="checkline compact-check">
@@ -194,7 +197,13 @@ function renderWorkbenchTask(task, issues = []) {
             </select>
           </label>
           <label>
-            负责人
+            负责人账号
+            <select name="owner_user_id">
+              ${assigneeOptions(task.owner_user_id || "")}
+            </select>
+          </label>
+          <label>
+            负责人姓名
             <input name="owner_name" value="${escapeHtml(task.owner_name || "")}" placeholder="负责人" />
           </label>
           <label>
@@ -406,6 +415,7 @@ async function saveWorkbenchTask(form, projectId) {
 function bindTaskCreation(projectId) {
   const taskForm = $("#workbenchTaskForm");
   if (taskForm) {
+    bindAssigneeControls(taskForm);
     taskForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const button = event.submitter;
@@ -505,6 +515,7 @@ function bindTaskForms(projectId, workspace) {
       await saveWorkbenchTask(form, projectId);
     });
   });
+  bindAssigneeControls(workspace);
 }
 
 function bindTaskCompletionForms(projectId, workspace) {

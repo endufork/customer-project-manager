@@ -164,6 +164,112 @@ def test_user_patch_without_roles_preserves_existing_roles(client):
     assert name_response.json()["roles"] == ["engineer"]
 
 
+def test_admin_can_delete_user_and_clear_sessions_and_task_binding(client):
+    from customer_m import database
+
+    initial_email = "rongkai@jinxiangsz.com"
+    code_payload = client.post("/api/auth/request-code", json={"email": initial_email}).json()
+    login_payload = client.post(
+        "/api/auth/login",
+        json={"email": initial_email, "code": code_payload["dev_code"]},
+    ).json()
+    admin_headers = {"Authorization": f"Bearer {login_payload['token']}"}
+
+    target_email = "delete-me@jinxiangsz.com"
+    target_code = client.post("/api/auth/request-code", json={"email": target_email}).json()["dev_code"]
+    users_payload = client.get("/api/users", headers=admin_headers).json()
+    target_user = next(user for user in users_payload["users"] if user["email"] == target_email)
+    role_response = client.patch(
+        f"/api/users/{target_user['id']}",
+        headers=admin_headers,
+        json={"display_name": "Delete Me", "status": "enabled", "roles": ["engineer"]},
+    )
+    assert role_response.status_code == 200, role_response.text
+
+    target_login = client.post("/api/auth/login", json={"email": target_email, "code": target_code})
+    assert target_login.status_code == 200, target_login.text
+    target_headers = {"Authorization": f"Bearer {target_login.json()['token']}"}
+
+    project_response = client.post(
+        "/api/projects",
+        headers=admin_headers,
+        json={
+            "customer_name": "Delete User Customer",
+            "site_name": "Suzhou",
+            "contact_name": "Alice",
+            "equipment_name": "Delete User Machine",
+            "project_name": "Delete User Line",
+            "project_nature": "新设备",
+            "status_code": "inquiry",
+            "currency_code": "CNY",
+            "inquiry_date": "2026-06-01",
+        },
+    )
+    assert project_response.status_code == 201, project_response.text
+    task_response = client.post(
+        f"/api/workbench/projects/{project_response.json()['id']}/tasks",
+        headers=admin_headers,
+        json={"title": "Assigned before delete", "owner_user_id": target_user["id"]},
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+
+    delete_response = client.delete(f"/api/users/{target_user['id']}", headers=admin_headers)
+    assert delete_response.status_code == 200, delete_response.text
+    assert delete_response.json()["deleted"] is True
+
+    deleted_me_response = client.get("/api/auth/me", headers=target_headers)
+    assert deleted_me_response.status_code == 401
+
+    refreshed_users = client.get("/api/users", headers=admin_headers).json()["users"]
+    assert all(user["email"] != target_email for user in refreshed_users)
+
+    with database.db_connect() as conn:
+        task = conn.execute(
+            "SELECT owner_user_id, owner_email, owner_name FROM execution_tasks WHERE id = ?",
+            (task_id,),
+        ).fetchone()
+    assert task["owner_user_id"] is None
+    assert task["owner_email"] is None
+    assert task["owner_name"] == "Delete Me"
+
+
+def test_user_delete_rejects_self_and_initial_admin(client):
+    initial_email = "rongkai@jinxiangsz.com"
+    code_payload = client.post("/api/auth/request-code", json={"email": initial_email}).json()
+    login_payload = client.post(
+        "/api/auth/login",
+        json={"email": initial_email, "code": code_payload["dev_code"]},
+    ).json()
+    admin_headers = {"Authorization": f"Bearer {login_payload['token']}"}
+    admin_user_id = login_payload["user"]["id"]
+
+    delete_response = client.delete(f"/api/users/{admin_user_id}", headers=admin_headers)
+    assert delete_response.status_code == 400
+    assert delete_response.json()["detail"] == "不能删除当前登录用户"
+
+    second_admin_email = "second-admin@jinxiangsz.com"
+    second_code = client.post("/api/auth/request-code", json={"email": second_admin_email}).json()["dev_code"]
+    users_payload = client.get("/api/users", headers=admin_headers).json()
+    second_admin = next(user for user in users_payload["users"] if user["email"] == second_admin_email)
+    patch_response = client.patch(
+        f"/api/users/{second_admin['id']}",
+        headers=admin_headers,
+        json={"display_name": "Second Admin", "status": "enabled", "roles": ["admin"]},
+    )
+    assert patch_response.status_code == 200, patch_response.text
+    second_login = client.post(
+        "/api/auth/login",
+        json={"email": second_admin_email, "code": second_code},
+    )
+    assert second_login.status_code == 200, second_login.text
+    second_admin_headers = {"Authorization": f"Bearer {second_login.json()['token']}"}
+
+    initial_delete_response = client.delete(f"/api/users/{admin_user_id}", headers=second_admin_headers)
+    assert initial_delete_response.status_code == 400
+    assert initial_delete_response.json()["detail"] == "不能删除初始管理员"
+
+
 def test_configured_smtp_failure_does_not_return_dev_code_or_persist_code(client, monkeypatch):
     from customer_m import database
     from customer_m.modules import auth

@@ -119,17 +119,54 @@ def list_workbench_projects(conn: sqlite3.Connection, query: dict[str, list[str]
     }
     return {"projects": rows, "kpis": kpis}
 
+
+def _user_owner_aliases(user_row: sqlite3.Row | None) -> list[str]:
+    if user_row is None:
+        return []
+    aliases = [
+        user_row["email"],
+        user_row["email"].split("@", 1)[0],
+        user_row["display_name"] or "",
+    ]
+    clean_aliases = []
+    for alias in aliases:
+        normalized = (alias or "").strip().lower()
+        if normalized and normalized not in clean_aliases:
+            clean_aliases.append(normalized)
+    return clean_aliases
+
+
+def _current_user_owner_filter(conn: sqlite3.Connection, user_id: str) -> tuple[str, list[str]]:
+    user_row = conn.execute(
+        "SELECT id, email, display_name FROM users WHERE id = ?",
+        (user_id,),
+    ).fetchone()
+    aliases = _user_owner_aliases(user_row)
+    if not aliases:
+        return "t.owner_user_id = ?", [user_id]
+    placeholders = ",".join("?" for _ in aliases)
+    return (
+        f"(t.owner_user_id = ? OR (t.owner_user_id IS NULL AND lower(trim(COALESCE(t.owner_name, ''))) IN ({placeholders})))",
+        [user_id, *aliases],
+    )
+
+
 def list_workbench_tasks(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
     done_sql = _done_sql()
     filters = [f"t.status NOT IN ({done_sql})", "COALESCE(p.is_deleted, 0) = 0"]
     params: list[str] = []
     search = (query.get("search", [""])[0] or "").strip()
     owner = (query.get("owner", [""])[0] or "").strip()
+    owner_user_id = (query.get("owner_user_id", [""])[0] or "").strip()
     view = (query.get("view", [""])[0] or "all").strip()
 
-    if owner:
-        filters.append("t.owner_name LIKE ?")
-        params.append(f"%{owner}%")
+    if owner_user_id:
+        owner_filter, owner_params = _current_user_owner_filter(conn, owner_user_id)
+        filters.append(owner_filter)
+        params.extend(owner_params)
+    elif owner:
+        filters.append("(t.owner_name LIKE ? OR t.owner_email LIKE ?)")
+        params.extend([f"%{owner}%", f"%{owner}%"])
     if search:
         like = f"%{search}%"
         filters.append(
@@ -481,14 +518,22 @@ def list_pending_risk_reviews(conn: sqlite3.Connection, query: dict[str, list[st
         rows.append(issue)
     return rows
 
-def list_workbench_inbox(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
+def _query_with_current_owner(query: dict[str, list[str]], user: dict | None) -> dict[str, list[str]]:
+    scoped_query = {key: list(value) for key, value in query.items()}
+    if user and user.get("id"):
+        scoped_query["owner_user_id"] = [user["id"]]
+        scoped_query.pop("owner", None)
+    return scoped_query
+
+
+def list_workbench_inbox(conn: sqlite3.Connection, query: dict[str, list[str]], user: dict | None = None) -> dict:
     role = (query.get("role", ["engineer"])[0] or "engineer").strip().lower()
     if role not in {"engineer", "pm"}:
         role = "engineer"
 
     owner = (query.get("owner", [""])[0] or "").strip()
-    if role == "pm" and not owner:
-        task_payload = {"tasks": [], "kpis": {"blocked": 0, "submitted": 0, "overdue": 0}}
+    if user and not owner:
+        task_payload = list_workbench_tasks(conn, _query_with_current_owner(query, user))
     else:
         task_payload = list_workbench_tasks(conn, query)
     tasks = task_payload["tasks"]

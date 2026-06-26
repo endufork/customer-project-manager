@@ -49,6 +49,19 @@ def get_bootstrap_payload(conn: sqlite3.Connection) -> dict:
         "workbench_issue_severities": list(WORKBENCH_ISSUE_SEVERITIES),
         "workbench_issue_statuses": list(WORKBENCH_ISSUE_STATUSES),
         "workbench_deliverable_statuses": list(WORKBENCH_DELIVERABLE_STATUSES),
+        "assignees": [
+            row_to_dict(row)
+            for row in conn.execute(
+                """
+                SELECT DISTINCT users.id, users.email, COALESCE(users.display_name, '') AS display_name
+                FROM users
+                JOIN user_roles ON user_roles.user_id = users.id
+                WHERE users.status = 'enabled'
+                  AND user_roles.role_code IN ('pm', 'engineer')
+                ORDER BY COALESCE(users.display_name, users.email), users.email
+                """
+            )
+        ],
         "file_categories": [
             row_to_dict(row)
             for row in conn.execute(

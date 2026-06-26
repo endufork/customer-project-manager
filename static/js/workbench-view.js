@@ -24,7 +24,7 @@ function workbenchQueryParams() {
   const role = workbenchRole();
   const view = $("#workbenchViewFilter").value;
   if (search) params.set("search", search);
-  if (owner && state.workbenchMode === "tasks") params.set("owner", owner);
+  if (owner && state.workbenchMode === "tasks" && !state.auth.user) params.set("owner", owner);
   if (role) params.set("role", role);
   if (view) params.set("view", view);
   return params;
@@ -59,15 +59,7 @@ async function loadWorkbenchTasks() {
   state.workbenchProjectId = null;
   state.workbenchProjects = [];
   renderWorkbenchProjectList("");
-  const owner = $("#workbenchOwnerInput").value.trim();
   const role = workbenchRole();
-  if (role !== "pm" && !owner) {
-    state.workbenchTasks = [];
-    state.workbenchInbox = null;
-    renderWorkbenchKpis({});
-    renderMyTodoWorkspace({ tasks: [], deliverables: [], role }, { ownerRequired: true });
-    return;
-  }
   const params = workbenchQueryParams();
   const payload = await api(`/api/workbench/inbox?${params.toString()}`);
   state.workbenchTasks = payload.tasks || [];
@@ -195,25 +187,13 @@ function renderMyTodoWorkspace(payload = {}, options = {}) {
   const riskReviews = payload.risk_reviews || [];
   const role = payload.role || workbenchRole();
   const owner = $("#workbenchOwnerInput").value.trim();
-  if (options.ownerRequired) {
-    $("#workbenchWorkspace").innerHTML = `
-      <div class="workbench-header">
-        <div>
-          <h3>我的待办</h3>
-          <p>先在顶部输入“我的名字/负责人”，系统会按负责人筛出未完成任务。</p>
-        </div>
-      </div>
-      <div class="empty">请输入负责人后查看我的待办</div>
-    `;
-    return;
-  }
   const overdueCount = tasks.filter((task) => dueClass(task.due_date || "") === "danger").length;
   const isPm = role === "pm";
   $("#workbenchWorkspace").innerHTML = `
     <div class="workbench-header">
       <div>
         <h3>我的待办 · ${isPm ? "PM" : "工程师"}${owner ? ` · ${escapeHtml(owner)}` : ""}</h3>
-        <p>${isPm ? "优先处理待确认文件和改期申请；填写负责人后，也会显示自己负责的未完成任务。" : "按 Due Date、阻塞和状态排序；需要提交文件的任务进入项目后上传交付物。"}</p>
+        <p>${isPm ? "优先处理待确认文件、改期申请和自己负责的任务。" : "按登录账号筛选；旧任务会兼容负责人姓名匹配。"}</p>
       </div>
     </div>
     <div class="workbench-summary-grid">
@@ -235,7 +215,7 @@ function renderMyTodoWorkspace(payload = {}, options = {}) {
         <span>${escapeHtml(tasks.length)} 个</span>
       </div>
       <div class="my-task-list">
-        ${tasks.length ? tasks.map((task) => renderMyTaskCard(task)).join("") : `<div class="empty small-empty">${isPm && !owner ? "填写负责人后显示我负责的任务" : "暂无我的待办任务"}</div>`}
+        ${tasks.length ? tasks.map((task) => renderMyTaskCard(task)).join("") : `<div class="empty small-empty">暂无我的待办任务</div>`}
       </div>
     </section>
   `;

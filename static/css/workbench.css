@@ -286,7 +286,7 @@
 }
 
 .workbench-create-form {
-  grid-template-columns: minmax(180px, 1.3fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr) 150px auto auto;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(120px, 0.7fr) minmax(180px, 0.9fr) minmax(120px, 0.7fr) 140px auto auto;
   align-items: end;
 }
 

@@ -11,6 +11,34 @@ def auth_headers(client) -> dict[str, str]:
     return {"Authorization": f"Bearer {login_payload['token']}"}
 
 
+def login_headers(client, email: str) -> dict[str, str]:
+    code_payload = client.post("/api/auth/request-code", json={"email": email}).json()
+    login_payload = client.post(
+        "/api/auth/login",
+        json={"email": email, "code": code_payload["dev_code"]},
+    ).json()
+    return {"Authorization": f"Bearer {login_payload['token']}"}
+
+
+def user_by_email(client, headers: dict[str, str], email: str) -> dict:
+    payload = client.get("/api/users", headers=headers).json()
+    return next(user for user in payload["users"] if user["email"] == email)
+
+
+def prepare_user(client, admin_headers: dict[str, str], email: str, display_name: str, roles: list[str]) -> dict:
+    code_payload = client.post("/api/auth/request-code", json={"email": email}).json()
+    user = user_by_email(client, admin_headers, email)
+    response = client.patch(
+        f"/api/users/{user['id']}",
+        headers=admin_headers,
+        json={"display_name": display_name, "status": "enabled", "roles": roles},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    payload["_dev_code"] = code_payload["dev_code"]
+    return payload
+
+
 def create_project(client, headers: dict[str, str]) -> str:
     response = client.post(
         "/api/projects",
@@ -29,6 +57,81 @@ def create_project(client, headers: dict[str, str]) -> str:
     )
     assert response.status_code == 201, response.text
     return response.json()["id"]
+
+
+def test_workbench_inbox_uses_logged_in_user_binding_and_legacy_owner_fallback(client):
+    admin_headers = auth_headers(client)
+    engineer = prepare_user(
+        client,
+        admin_headers,
+        "engineer-bound@jinxiangsz.com",
+        "Engineer Bound",
+        ["engineer"],
+    )
+    other = prepare_user(
+        client,
+        admin_headers,
+        "engineer-other@jinxiangsz.com",
+        "Engineer Other",
+        ["engineer"],
+    )
+    engineer_login = client.post(
+        "/api/auth/login",
+        json={"email": "engineer-bound@jinxiangsz.com", "code": engineer["_dev_code"]},
+    )
+    assert engineer_login.status_code == 200, engineer_login.text
+    engineer_headers = {"Authorization": f"Bearer {engineer_login.json()['token']}"}
+    project_id = create_project(client, admin_headers)
+
+    bound_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=admin_headers,
+        json={
+            "title": "Bound account task",
+            "work_package": "机械设计",
+            "owner_user_id": engineer["id"],
+            "owner_name": "Manual name should not win",
+            "requires_deliverable": 0,
+        },
+    )
+    assert bound_response.status_code == 201, bound_response.text
+
+    legacy_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=admin_headers,
+        json={
+            "title": "Legacy owner task",
+            "work_package": "前期方案",
+            "owner_name": "Engineer Bound",
+            "requires_deliverable": 0,
+        },
+    )
+    assert legacy_response.status_code == 201, legacy_response.text
+
+    other_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=admin_headers,
+        json={
+            "title": "Other engineer task",
+            "work_package": "调试",
+            "owner_user_id": other["id"],
+            "requires_deliverable": 0,
+        },
+    )
+    assert other_response.status_code == 201, other_response.text
+
+    inbox_response = client.get("/api/workbench/inbox?role=engineer", headers=engineer_headers)
+    assert inbox_response.status_code == 200, inbox_response.text
+    titles = {task["title"] for task in inbox_response.json()["tasks"]}
+    assert "Bound account task" in titles
+    assert "Legacy owner task" in titles
+    assert "Other engineer task" not in titles
+
+    detail_response = client.get(f"/api/workbench/projects/{project_id}", headers=admin_headers)
+    bound_task = next(task for task in detail_response.json()["tasks"] if task["title"] == "Bound account task")
+    assert bound_task["owner_user_id"] == engineer["id"]
+    assert bound_task["owner_email"] == "engineer-bound@jinxiangsz.com"
+    assert bound_task["owner_name"] == "Engineer Bound"
 
 
 def test_workbench_project_list_uses_aggregated_summary(client):

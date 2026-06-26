@@ -60,6 +60,77 @@ def _task_row(conn: sqlite3.Connection, task_id: str) -> sqlite3.Row:
     return row
 
 
+def _user_display_name(row: sqlite3.Row) -> str:
+    return row["display_name"] or row["email"].split("@", 1)[0]
+
+
+def _owner_user_row(conn: sqlite3.Connection, owner_user_id: str) -> sqlite3.Row:
+    row = conn.execute(
+        "SELECT id, email, display_name, status FROM users WHERE id = ?",
+        (owner_user_id,),
+    ).fetchone()
+    if row is None or row["status"] != "enabled":
+        raise ValueError("负责人用户不存在或已停用")
+    return row
+
+
+def _match_owner_user(conn: sqlite3.Connection, owner_name: str | None) -> sqlite3.Row | None:
+    clean_name = (owner_name or "").strip().lower()
+    if not clean_name:
+        return None
+    row = conn.execute(
+        """
+        SELECT id, email, display_name, status
+        FROM users
+        WHERE status = 'enabled'
+          AND lower(email) = ?
+        LIMIT 1
+        """,
+        (clean_name,),
+    ).fetchone()
+    if row is not None:
+        return row
+    return conn.execute(
+        """
+        SELECT id, email, display_name, status
+        FROM users
+        WHERE status = 'enabled'
+          AND lower(COALESCE(display_name, '')) = ?
+        ORDER BY created_at
+        LIMIT 1
+        """,
+        (clean_name,),
+    ).fetchone()
+
+
+def _resolve_task_owner(
+    conn: sqlite3.Connection,
+    data: dict,
+    existing: sqlite3.Row | None = None,
+) -> tuple[str | None, str | None, str | None]:
+    if "owner_user_id" in data:
+        owner_user_id = _nullable_text(data.get("owner_user_id"))
+        if owner_user_id:
+            user = _owner_user_row(conn, owner_user_id)
+            return user["id"], user["email"], _user_display_name(user)
+        owner_name = _nullable_text(data.get("owner_name")) if "owner_name" in data else existing["owner_name"] if existing else None
+        user = _match_owner_user(conn, owner_name)
+        if user is not None:
+            return user["id"], user["email"], _user_display_name(user)
+        return None, None, owner_name
+
+    if "owner_name" in data:
+        owner_name = _nullable_text(data.get("owner_name"))
+        user = _match_owner_user(conn, owner_name)
+        if user is not None:
+            return user["id"], user["email"], _user_display_name(user)
+        return None, None, owner_name
+
+    if existing is None:
+        return None, None, None
+    return existing["owner_user_id"], existing["owner_email"], existing["owner_name"]
+
+
 def _open_task_issue_exists(conn: sqlite3.Connection, task_id: str) -> bool:
     return bool(
         conn.execute(
@@ -114,14 +185,15 @@ def create_task(conn: sqlite3.Connection, project_id: str, data: dict) -> dict:
     task_id = make_id()
     now = now_iso()
     completed_at = now if status in {"confirmed", "completed"} else None
+    owner_user_id, owner_email, owner_name = _resolve_task_owner(conn, data)
     conn.execute(
         """
         INSERT INTO execution_tasks (
           id, project_id, work_package, phase_code, title, description,
-          owner_name, status, due_date, completed_at, is_required,
+          owner_name, owner_user_id, owner_email, status, due_date, completed_at, is_required,
           requires_deliverable, blocked_reason, notes, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             task_id,
@@ -130,7 +202,9 @@ def create_task(conn: sqlite3.Connection, project_id: str, data: dict) -> dict:
             _nullable_text(data.get("phase_code")),
             title,
             _nullable_text(data.get("description")),
-            _nullable_text(data.get("owner_name")),
+            owner_name,
+            owner_user_id,
+            owner_email,
             status,
             _date_or_none(data.get("due_date")),
             completed_at,
@@ -181,7 +255,7 @@ def update_task(conn: sqlite3.Connection, task_id: str, data: dict) -> dict:
     work_package = _clean_work_package(data.get("work_package")) if "work_package" in data else row["work_package"]
     phase_code = _nullable_text(data.get("phase_code")) if "phase_code" in data else row["phase_code"]
     description = _nullable_text(data.get("description")) if "description" in data else row["description"]
-    owner_name = _nullable_text(data.get("owner_name")) if "owner_name" in data else row["owner_name"]
+    owner_user_id, owner_email, owner_name = _resolve_task_owner(conn, data, row)
     due_date = _date_or_none(data.get("due_date")) if "due_date" in data else row["due_date"]
     is_required = _bool_value(data.get("is_required")) if "is_required" in data else row["is_required"]
     requires_deliverable = _bool_value(data.get("requires_deliverable")) if "requires_deliverable" in data else row["requires_deliverable"]
@@ -195,6 +269,8 @@ def update_task(conn: sqlite3.Connection, task_id: str, data: dict) -> dict:
             title = ?,
             description = ?,
             owner_name = ?,
+            owner_user_id = ?,
+            owner_email = ?,
             status = ?,
             due_date = ?,
             started_at = ?,
@@ -214,6 +290,8 @@ def update_task(conn: sqlite3.Connection, task_id: str, data: dict) -> dict:
             title,
             description,
             owner_name,
+            owner_user_id,
+            owner_email,
             status,
             due_date,
             started_at,

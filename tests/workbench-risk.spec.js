@@ -20,6 +20,8 @@ test("workbench action windows open from the task action row", async ({ page }) 
   await expect(taskDialog).toBeVisible();
   await expect(taskDialog.getByRole("heading", { name: "新增任务" })).toBeVisible();
   await expect(taskDialog.getByRole("heading", { name: "手动新增" })).toBeVisible();
+  await expect(taskDialog.locator("select[name='owner_user_id']")).toBeVisible();
+  await expect(taskDialog.locator("input[name='owner_name']")).toBeVisible();
   await expect(taskDialog.getByRole("heading", { name: "从模板选择添加" })).toBeVisible();
   await expect(taskDialog.locator(".template-checklist:not([hidden])")).toHaveCount(0);
   await taskDialog.locator("#taskTemplateSelect").selectOption("inq");
@@ -95,6 +97,12 @@ test("workbench action windows open from the task action row", async ({ page }) 
   await expect(page.locator("#pmInboxKpis")).toContainText("改期申请");
   await expect(page.locator("#pmInboxList")).toBeVisible();
   await expect(page.locator("#pmInboxPanel")).toBeVisible();
+  await page.getByRole("button", { name: "项目执行" }).click();
+
+  await page.getByRole("button", { name: "用户管理" }).click();
+  await expect(page.getByRole("heading", { name: "用户管理" })).toBeVisible();
+  await expect(page.locator("#userList")).toContainText("删除");
+  await expect(page.locator("[data-action='delete-user']").first()).toBeVisible();
   await page.getByRole("button", { name: "项目执行" }).click();
 
   const inboxConfirmDeliverable = page.locator("[data-action='confirm-inbox-deliverable']").first();

@@ -95,7 +95,7 @@
 
 .user-list-head {
   display: grid;
-  grid-template-columns: minmax(280px, 1.25fr) minmax(200px, 0.8fr) 128px minmax(360px, 1.35fr) 88px;
+  grid-template-columns: minmax(280px, 1.25fr) minmax(200px, 0.8fr) 128px minmax(360px, 1.35fr) 88px 88px;
   gap: 14px;
   align-items: center;
   min-height: 38px;
@@ -109,7 +109,7 @@
 
 .user-card {
   display: grid;
-  grid-template-columns: minmax(280px, 1.25fr) minmax(200px, 0.8fr) 128px minmax(360px, 1.35fr) 88px;
+  grid-template-columns: minmax(280px, 1.25fr) minmax(200px, 0.8fr) 128px minmax(360px, 1.35fr) 88px 88px;
   gap: 14px;
   align-items: center;
   min-height: 68px;

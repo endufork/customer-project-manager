@@ -89,9 +89,9 @@ def workbench_risks(request: Request, _: dict = Depends(current_user)) -> dict:
 
 
 @router.get("/inbox")
-def workbench_inbox(request: Request, _: dict = Depends(current_user)) -> dict:
+def workbench_inbox(request: Request, user: dict = Depends(current_user)) -> dict:
     with db_connect() as conn:
-        return list_workbench_inbox(conn, query_as_lists(request))
+        return list_workbench_inbox(conn, query_as_lists(request), user)
 
 
 @router.get("/pm-inbox", response_model=WorkbenchPmInboxPayload)

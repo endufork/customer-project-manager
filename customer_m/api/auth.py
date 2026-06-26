@@ -4,7 +4,16 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from ..modules.auth import AuthStateChangedError, list_users, login_with_code, request_login_code, revoke_token, update_user
+from ..modules.auth import (
+    AuthStateChangedError,
+    delete_user,
+    list_assignable_users,
+    list_users,
+    login_with_code,
+    request_login_code,
+    revoke_token,
+    update_user,
+)
 from .deps import bearer_token, current_user, get_db, query_as_lists, require_roles
 from .schemas import (
     CurrentUserPayload,
@@ -83,6 +92,11 @@ def users(request: Request, _: dict = Depends(admin_user), conn: sqlite3.Connect
     return list_users(conn, query_as_lists(request))
 
 
+@router.get("/api/users/assignees", response_model=UserListPayload)
+def assignees(_: dict = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)) -> dict:
+    return list_assignable_users(conn)
+
+
 @router.patch("/api/users/{user_id}")
 def patch_user(
     user_id: str,
@@ -92,6 +106,22 @@ def patch_user(
 ) -> dict:
     try:
         payload = update_user(conn, user_id, _model_data(body, exclude_unset=True))
+        conn.commit()
+        return payload
+    except ValueError as exc:
+        raise _bad_request(exc) from exc
+    except sqlite3.IntegrityError as exc:
+        raise _integrity_error(exc) from exc
+
+
+@router.delete("/api/users/{user_id}")
+def remove_user(
+    user_id: str,
+    user: dict = Depends(admin_user),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    try:
+        payload = delete_user(conn, user_id, user)
         conn.commit()
         return payload
     except ValueError as exc:

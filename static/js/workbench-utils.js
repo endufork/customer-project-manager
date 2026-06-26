@@ -14,6 +14,40 @@ function stringOptions(items, selectedValue = "") {
     .join("");
 }
 
+function assigneeName(user) {
+  return user.display_name || user.email?.split("@")[0] || "";
+}
+
+function assigneeLabel(user) {
+  const name = assigneeName(user);
+  return name && name !== user.email ? `${name} · ${user.email}` : user.email;
+}
+
+function assigneeOptions(selectedValue = "") {
+  return [
+    `<option value="">手动负责人</option>`,
+    ...(state.bootstrap?.assignees || []).map((user) => {
+      const selected = user.id === selectedValue ? " selected" : "";
+      return `<option value="${escapeHtml(user.id)}" data-name="${escapeHtml(assigneeName(user))}"${selected}>${escapeHtml(assigneeLabel(user))}</option>`;
+    }),
+  ].join("");
+}
+
+function bindAssigneeControls(container = document) {
+  container.querySelectorAll("select[name='owner_user_id']").forEach((select) => {
+    select.addEventListener("change", () => {
+      const form = select.closest("form") || select.closest("article") || container;
+      const ownerInput = form?.querySelector("input[name='owner_name']");
+      if (!ownerInput) return;
+      const selectedOption = select.selectedOptions[0];
+      const selectedName = selectedOption?.dataset?.name || "";
+      if (selectedName) {
+        ownerInput.value = selectedName;
+      }
+    });
+  });
+}
+
 function workbenchTaskStatusName(statusCode) {
   return (state.bootstrap?.workbench_task_statuses || []).find((item) => item.code === statusCode)?.name || statusCode || "";
 }
@@ -46,6 +80,8 @@ function requireDataset(button, key, label) {
 
 function workbenchRole() {
   if (state.auth.user) {
+    const selected = $("#workbenchRoleSelect")?.value?.trim().toLowerCase();
+    if (selected && userHasRole(selected)) return selected;
     return preferredWorkbenchRole();
   }
   const selected = $("#workbenchRoleSelect")?.value;
