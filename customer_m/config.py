@@ -61,19 +61,26 @@ STATUS_DATE_FIELD_BY_STATUS = {
 STANDARD_PROJECT_FOLDERS = (
     "01_输入资料",
     "02_报价与订单",
+    "02_报价与订单/01_内部报价",
+    "02_报价与订单/02_对客报价",
+    "02_报价与订单/03_PO订单",
     "03_方案与图纸",
-    "04_交付与验收",
+    "04_BOM与采购",
+    "04_BOM与采购/01_BOM",
+    "04_BOM与采购/02_采购商务",
+    "05_装配调试",
+    "06_验收发货",
     "99_其他",
 )
 CATEGORY_DEFAULT_FOLDERS = {
     "inquiry": "01_输入资料",
     "communication": "01_输入资料",
-    "internal_quote": "02_报价与订单",
-    "customer_quote": "02_报价与订单",
-    "po": "02_报价与订单",
+    "internal_quote": "02_报价与订单/01_内部报价",
+    "customer_quote": "02_报价与订单/02_对客报价",
+    "po": "02_报价与订单/03_PO订单",
     "solution": "03_方案与图纸",
     "drawing_model": "03_方案与图纸",
-    "acceptance_delivery": "04_交付与验收",
+    "acceptance_delivery": "06_验收发货",
     "other": "99_其他",
 }
 LEGACY_CATEGORY_FOLDERS = {
@@ -87,10 +94,22 @@ LEGACY_CATEGORY_FOLDERS = {
     "08_沟通记录": "communication",
     "99_其他": "other",
 }
+STANDARD_CATEGORY_FOLDERS = {
+    "01_输入资料": "inquiry",
+    "02_报价与订单/01_内部报价": "internal_quote",
+    "02_报价与订单/02_对客报价": "customer_quote",
+    "02_报价与订单/03_PO订单": "po",
+    "03_方案与图纸": "solution",
+    "04_BOM与采购/01_BOM": "other",
+    "04_BOM与采购/02_采购商务": "other",
+    "05_装配调试": "other",
+    "06_验收发货": "acceptance_delivery",
+    "99_其他": "other",
+}
 STANDARD_FOLDER_FALLBACK_CATEGORIES = {
     "01_输入资料": "inquiry",
     "03_方案与图纸": "solution",
-    "04_交付与验收": "acceptance_delivery",
+    "06_验收发货": "acceptance_delivery",
     "99_其他": "other",
 }
 

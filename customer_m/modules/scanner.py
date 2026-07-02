@@ -9,6 +9,7 @@ from pathlib import Path
 from ..config import (
     LEGACY_CATEGORY_FOLDERS,
     MODEL_EXTENSIONS,
+    STANDARD_CATEGORY_FOLDERS,
     STANDARD_FOLDER_FALLBACK_CATEGORIES,
     STANDARD_PROJECT_FOLDERS,
 )
@@ -46,6 +47,13 @@ def category_from_project_path(conn: sqlite3.Connection, project_folder: Path, f
     except ValueError:
         relative_parts = file_path.parts[:-1]
     classified = classify_file(file_path)
+    for index in range(len(relative_parts), 0, -1):
+        relative_folder = "/".join(relative_parts[:index])
+        standard_category = STANDARD_CATEGORY_FOLDERS.get(relative_folder)
+        if standard_category:
+            if standard_category != "other":
+                return standard_category
+            break
     for part in relative_parts:
         legacy_category = LEGACY_CATEGORY_FOLDERS.get(part)
         if legacy_category:

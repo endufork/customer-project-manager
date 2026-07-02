@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from customer_m.config import STANDARD_PROJECT_FOLDERS
@@ -48,6 +49,15 @@ def assert_standard_dirs(folder: Path) -> None:
     assert folder.is_dir()
     for name in STANDARD_PROJECT_FOLDERS:
         assert (folder / name).is_dir(), f"missing standard folder: {name}"
+
+
+def remove_standard_dirs(folder: Path, *, keep: Path | None = None) -> None:
+    for name in sorted(STANDARD_PROJECT_FOLDERS, key=lambda value: value.count("/"), reverse=True):
+        candidate = folder / name
+        if keep and (candidate == keep or keep.is_relative_to(candidate)):
+            continue
+        if candidate.exists():
+            shutil.rmtree(candidate)
 
 
 def test_create_project_with_wo_creates_project_folder(client):
@@ -101,10 +111,7 @@ def test_inq_to_wo_rebuilds_missing_standard_dirs_without_losing_files(client):
     kept_folder = before / "01_输入资料"
     kept_file = kept_folder / "customer-input.pdf"
     kept_file.write_text("sample", encoding="utf-8")
-    for folder_name in STANDARD_PROJECT_FOLDERS:
-        candidate = before / folder_name
-        if candidate != kept_folder:
-            candidate.rmdir()
+    remove_standard_dirs(before, keep=kept_folder)
 
     response = client.patch(
         f"/api/projects/{project_id}",
@@ -133,8 +140,7 @@ def test_rename_to_wo_is_idempotent_and_repairs_missing_folder(client):
     )
     project_id = created["id"]
     folder = Path(project_detail(client, headers, project_id)["project_folder_path"])
-    for folder_name in STANDARD_PROJECT_FOLDERS:
-        (folder / folder_name).rmdir()
+    remove_standard_dirs(folder)
     folder.rmdir()
 
     response = client.post(f"/api/projects/{project_id}/rename-folder", headers=headers, json={})

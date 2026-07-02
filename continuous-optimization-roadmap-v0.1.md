@@ -848,6 +848,7 @@ project-management-platform-architecture-plan-v0.1.md
 - `admin_only`：Admin 可见。
 - 内部报价默认 `engineering`，工程师可见。
 - 客户报价和 PO 默认 `pm_only`。
+- 实际落盘目录同步分层：内部报价、对客报价、PO、BOM/采购商务分别进入子目录，便于后续 NAS ACL 落地。
 
 ### 暂不做
 
@@ -860,6 +861,7 @@ project-management-platform-architecture-plan-v0.1.md
 - 在 NAS 试用时按报价、PO、采购商务等目录验证 ACL。
 - 用 Engineer / PM / Admin 三类账号分别验证系统页面和直接共享目录访问。
 - 根据真实目录结构确认是否需要进一步拆分报价与订单文件夹。
+- 旧项目目录迁移使用显式工具或人工确认执行，不做启动时自动搬迁。
 
 ### 相关文档
 

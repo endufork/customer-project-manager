@@ -474,11 +474,11 @@ INSERT OR IGNORE INTO project_statuses (code, name, sort_order, is_active) VALUE
 INSERT OR IGNORE INTO file_categories (code, name, default_folder, sort_order, is_active) VALUES
 ('inquiry', '询价需求', '01_输入资料', 10, 1),
 ('solution', '方案资料', '03_方案与图纸', 20, 1),
-('internal_quote', '内部报价', '02_报价与订单', 30, 1),
-('customer_quote', '客户报价', '02_报价与订单', 40, 1),
-('po', 'PO 订单', '02_报价与订单', 50, 1),
+('internal_quote', '内部报价', '02_报价与订单/01_内部报价', 30, 1),
+('customer_quote', '客户报价', '02_报价与订单/02_对客报价', 40, 1),
+('po', 'PO 订单', '02_报价与订单/03_PO订单', 50, 1),
 ('drawing_model', '图纸模型', '03_方案与图纸', 60, 1),
-('acceptance_delivery', '验收发货', '04_交付与验收', 70, 1),
+('acceptance_delivery', '验收发货', '06_验收发货', 70, 1),
 ('communication', '沟通记录', '01_输入资料', 80, 1),
 ('other', '其他', '99_其他', 90, 1);
 

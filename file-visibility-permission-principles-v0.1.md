@@ -67,9 +67,13 @@
 ## 5. 当前已落地范围
 
 - `file_categories.default_visibility` 保存文件类别默认可见度。
+- `file_categories.default_folder` 已改为细分落盘目录，例如内部报价、对客报价和 PO 分别进入不同子目录。
 - `project_files.visibility_code` 和 `project_group_files.visibility_code` 保存具体文件记录可见度。
 - 项目详情接口按登录用户角色过滤文件列表。
 - 文件导入、目录扫描、工作台交付上传会写入默认可见度。
+- 新项目会创建细分后的标准目录结构。
+- 新上传/导入文件会按文件类别进入细分目录。
+- 旧项目可使用 `tools/restructure_project_folders.py` 先 dry-run 再显式 `--apply` 迁移。
 - 历史 `readonly` 用户迁移为 `pending` 并清理 `readonly` 角色。
 
 ## 6. 暂不做
