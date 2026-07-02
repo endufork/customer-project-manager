@@ -72,9 +72,10 @@ FastAPI + SQLite WAL + 本地/NAS 文件目录 + Web 前端
 
 - 企业邮箱验证码登录。
 - 当前允许域名：`jinxiangsz.com`。
-- 新用户默认只读，Admin 分配角色。
-- 角色：Admin、PM、Engineer、Readonly。
+- 新用户默认进入待分配状态，Admin 分配角色并启用后才能登录。
+- 角色：Admin、PM、Engineer。
 - 权限必须由后端校验，前端隐藏按钮只是辅助。
+- 文件可见度当前由后端文件索引过滤，最终共享目录保护等 NAS 试用时用 ACL 落地。
 
 ## 本地运行
 

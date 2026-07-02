@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def _category_row(conn: sqlite3.Connection, category_code: str) -> sqlite3.Row:
     row = conn.execute(
-        "SELECT code, name, default_folder FROM file_categories WHERE code = ? AND is_active = 1",
+        "SELECT code, name, default_folder, default_visibility FROM file_categories WHERE code = ? AND is_active = 1",
         (category_code,),
     ).fetchone()
     if row is None:
@@ -104,10 +104,10 @@ def submit_task_file(
         """
         INSERT INTO project_files (
           id, project_id, original_name, current_name, extension, category_code,
-          file_path, original_source_path, size_bytes, modified_at, is_3d_model,
+          visibility_code, file_path, original_source_path, size_bytes, modified_at, is_3d_model,
           text_extracted, extracted_text, content_hash, import_method, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'new_project_copy', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'new_project_copy', ?, ?)
         """,
         (
             file_id,
@@ -116,6 +116,7 @@ def submit_task_file(
             target_path.name,
             ext,
             category["code"],
+            category["default_visibility"],
             str(target_path),
             stat.st_size,
             datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds"),

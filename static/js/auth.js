@@ -2,7 +2,6 @@ const AUTH_ROLE_LABELS = {
   admin: "Admin",
   pm: "PM",
   engineer: "工程师",
-  readonly: "只读",
 };
 
 function authRoles() {
@@ -171,6 +170,7 @@ function renderUserCard(user) {
       </div>
       <input name="display_name" value="${escapeHtml(user.display_name || "")}" placeholder="姓名" />
       <select name="status">
+        <option value="pending"${user.status === "pending" ? " selected" : ""}>待分配</option>
         <option value="enabled"${user.status === "enabled" ? " selected" : ""}>启用</option>
         <option value="disabled"${user.status === "disabled" ? " selected" : ""}>停用</option>
       </select>

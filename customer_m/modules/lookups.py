@@ -65,7 +65,7 @@ def get_bootstrap_payload(conn: sqlite3.Connection) -> dict:
         "file_categories": [
             row_to_dict(row)
             for row in conn.execute(
-                "SELECT code, name, default_folder FROM file_categories WHERE is_active = 1 ORDER BY sort_order"
+                "SELECT code, name, default_folder, default_visibility FROM file_categories WHERE is_active = 1 ORDER BY sort_order"
             )
         ],
         "customer_groups": [

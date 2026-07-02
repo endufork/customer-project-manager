@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS file_categories (
   code TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   default_folder TEXT NOT NULL,
+  default_visibility TEXT NOT NULL DEFAULT 'engineering',
   sort_order INTEGER NOT NULL,
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))
 );
@@ -165,6 +166,7 @@ CREATE TABLE IF NOT EXISTS project_group_files (
   current_name TEXT NOT NULL,
   extension TEXT,
   category_code TEXT NOT NULL,
+  visibility_code TEXT NOT NULL DEFAULT 'engineering',
   file_path TEXT NOT NULL,
   size_bytes INTEGER CHECK (size_bytes IS NULL OR size_bytes >= 0),
   modified_at TEXT,
@@ -186,6 +188,7 @@ CREATE TABLE IF NOT EXISTS project_files (
   current_name TEXT NOT NULL,
   extension TEXT,
   category_code TEXT NOT NULL,
+  visibility_code TEXT NOT NULL DEFAULT 'engineering',
   file_path TEXT NOT NULL,
   original_source_path TEXT,
   size_bytes INTEGER CHECK (size_bytes IS NULL OR size_bytes >= 0),
@@ -286,7 +289,7 @@ CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL COLLATE NOCASE UNIQUE,
   display_name TEXT,
-  status TEXT NOT NULL DEFAULT 'enabled',
+  status TEXT NOT NULL DEFAULT 'pending',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   last_login_at TEXT

@@ -9,6 +9,7 @@
 1. `README.md`
 2. `fastapi-stabilization-runbook-v0.1.md`
 3. `team-trial-auth-requirements-v0.1.md`
+4. `file-visibility-permission-principles-v0.1.md`
 
 ### 准备继续开发
 
@@ -70,6 +71,7 @@
 ### 登录、权限和团队试用
 
 - `team-trial-auth-requirements-v0.1.md`：企业邮箱验证码登录、角色权限、Due Date 审批、通知和上线试用需求。
+- `file-visibility-permission-principles-v0.1.md`：文件可见度、角色边界和后续 NAS ACL 落地原则。
 
 ### 部署、备份和运行
 
@@ -116,6 +118,7 @@
 - 实际团队试用运维清单：运行机器、备份路径、日志保留周期、SMTP 账号。
 - 我的任务绑定登录账号后的迁移规则。
 - 项目库状态联动建议的确认流程。
+- NAS 正式试用后的目录 ACL 验证和调整记录。
 
 ## 维护规则
 

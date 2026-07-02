@@ -160,9 +160,9 @@ workbench-bug-log-v0.1.md
 - 企业邮箱体系：阿里企业邮箱。
 - 允许域名：`jinxiangsz.com`。
 - 初始账号：`rongkai@jinxiangsz.com`。
-- 角色：`Admin`、`PM`、`Engineer`、`Readonly`。
+- 角色：`Admin`、`PM`、`Engineer`。
 - 同一用户可以拥有多个角色。
-- 新用户默认只读，Admin 分配角色。
+- 新用户默认进入待分配状态，Admin 分配角色并启用。
 - 初始管理员邮箱自动拥有 `Admin + PM`，避免系统冷启动后无人可分配角色。
 - `Admin` 和 `PM` 权限保持独立，不能在前端或后端把 `Admin` 隐式当作 `PM`。
 
@@ -180,7 +180,6 @@ workbench-bug-log-v0.1.md
 Engineer：看项目、更新自己的任务、上传文件、创建风险、申请改期。
 PM：分配任务、确认文件、审批改期、处理风险、修改项目资料。
 Admin：用户管理、系统设置、删除项目或文件记录。
-Readonly：查看项目和状态，不修改。
 ```
 
 ## 6. Due Date 与审批优化方向
@@ -577,7 +576,7 @@ project-management-platform-architecture-plan-v0.1.md
 - 验证码和会话过期判断统一使用 UTC aware datetime，避免 aware/naive 时间比较异常。
 - SMTP 发信失败只影响验证码发送结果，必须记录日志并降级处理，不能让接口直接 HTTP 500。
 - 初始管理员邮箱自动初始化 `Admin + PM`。
-- `Admin`、`PM`、`Engineer`、`Readonly` 按后端返回的 `roles` 精确放行，`Admin` 不再隐式继承 PM 权限。
+- `Admin`、`PM`、`Engineer` 按后端返回的 `roles` 精确放行，`Admin` 不再隐式继承 PM 权限。
 - 同时具备 `PM` 和 `Engineer` 的用户允许切换工作台视角。
 
 适用模块：
@@ -824,5 +823,47 @@ FastAPI 底层稳定化阶段完成。当前不继续强化扫描性能，扫描
 fastapi-stabilization-runbook-v0.1.md
 fastapi-refactor-plan-v0.1.md
 fastapi-refactor-checklist-v0.1.md
+project-management-platform-architecture-plan-v0.1.md
+```
+
+## 24. 2026-07-02 文件可见度与 NAS ACL 原则
+
+### 决策内容
+
+当前不增加独立 `Readonly` 业务角色，团队试用阶段只保留 `Admin`、`PM`、`Engineer`。新账号先进入待分配状态，由 Admin 分配角色并启用。
+
+文件权限先按系统内可见度落地，NAS / Windows ACL 等正式在 NAS 上试用后再配置。系统内可见度不能替代共享目录权限；用户如果直接拥有 NAS 目录访问权，仍可能绕过前端和 API。
+
+### 适用模块
+
+- 登录与用户管理。
+- 项目资料库文件索引。
+- 文件导入、扫描和工作台交付物归档。
+- NAS / 共享盘部署。
+
+### 当前规则
+
+- `engineering`：Admin、PM、Engineer 可见。
+- `pm_only`：Admin、PM 可见。
+- `admin_only`：Admin 可见。
+- 内部报价默认 `engineering`，工程师可见。
+- 客户报价和 PO 默认 `pm_only`。
+
+### 暂不做
+
+- 暂不本地模拟完整 NAS ACL。
+- 暂不做复杂只读角色。
+- 暂不做前端逐文件改权限界面。
+
+### 下一步动作
+
+- 在 NAS 试用时按报价、PO、采购商务等目录验证 ACL。
+- 用 Engineer / PM / Admin 三类账号分别验证系统页面和直接共享目录访问。
+- 根据真实目录结构确认是否需要进一步拆分报价与订单文件夹。
+
+### 相关文档
+
+```text
+file-visibility-permission-principles-v0.1.md
 project-management-platform-architecture-plan-v0.1.md
 ```

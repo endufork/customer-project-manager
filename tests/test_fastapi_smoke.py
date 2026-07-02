@@ -64,6 +64,16 @@ def test_login_code_dev_flow(client):
     assert me_response.json()["user"]["is_pm"] is True
 
 
+def test_new_user_stays_pending_until_admin_assigns_role(client):
+    email = "pending-user@jinxiangsz.com"
+    code_response = client.post("/api/auth/request-code", json={"email": email})
+    assert code_response.status_code == 200
+
+    login_response = client.post("/api/auth/login", json={"email": email, "code": code_response.json()["dev_code"]})
+    assert login_response.status_code == 400
+    assert login_response.json()["detail"] == "账号待管理员分配角色，请联系管理员"
+
+
 def test_wrong_login_code_attempts_are_persisted(client):
     from customer_m import database
 
@@ -268,6 +278,97 @@ def test_user_delete_rejects_self_and_initial_admin(client):
     initial_delete_response = client.delete(f"/api/users/{admin_user_id}", headers=second_admin_headers)
     assert initial_delete_response.status_code == 400
     assert initial_delete_response.json()["detail"] == "不能删除初始管理员"
+
+
+def test_project_detail_filters_files_by_user_role(client):
+    from customer_m import database
+    from customer_m.utils import make_id, now_iso
+
+    initial_email = "rongkai@jinxiangsz.com"
+    code_payload = client.post("/api/auth/request-code", json={"email": initial_email}).json()
+    login_payload = client.post(
+        "/api/auth/login",
+        json={"email": initial_email, "code": code_payload["dev_code"]},
+    ).json()
+    admin_headers = {"Authorization": f"Bearer {login_payload['token']}"}
+
+    engineer_email = "visibility-engineer@jinxiangsz.com"
+    engineer_code = client.post("/api/auth/request-code", json={"email": engineer_email}).json()["dev_code"]
+    users_payload = client.get("/api/users", headers=admin_headers).json()
+    engineer = next(user for user in users_payload["users"] if user["email"] == engineer_email)
+    patch_response = client.patch(
+        f"/api/users/{engineer['id']}",
+        headers=admin_headers,
+        json={"display_name": "Visibility Engineer", "status": "enabled", "roles": ["engineer"]},
+    )
+    assert patch_response.status_code == 200, patch_response.text
+    engineer_login = client.post(
+        "/api/auth/login",
+        json={"email": engineer_email, "code": engineer_code},
+    )
+    assert engineer_login.status_code == 200, engineer_login.text
+    engineer_headers = {"Authorization": f"Bearer {engineer_login.json()['token']}"}
+
+    project_response = client.post(
+        "/api/projects",
+        headers=admin_headers,
+        json={
+            "customer_name": "Visibility Customer",
+            "site_name": "Suzhou",
+            "contact_name": "Alice",
+            "equipment_name": "Visibility Machine",
+            "project_name": "Visibility Line",
+            "project_nature": "新设备",
+            "status_code": "inquiry",
+            "currency_code": "CNY",
+            "inquiry_date": "2026-06-01",
+        },
+    )
+    assert project_response.status_code == 201, project_response.text
+    project_id = project_response.json()["id"]
+
+    now = now_iso()
+    file_rows = [
+        ("internal.xlsx", "internal_quote", "engineering"),
+        ("customer.xlsx", "customer_quote", "pm_only"),
+        ("po.pdf", "po", "pm_only"),
+    ]
+    with database.db_connect() as conn:
+        for file_name, category_code, visibility_code in file_rows:
+            conn.execute(
+                """
+                INSERT INTO project_files (
+                  id, project_id, original_name, current_name, extension, category_code,
+                  visibility_code, file_path, original_source_path, size_bytes, modified_at,
+                  is_3d_model, text_extracted, extracted_text, content_hash, import_method,
+                  created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 10, ?, 0, 0, NULL, ?, 'new_project_copy', ?, ?)
+                """,
+                (
+                    make_id(),
+                    project_id,
+                    file_name,
+                    file_name,
+                    "." + file_name.rsplit(".", 1)[1],
+                    category_code,
+                    visibility_code,
+                    f"C:/tmp/{file_name}",
+                    now,
+                    make_id(),
+                    now,
+                    now,
+                ),
+            )
+        conn.commit()
+
+    engineer_detail = client.get(f"/api/projects/{project_id}", headers=engineer_headers)
+    assert engineer_detail.status_code == 200, engineer_detail.text
+    assert [item["current_name"] for item in engineer_detail.json()["files"]] == ["internal.xlsx"]
+
+    pm_detail = client.get(f"/api/projects/{project_id}", headers=admin_headers)
+    assert pm_detail.status_code == 200, pm_detail.text
+    assert {item["current_name"] for item in pm_detail.json()["files"]} == {"internal.xlsx", "customer.xlsx", "po.pdf"}
 
 
 def test_configured_smtp_failure_does_not_return_dev_code_or_persist_code(client, monkeypatch):

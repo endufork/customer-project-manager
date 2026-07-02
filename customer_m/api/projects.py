@@ -70,9 +70,9 @@ def create_project(body: ProjectMutationRequest, _: dict = Depends(pm_user)) -> 
 
 
 @router.get("/{project_id}", response_model=ProjectDetailPayload)
-def project_detail(project_id: str, _: dict = Depends(current_user)) -> dict:
+def project_detail(project_id: str, user: dict = Depends(current_user)) -> dict:
     with db_connect() as conn:
-        payload = get_project_detail_payload(conn, project_id)
+        payload = get_project_detail_payload(conn, project_id, user)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
     return payload

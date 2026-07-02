@@ -14,6 +14,7 @@ from ..config import (
 )
 from ..utils import make_id, now_iso
 from .file_types import classify_file
+from .file_visibility import category_visibility
 from .lifecycle import create_event
 from .parsers import extract_text
 
@@ -120,11 +121,12 @@ def index_project_file(conn: sqlite3.Connection, project_id: str, project_folder
         ext = file_path.suffix.lower()
         is_model = 1 if ext in MODEL_EXTENSIONS else 0
         text_extracted, extracted_text = extract_text(file_path)
+        visibility_code = category_visibility(conn, category)
         conn.execute(
             """
             UPDATE project_files
             SET original_name = ?, current_name = ?, extension = ?, category_code = ?,
-              size_bytes = ?, modified_at = ?, is_3d_model = ?, text_extracted = ?,
+              visibility_code = ?, size_bytes = ?, modified_at = ?, is_3d_model = ?, text_extracted = ?,
               extracted_text = ?, content_hash = ?, updated_at = ?
             WHERE id = ?
             """,
@@ -133,6 +135,7 @@ def index_project_file(conn: sqlite3.Connection, project_id: str, project_folder
                 file_path.name,
                 ext,
                 category,
+                visibility_code,
                 stat.st_size,
                 modified_at,
                 is_model,
@@ -152,15 +155,16 @@ def index_project_file(conn: sqlite3.Connection, project_id: str, project_folder
     text_extracted, extracted_text = extract_text(file_path)
     stat = file_path.stat()
     modified_at = file_modified_at(file_path)
+    visibility_code = category_visibility(conn, category)
     file_id = make_id()
     conn.execute(
         """
         INSERT INTO project_files (
           id, project_id, original_name, current_name, extension, category_code,
-          file_path, original_source_path, size_bytes, modified_at, is_3d_model,
+          visibility_code, file_path, original_source_path, size_bytes, modified_at, is_3d_model,
           text_extracted, extracted_text, content_hash, import_method, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'new_project_copy', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'new_project_copy', ?, ?)
         """,
         (
             file_id,
@@ -169,6 +173,7 @@ def index_project_file(conn: sqlite3.Connection, project_id: str, project_folder
             file_path.name,
             ext,
             category,
+            visibility_code,
             file_path_text,
             stat.st_size,
             modified_at,
@@ -199,11 +204,12 @@ def index_project_group_file(conn: sqlite3.Connection, project_group_id: str, fi
         ext = file_path.suffix.lower()
         is_model = 1 if ext in MODEL_EXTENSIONS else 0
         text_extracted, extracted_text = extract_text(file_path)
+        visibility_code = category_visibility(conn, category)
         conn.execute(
             """
             UPDATE project_group_files
             SET original_name = ?, current_name = ?, extension = ?, category_code = ?,
-              size_bytes = ?, modified_at = ?, is_3d_model = ?, text_extracted = ?,
+              visibility_code = ?, size_bytes = ?, modified_at = ?, is_3d_model = ?, text_extracted = ?,
               extracted_text = ?, content_hash = ?, updated_at = ?
             WHERE id = ?
             """,
@@ -212,6 +218,7 @@ def index_project_group_file(conn: sqlite3.Connection, project_group_id: str, fi
                 file_path.name,
                 ext,
                 category,
+                visibility_code,
                 stat.st_size,
                 modified_at,
                 is_model,
@@ -230,14 +237,15 @@ def index_project_group_file(conn: sqlite3.Connection, project_group_id: str, fi
     text_extracted, extracted_text = extract_text(file_path)
     stat = file_path.stat()
     modified_at = file_modified_at(file_path)
+    visibility_code = category_visibility(conn, category)
     conn.execute(
         """
         INSERT INTO project_group_files (
           id, project_group_id, original_name, current_name, extension, category_code,
-          file_path, size_bytes, modified_at, is_3d_model, text_extracted,
+          visibility_code, file_path, size_bytes, modified_at, is_3d_model, text_extracted,
           extracted_text, content_hash, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             make_id(),
@@ -246,6 +254,7 @@ def index_project_group_file(conn: sqlite3.Connection, project_group_id: str, fi
             file_path.name,
             ext,
             category,
+            visibility_code,
             file_path_text,
             stat.st_size,
             modified_at,

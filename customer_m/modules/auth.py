@@ -27,7 +27,7 @@ from ..database import row_to_dict
 from ..utils import make_id, now_iso
 
 
-VALID_ROLES = ("admin", "pm", "engineer", "readonly")
+VALID_ROLES = ("admin", "pm", "engineer")
 logger = logging.getLogger(__name__)
 
 
@@ -102,13 +102,9 @@ def ensure_user(conn: sqlite3.Connection, email: str) -> dict:
         conn.execute(
             """
             INSERT INTO users (id, email, display_name, status, created_at, updated_at)
-            VALUES (?, ?, ?, 'enabled', ?, ?)
+            VALUES (?, ?, ?, 'pending', ?, ?)
             """,
             (user_id, email, default_display_name(email), now, now),
-        )
-        conn.execute(
-            "INSERT INTO user_roles (user_id, role_code, created_at) VALUES (?, 'readonly', ?)",
-            (user_id, now),
         )
     else:
         user_id = row["id"]
@@ -220,6 +216,8 @@ def login_with_code(conn: sqlite3.Connection, raw_email: str, code: str) -> dict
 
     user = ensure_user(conn, email)
     if user["status"] != "enabled":
+        if user["status"] == "pending":
+            raise ValueError("账号待管理员分配角色，请联系管理员")
         raise ValueError("该用户已停用，请联系管理员")
     token = secrets.token_urlsafe(32)
     now = _now()
@@ -334,8 +332,8 @@ def update_user(conn: sqlite3.Connection, user_id: str, data: dict) -> dict:
     if row is None:
         raise ValueError("用户不存在")
     display_name = str(data.get("display_name", row["display_name"] or "")).strip()
-    status = str(data.get("status", row["status"] or "enabled")).strip() or "enabled"
-    if status not in ("enabled", "disabled"):
+    status = str(data.get("status", row["status"] or "pending")).strip() or "pending"
+    if status not in ("pending", "enabled", "disabled"):
         raise ValueError("用户状态无效")
     now = now_iso()
     conn.execute(
@@ -347,8 +345,8 @@ def update_user(conn: sqlite3.Connection, user_id: str, data: dict) -> dict:
         if isinstance(roles, str):
             roles = [item.strip() for item in roles.split(",") if item.strip()]
         roles = [role for role in roles if role in VALID_ROLES]
-        if not roles:
-            roles = ["readonly"]
+        if status == "enabled" and not roles:
+            raise ValueError("启用用户至少需要一个角色")
         conn.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
         for role in sorted(set(roles)):
             conn.execute(
