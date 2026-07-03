@@ -78,6 +78,18 @@ def test_create_project_with_wo_creates_project_folder(client):
     assert_standard_dirs(folder)
 
 
+def test_create_project_with_group_creates_shared_folder(client):
+    headers = auth_headers(client)
+
+    created = create_project(client, headers, project_group_name="Shared Line")
+
+    detail = project_detail(client, headers, created["id"])
+    shared_folder = Path(detail["shared_folder_path"])
+
+    assert shared_folder.name == "00_共享资料"
+    assert shared_folder.is_dir()
+
+
 def test_inq_to_wo_keeps_empty_project_folder_and_standard_dirs(client):
     headers = auth_headers(client)
     created = create_project(client, headers)
@@ -151,3 +163,97 @@ def test_rename_to_wo_is_idempotent_and_repairs_missing_folder(client):
     assert payload["renamed"] is False
     assert repaired == folder
     assert_standard_dirs(repaired)
+
+
+def test_scan_all_scans_project_and_shared_folders(client):
+    headers = auth_headers(client)
+    created = create_project(client, headers, project_group_name="Scan All Line")
+    project_id = created["id"]
+    detail = project_detail(client, headers, project_id)
+    project_folder = Path(detail["project_folder_path"])
+    shared_folder = Path(detail["shared_folder_path"])
+    (project_folder / "01_输入资料" / "input.txt").write_text("project file", encoding="utf-8")
+    (shared_folder / "common.txt").write_text("shared file", encoding="utf-8")
+
+    response = client.post(f"/api/projects/{project_id}/scan-all", headers=headers, json={})
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["project"]["new_files"] == 1
+    assert payload["shared"]["new_files"] == 1
+
+
+def test_admin_global_scan_scans_all_and_removes_stale_indexes(client):
+    from customer_m import database
+    from customer_m.utils import make_id, now_iso
+
+    headers = auth_headers(client)
+    created = create_project(client, headers, project_group_name="Global Scan Line")
+    project_id = created["id"]
+    detail = project_detail(client, headers, project_id)
+    project_folder = Path(detail["project_folder_path"])
+    shared_folder = Path(detail["shared_folder_path"])
+    (project_folder / "01_输入资料" / "global-input.txt").write_text("project file", encoding="utf-8")
+    (shared_folder / "global-common.txt").write_text("shared file", encoding="utf-8")
+
+    now = now_iso()
+    with database.db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO project_files (
+              id, project_id, original_name, current_name, extension, category_code,
+              visibility_code, file_path, original_source_path, size_bytes, modified_at,
+              is_3d_model, text_extracted, extracted_text, content_hash, import_method,
+              created_at, updated_at
+            )
+            VALUES (?, ?, 'missing-project.pdf', 'missing-project.pdf', '.pdf', 'other',
+              'engineering', ?, NULL, 10, ?, 0, 0, NULL, ?, 'new_project_copy', ?, ?)
+            """,
+            (make_id(), project_id, str(project_folder / "missing-project.pdf"), now, make_id(), now, now),
+        )
+        conn.execute(
+            """
+            INSERT INTO project_group_files (
+              id, project_group_id, original_name, current_name, extension, category_code,
+              visibility_code, file_path, size_bytes, modified_at, is_3d_model,
+              text_extracted, extracted_text, content_hash, created_at, updated_at
+            )
+            VALUES (?, ?, 'missing-shared.pdf', 'missing-shared.pdf', '.pdf', 'other',
+              'engineering', ?, 10, ?, 0, 0, NULL, ?, ?, ?)
+            """,
+            (make_id(), detail["project_group_id"], str(shared_folder / "missing-shared.pdf"), now, make_id(), now, now),
+        )
+        conn.commit()
+
+    response = client.post("/api/system/global-scan", headers=headers, json={})
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["scanned_projects"] == 1
+    assert payload["scanned_shared_groups"] == 1
+    assert payload["project"]["new_files"] == 1
+    assert payload["project"]["removed_files"] == 1
+    assert payload["shared"]["new_files"] == 1
+    assert payload["shared"]["removed_files"] == 1
+    assert payload["failed_scopes"] == 0
+
+
+def test_global_scan_requires_admin(client):
+    admin_headers = auth_headers(client)
+    email = "global-scan-pm@jinxiangsz.com"
+    code = client.post("/api/auth/request-code", json={"email": email}).json()["dev_code"]
+    users_payload = client.get("/api/users", headers=admin_headers).json()
+    user = next(user for user in users_payload["users"] if user["email"] == email)
+    patch_response = client.patch(
+        f"/api/users/{user['id']}",
+        headers=admin_headers,
+        json={"display_name": "Global Scan PM", "status": "enabled", "roles": ["pm"]},
+    )
+    assert patch_response.status_code == 200, patch_response.text
+    login_response = client.post("/api/auth/login", json={"email": email, "code": code})
+    assert login_response.status_code == 200, login_response.text
+    pm_headers = {"Authorization": f"Bearer {login_response.json()['token']}"}
+
+    response = client.post("/api/system/global-scan", headers=pm_headers, json={})
+
+    assert response.status_code == 403

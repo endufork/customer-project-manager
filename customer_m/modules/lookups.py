@@ -92,4 +92,50 @@ def get_bootstrap_payload(conn: sqlite3.Connection) -> dict:
                 "SELECT id, customer_id, site_id, name, role, department FROM contacts ORDER BY name"
             )
         ],
+        "project_field_options": {
+            "departments": [
+                row["value"]
+                for row in conn.execute(
+                    """
+                    SELECT DISTINCT trim(department) AS value
+                    FROM projects
+                    WHERE department IS NOT NULL AND trim(department) <> ''
+                    ORDER BY value
+                    """
+                )
+            ],
+            "equipment_names": [
+                row["value"]
+                for row in conn.execute(
+                    """
+                    SELECT DISTINCT trim(equipment_name) AS value
+                    FROM projects
+                    WHERE equipment_name IS NOT NULL AND trim(equipment_name) <> ''
+                    ORDER BY value
+                    """
+                )
+            ],
+            "legacy_numbers": [
+                row["value"]
+                for row in conn.execute(
+                    """
+                    SELECT DISTINCT trim(related_legacy_no) AS value
+                    FROM projects
+                    WHERE related_legacy_no IS NOT NULL AND trim(related_legacy_no) <> ''
+                    ORDER BY value
+                    """
+                )
+            ],
+            "equipment_numbers": [
+                row["value"]
+                for row in conn.execute(
+                    """
+                    SELECT DISTINCT trim(equipment_no) AS value
+                    FROM projects
+                    WHERE equipment_no IS NOT NULL AND trim(equipment_no) <> ''
+                    ORDER BY value
+                    """
+                )
+            ],
+        },
     }

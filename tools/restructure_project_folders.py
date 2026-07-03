@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from customer_m.config import CATEGORY_DEFAULT_FOLDERS, STANDARD_PROJECT_FOLDERS  # noqa: E402
+from customer_m.config import CATEGORY_DEFAULT_FOLDERS, SHARED_FOLDER_NAME, STANDARD_PROJECT_FOLDERS  # noqa: E402
 from customer_m.database import db_connect, get_setting  # noqa: E402
 from customer_m.modules.folders import unique_destination  # noqa: E402
 from customer_m.utils import now_iso  # noqa: E402
@@ -58,6 +58,21 @@ def project_files(conn: sqlite3.Connection, project_id: str) -> list[sqlite3.Row
     ).fetchall()
 
 
+def active_project_groups(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT pg.id, pg.name, pg.shared_folder_path, COUNT(p.id) AS project_count
+        FROM project_groups pg
+        JOIN projects p ON p.project_group_id = pg.id
+        WHERE COALESCE(p.is_deleted, 0) = 0
+          AND pg.shared_folder_path IS NOT NULL
+          AND trim(pg.shared_folder_path) <> ''
+        GROUP BY pg.id
+        ORDER BY pg.name
+        """
+    ).fetchall()
+
+
 def is_under(path: Path, root: Path) -> bool:
     try:
         path.resolve(strict=False).relative_to(root.resolve(strict=False))
@@ -90,6 +105,25 @@ def ensure_standard_dirs(project_folder: Path, apply: bool) -> list[Path]:
         for folder in STANDARD_PROJECT_FOLDERS:
             (project_folder / folder).mkdir(parents=True, exist_ok=True)
     return missing
+
+
+def ensure_shared_dirs(conn: sqlite3.Connection, root: Path, apply: bool, summary_only: bool, moves_only: bool) -> tuple[int, int]:
+    created = 0
+    skipped = 0
+    for group in active_project_groups(conn):
+        shared_folder = Path(group["shared_folder_path"]).resolve(strict=False)
+        if shared_folder.is_dir():
+            continue
+        if shared_folder.name != SHARED_FOLDER_NAME or not is_under(shared_folder, root):
+            skipped += 1
+            print(f"SKIP shared folder outside expected structure: {group['name']} {shared_folder}")
+            continue
+        if not summary_only and not moves_only:
+            print(("CREATE" if apply else "WOULD CREATE") + f": {shared_folder}")
+        if apply:
+            shared_folder.mkdir(parents=True, exist_ok=True)
+        created += 1
+    return created, skipped
 
 
 def restructure_project(
@@ -162,6 +196,16 @@ def main() -> int:
     with db_connect() as conn:
         root = Path(get_setting(conn, "project_root_path", r"D:\01_CustomerProject")).resolve(strict=False)
         projects = active_project_rows(conn, args.project_id)
+        shared_created_dirs = 0
+        shared_skipped = 0
+        if not args.project_id:
+            shared_created_dirs, shared_skipped = ensure_shared_dirs(
+                conn,
+                root,
+                args.apply,
+                args.summary_only,
+                args.moves_only,
+            )
         total_created_dirs = 0
         total_moved = 0
         total_skipped = 0
@@ -185,6 +229,8 @@ def main() -> int:
         if args.apply:
             conn.commit()
         print(f"Project root: {root}")
+        print(f"{'Created shared dirs' if args.apply else 'Planned shared dirs to create'}: {shared_created_dirs}")
+        print(f"Skipped shared dirs: {shared_skipped}")
         print(f"Checked projects: {len(projects)}")
         print(f"{'Created dirs' if args.apply else 'Planned dirs to create'}: {total_created_dirs}")
         print(f"{'Moved' if args.apply else 'Planned moves'}: {total_moved}")

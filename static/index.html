@@ -202,7 +202,8 @@
             </label>
             <label>
               部门/业务单元
-              <input name="department" placeholder="Engineering / Maintenance / NPI" />
+              <input name="department" list="departmentOptions" placeholder="Engineering / Maintenance / NPI" />
+              <datalist id="departmentOptions"></datalist>
             </label>
           </div>
 
@@ -236,7 +237,8 @@
           <div class="grid two">
             <label>
               项目/设备/夹具名称 *
-              <input name="equipment_name" required />
+              <input name="equipment_name" list="equipmentNameOptions" required />
+              <datalist id="equipmentNameOptions"></datalist>
             </label>
             <label>
               项目性质
@@ -247,11 +249,13 @@
           <div class="grid two">
             <label>
               关联原项目/原WO号
-              <input name="related_legacy_no" placeholder="改造、夹具、备件时填写旧项目或旧WO号" />
+              <input name="related_legacy_no" list="legacyNumberOptions" placeholder="改造、夹具、备件时填写旧项目或旧WO号" />
+              <datalist id="legacyNumberOptions"></datalist>
             </label>
             <label>
               WO号/内部设备号
-              <input name="equipment_no" placeholder="正式开 WO 后填写，可后补" />
+              <input name="equipment_no" list="equipmentNoOptions" placeholder="正式开 WO 后填写，可后补" />
+              <datalist id="equipmentNoOptions"></datalist>
             </label>
           </div>
 
@@ -410,6 +414,13 @@
             <button id="refreshUsersButton" type="button" class="secondary">刷新</button>
           </div>
         </div>
+        <section class="admin-maintenance" aria-labelledby="admin-maintenance-title">
+          <div>
+            <h3 id="admin-maintenance-title">系统维护</h3>
+            <p id="globalScanStatus" class="form-hint">全局扫描只更新文件索引，不移动或删除物理文件。</p>
+          </div>
+          <button id="globalScanButton" type="button" class="secondary">全局扫描</button>
+        </section>
         <div id="userList" class="user-list">
           <div class="empty">请先以 Admin 登录</div>
         </div>

@@ -36,3 +36,29 @@
 - 剩余风险：
   - 历史上被误删的空目录可以补建；如果曾有未被数据库索引且已被误删的真实文件，代码无法自动恢复，需要从备份、NAS 快照或回收站恢复。
   - 当前修复不会移动或删除任何现有客户资料。
+
+## PL-002 历史产品/产线共享资料目录缺失
+
+- 日期：2026-07-03
+- 严重级别：中
+- 影响模块：项目资料库、项目文件夹管家、历史目录重构工具、共享资料扫描
+- 现象：
+  - 只读审计 `project_groups.shared_folder_path` 发现 13 个客户产品/生产线分组中 6 个共享资料路径不存在。
+  - 6 个缺失项均有关联项目，且产品/生产线父目录存在，缺失的是末级 `00_共享资料`。
+  - 受影响分组包括 Deflector Drawer、Rear Drum、Body Grip、Early Entry Saw and Apache Trowel、Ministud、DEWALT PUSH And Self-propelled Mover。
+- 根因：
+  - 新建和编辑项目逻辑会创建 `00_共享资料`，但历史目录重构工具只补项目叶子目录的标准子目录。
+  - 旧项目按新目录结构迁移时，工具没有校验 `project_groups.shared_folder_path`，导致历史分组中缺失的共享资料目录未被补建。
+  - 本次 PO/报价文件迁移没有移动或删除共享资料目录；缺失点位于共享目录末级，且父产品/产线目录仍存在。
+- 修复：
+  - `tools/restructure_project_folders.py` 增加 active `project_groups` 共享资料目录校验。
+  - 仅当共享路径位于项目根目录内且末级目录名为 `00_共享资料` 时才允许补建。
+  - 已执行重构工具补建 6 个缺失共享资料目录，并同步补齐新增机械/电气标准子目录。
+- 验证结果：
+  - 补建前 dry-run：`Planned shared dirs to create: 6`，`Planned moves: 0`。
+  - 执行 apply：`Created shared dirs: 6`，`Created dirs: 64`，`Moved: 0`。
+  - 补建后 dry-run：`Planned shared dirs to create: 0`，`Planned dirs to create: 0`，`Planned moves: 0`。
+  - 对 SC1288 执行项目文件扫描，结果为新增 2 个当前实际存在文件索引、移除 2 个缺失旧索引、失败 0 个。
+  - SC1288 复查结果：`total_file_indexes=10`，`missing_file_indexes=0`。
+- 剩余风险：
+  - 本次修复只补建目录，不恢复目录中曾经可能存在但已丢失的文件。

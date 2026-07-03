@@ -84,6 +84,31 @@
   height: 38px;
 }
 
+.admin-maintenance {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.admin-maintenance h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.admin-maintenance p {
+  margin: 0;
+}
+
+.admin-maintenance button {
+  flex: 0 0 auto;
+  height: 38px;
+}
+
 .user-list {
   display: grid;
   gap: 0;
@@ -236,7 +261,13 @@ body:not(.authenticated) > .detail-backdrop {
 
   .admin-heading,
   .admin-heading .heading-actions,
+  .admin-maintenance,
   .role-checks {
     grid-template-columns: 1fr;
+  }
+
+  .admin-maintenance {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

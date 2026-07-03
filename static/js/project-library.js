@@ -91,6 +91,19 @@ async function loadBootstrap() {
   $("#contactOptions").innerHTML = state.bootstrap.contacts
     .map((item) => `<option value="${escapeHtml(item.name)}"></option>`)
     .join("");
+  const fieldOptions = state.bootstrap.project_field_options || {};
+  $("#departmentOptions").innerHTML = (fieldOptions.departments || [])
+    .map((item) => `<option value="${escapeHtml(item)}"></option>`)
+    .join("");
+  $("#equipmentNameOptions").innerHTML = (fieldOptions.equipment_names || [])
+    .map((item) => `<option value="${escapeHtml(item)}"></option>`)
+    .join("");
+  $("#legacyNumberOptions").innerHTML = (fieldOptions.legacy_numbers || [])
+    .map((item) => `<option value="${escapeHtml(item)}"></option>`)
+    .join("");
+  $("#equipmentNoOptions").innerHTML = (fieldOptions.equipment_numbers || [])
+    .map((item) => `<option value="${escapeHtml(item)}"></option>`)
+    .join("");
   $("#filterGroup").innerHTML =
     `<option value="">全部集团</option>` +
     state.bootstrap.customer_groups

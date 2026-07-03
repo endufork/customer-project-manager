@@ -16,6 +16,7 @@ from ..modules.projects import (
     get_project_shared_folder_path,
     list_project_records,
     rename_project_folder_to_wo,
+    scan_project_and_shared_folders,
     scan_project_shared_folder,
     update_project_record,
 )
@@ -118,6 +119,17 @@ def scan_shared_project_folder(project_id: str, _: dict = Depends(pm_user)) -> d
     try:
         with db_connect() as conn:
             payload = scan_project_shared_folder(conn, project_id)
+            conn.commit()
+        return payload
+    except ValueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.post("/{project_id}/scan-all")
+def scan_project_and_shared(project_id: str, _: dict = Depends(pm_user)) -> dict:
+    try:
+        with db_connect() as conn:
+            payload = scan_project_and_shared_folders(conn, project_id)
             conn.commit()
         return payload
     except ValueError as exc:

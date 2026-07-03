@@ -52,7 +52,7 @@
 ### 项目资料库
 
 - `customer-project-management-requirements-v0.2.md`：当前项目资料库需求基线。
-- `new-project-entry-spec-v0.2.md`：新项目录入页面和字段规格。
+- `new-project-entry-spec-v0.2.md`：新项目录入页面、字段规格、标准目录和扫描入口。
 - `mvp-data-model-v0.2.md`：当前 MVP 数据模型说明。
 - `project-library-bug-log-v0.1.md`：项目库 bug 记录。
 - `project-status-link-plan-v0.1.md`：项目库状态与项目执行联动计划。
@@ -101,6 +101,7 @@
 - 项目资料库需求和数据模型。
 - 新项目入口。
 - 文件夹、扫描、解析和目录安全原则。
+- 项目基础信息 `input + datalist` 方向、机械/电气目录分层和当前项目一键扫描范围。
 - 工程工作台闭环。
 - 风险分层、Due Date 改期、交付物确认。
 - 项目看板和跨项目风险总览。

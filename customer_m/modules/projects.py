@@ -9,6 +9,7 @@ from .project_commands import (
     create_project_record,
     delete_project_record,
     rename_project_folder_to_wo,
+    scan_project_and_shared_folders,
     scan_project_shared_folder,
     update_project_record,
 )
@@ -33,5 +34,6 @@ __all__ = [
     "get_project_folder_path",
     "project_group_for_project",
     "get_project_shared_folder_path",
+    "scan_project_and_shared_folders",
     "scan_project_shared_folder",
 ]

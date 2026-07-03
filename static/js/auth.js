@@ -128,6 +128,7 @@ function bindAuthEvents() {
   $("#logoutButton").addEventListener("click", () => logout().catch(console.error));
   $("#navAdminButton").addEventListener("click", () => switchView("admin"));
   $("#refreshUsersButton").addEventListener("click", () => loadUsers().catch(console.error));
+  $("#globalScanButton").addEventListener("click", () => runGlobalScan().catch(console.error));
   $("#userSearchInput").addEventListener("input", debounce(() => loadUsers().catch(console.error), 300));
 }
 
@@ -221,4 +222,28 @@ async function deleteUser(card) {
   showToast("用户已删除");
   await loadBootstrap();
   await loadUsers();
+}
+
+async function runGlobalScan() {
+  const button = $("#globalScanButton");
+  const status = $("#globalScanStatus");
+  button.disabled = true;
+  status.textContent = "正在扫描全部项目和共享资料，请不要重复点击。";
+  try {
+    const result = await api("/api/system/global-scan", { method: "POST", body: "{}" });
+    const project = result.project || {};
+    const shared = result.shared || {};
+    status.textContent =
+      `扫描完成：项目 ${result.scanned_projects || 0} 个，共享资料 ${result.scanned_shared_groups || 0} 个；` +
+      `项目新增 ${project.new_files || 0}、更新 ${project.updated_files || 0}、移除索引 ${project.removed_files || 0}；` +
+      `共享新增 ${shared.new_files || 0}、更新 ${shared.updated_files || 0}、移除索引 ${shared.removed_files || 0}；` +
+      `失败范围 ${result.failed_scopes || 0} 个。`;
+    showToast("全局扫描完成");
+    await loadBootstrap();
+  } catch (error) {
+    status.textContent = error.message;
+    showToast(error.message);
+  } finally {
+    button.disabled = false;
+  }
 }

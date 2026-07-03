@@ -22,6 +22,7 @@ async function openDetail(projectId) {
         <span>把资料放入对应文件夹后，在这里更新文件索引和文件标记。</span>
       </div>
       <div class="scan-buttons">
+        <button type="button" data-action="scan-all-folders" data-id="${escapeHtml(project.id)}">一键扫描</button>
         <button type="button" data-action="scan-folder" data-id="${escapeHtml(project.id)}">扫描项目文件</button>
         ${sharedScanButton}
       </div>
@@ -56,6 +57,7 @@ async function openDetail(projectId) {
         <input type="hidden" name="quote_date" value="${escapeHtml(project.quote_date || "")}" />
         <input type="hidden" name="po_date" value="${escapeHtml(project.po_date || "")}" />
         <input type="hidden" name="actual_ship_date" value="${escapeHtml(project.actual_ship_date || "")}" />
+        <input type="hidden" name="project_name" value="${escapeHtml(project.project_name || "")}" />
         <div class="grid two">
           <label>
             客户集团
@@ -77,7 +79,7 @@ async function openDetail(projectId) {
           </label>
           <label>
             部门/业务单元
-            <input name="department" value="${escapeHtml(project.department || "")}" />
+            <input name="department" list="departmentOptions" value="${escapeHtml(project.department || "")}" />
           </label>
           <label>
             项目来源角色
@@ -97,7 +99,7 @@ async function openDetail(projectId) {
         <div class="grid two">
           <label>
             项目/设备/夹具名称 *
-            <input name="equipment_name" value="${escapeHtml(project.equipment_name || "")}" required />
+            <input name="equipment_name" list="equipmentNameOptions" value="${escapeHtml(project.equipment_name || "")}" required />
           </label>
           <label>
             项目性质
@@ -107,11 +109,11 @@ async function openDetail(projectId) {
         <div class="grid two">
           <label>
             关联原项目/原WO号
-            <input name="related_legacy_no" value="${escapeHtml(project.related_legacy_no || "")}" />
+            <input name="related_legacy_no" list="legacyNumberOptions" value="${escapeHtml(project.related_legacy_no || "")}" />
           </label>
           <label>
             WO号/内部设备号
-            <input name="equipment_no" value="${escapeHtml(project.equipment_no || "")}" />
+            <input name="equipment_no" list="equipmentNoOptions" value="${escapeHtml(project.equipment_no || "")}" />
           </label>
         </div>
         <div class="grid three">
@@ -128,16 +130,10 @@ async function openDetail(projectId) {
             <input name="status_date" type="date" value="${escapeHtml(statusDateValue(project))}" />
           </label>
         </div>
-        <div class="grid two">
-          <label>
-            预计交期
-            <input name="expected_delivery_date" type="date" value="${escapeHtml(project.expected_delivery_date || "")}" />
-          </label>
-          <label>
-            项目名称
-            <input name="project_name" value="${escapeHtml(project.project_name || "")}" />
-          </label>
-        </div>
+        <label>
+          预计交期
+          <input name="expected_delivery_date" type="date" value="${escapeHtml(project.expected_delivery_date || "")}" />
+        </label>
         <label>
           备注
           <textarea name="notes" rows="3">${escapeHtml(project.notes || "")}</textarea>
@@ -264,6 +260,18 @@ function bindDetailActions(project) {
           button.disabled = true;
           const result = await api(`/api/projects/${encodeURIComponent(projectId)}/scan`, { method: "POST", body: "{}" });
           showToast(`扫描完成：新增 ${result.new_files} 个，更新 ${result.updated_files || 0} 个，移除 ${result.removed_files || 0} 个文件记录`);
+          await loadProjects();
+          await openDetail(projectId);
+        }
+        if (action === "scan-all-folders") {
+          button.disabled = true;
+          const result = await api(`/api/projects/${encodeURIComponent(projectId)}/scan-all`, { method: "POST", body: "{}" });
+          const projectResult = result.project || {};
+          const sharedResult = result.shared || {};
+          const sharedText = sharedResult.skipped
+            ? sharedResult.reason || "未扫描共享资料"
+            : `共享新增 ${sharedResult.new_files || 0} 个，更新 ${sharedResult.updated_files || 0} 个，移除 ${sharedResult.removed_files || 0} 个`;
+          showToast(`一键扫描完成：项目新增 ${projectResult.new_files || 0} 个，更新 ${projectResult.updated_files || 0} 个，移除 ${projectResult.removed_files || 0} 个；${sharedText}`);
           await loadProjects();
           await openDetail(projectId);
         }

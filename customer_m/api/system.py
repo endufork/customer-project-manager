@@ -4,7 +4,7 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ..modules.system_maintenance import create_database_backup
+from ..modules.system_maintenance import create_database_backup, run_global_file_scan
 from .deps import current_user, require_roles
 
 
@@ -25,5 +25,13 @@ def backup_database(_: dict = Depends(admin_user)) -> dict:
         return create_database_backup()
     except ValueError as exc:
         raise _bad_request(exc) from exc
+    except sqlite3.Error as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.post("/global-scan")
+def global_file_scan(_: dict = Depends(admin_user)) -> dict:
+    try:
+        return run_global_file_scan()
     except sqlite3.Error as exc:
         raise _bad_request(exc) from exc
