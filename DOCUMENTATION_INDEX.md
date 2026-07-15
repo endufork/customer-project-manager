@@ -59,7 +59,7 @@
 ### 协作、分支和版本
 
 - `AGENTS.md`：项目级开发规则，Codex 和人工开发默认遵守。
-- `branch-change-management-v0.1.md`：分支角色、开发流程、修复同步和服务重启规则。
+- `branch-change-management-v0.1.md`：分支角色、当前分支盘点、推送与 PR 顺序、历史分支清理和服务重启规则。
 - `VERSIONING.md`：半自动版本管理规则和脚本说明。
 
 ### 项目资料库
