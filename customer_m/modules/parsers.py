@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-from ..config import TEXT_EXTENSIONS
+from .. import config
 
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,19 @@ logger = logging.getLogger(__name__)
 def extract_text(path: Path) -> tuple[int, str]:
     ext = path.suffix.lower()
     try:
-        if ext in TEXT_EXTENSIONS:
+        if path.stat().st_size > config.PARSER_MAX_BYTES:
+            logger.info(
+                "Skipped text extraction above parser limit path=%s size_bytes=%s limit_bytes=%s",
+                path,
+                path.stat().st_size,
+                config.PARSER_MAX_BYTES,
+            )
+            return 0, ""
+    except OSError:
+        logger.exception("Failed to inspect file before text extraction: %s", path)
+        return 0, ""
+    try:
+        if ext in config.TEXT_EXTENSIONS:
             return 1, path.read_text(encoding="utf-8", errors="ignore")[:200_000]
         if ext == ".docx":
             return 1, extract_docx_text(path)[:200_000]

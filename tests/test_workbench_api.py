@@ -917,3 +917,65 @@ def test_rejected_deliverable_must_be_resubmitted(client):
         json={"status": "confirmed", "confirmed_by": "PM"},
     )
     assert confirm_response.status_code == 200, confirm_response.text
+
+
+def test_deliverable_upload_streams_with_size_type_and_parse_limits(client, monkeypatch):
+    from customer_m import config, database
+
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+    monkeypatch.setattr(config, "UPLOAD_MAX_BYTES", 8)
+    monkeypatch.setattr(config, "UPLOAD_CHUNK_BYTES", 4)
+    monkeypatch.setattr(config, "PARSER_MAX_BYTES", 4)
+    monkeypatch.setattr(config, "UPLOAD_ALLOWED_EXTENSIONS", {".txt", ".step"})
+
+    def new_task(title: str) -> str:
+        response = client.post(
+            f"/api/workbench/projects/{project_id}/tasks",
+            headers=headers,
+            json={"title": title, "requires_deliverable": 1},
+        )
+        assert response.status_code == 201, response.text
+        return response.json()["id"]
+
+    oversized = client.post(
+        f"/api/workbench/tasks/{new_task('Oversized upload')}/deliverables",
+        headers=headers,
+        files={"file": ("oversized.txt", b"123456789", "text/plain")},
+    )
+    assert oversized.status_code == 413
+
+    blocked_type = client.post(
+        f"/api/workbench/tasks/{new_task('Blocked type')}/deliverables",
+        headers=headers,
+        files={"file": ("payload.exe", b"binary", "application/octet-stream")},
+    )
+    assert blocked_type.status_code == 415
+
+    large_text = client.post(
+        f"/api/workbench/tasks/{new_task('Archive text without parsing')}/deliverables",
+        headers=headers,
+        files={"file": ("large.txt", b"123456", "text/plain")},
+    )
+    assert large_text.status_code == 201, large_text.text
+
+    model = client.post(
+        f"/api/workbench/tasks/{new_task('Archive 3D model')}/deliverables",
+        headers=headers,
+        files={"file": ("fixture.step", b"123456", "application/octet-stream")},
+    )
+    assert model.status_code == 201, model.text
+
+    with database.db_connect() as conn:
+        files = {
+            row["current_name"]: row
+            for row in conn.execute(
+                "SELECT current_name, is_3d_model, text_extracted, extracted_text FROM project_files WHERE project_id = ?",
+                (project_id,),
+            ).fetchall()
+        }
+    assert "oversized.txt" not in files
+    assert files["large.txt"]["text_extracted"] == 0
+    assert not files["large.txt"]["extracted_text"]
+    assert files["fixture.step"]["is_3d_model"] == 1
+    assert files["fixture.step"]["text_extracted"] == 0

@@ -57,6 +57,14 @@ CUSTOMER_SMTP_PASSWORD
 - 生产配置不完整时应用启动失败，不允许降级返回测试验证码。
 - 生产环境关闭 FastAPI API 文档，并启用 CSP、禁止 iframe、MIME 嗅探和 Referrer 限制等基础响应头。
 
+### 上传与解析限制
+
+- `CUSTOMER_UPLOAD_MAX_MB`：单文件上限，默认 `500`。
+- `CUSTOMER_PARSER_MAX_MB`：PDF、DOCX、XLSX 和文本的解析上限，默认 `25`；超过后仍归档，但不解析正文。
+- `CUSTOMER_UPLOAD_CHUNK_MB`：流式写入分块大小，默认 `1`。
+- `CUSTOMER_UPLOAD_ALLOWED_EXTENSIONS`：逗号分隔允许扩展名。默认拒绝 EXE、脚本和未知类型；压缩包只保存，不自动解压；3D 模型不做正文解析。
+- 超限上传返回 HTTP 413，不允许的类型返回 HTTP 415；失败时删除尚未完成的目标文件，不写数据库记录。
+
 ## 3. 日志落盘
 
 应用日志默认写入：

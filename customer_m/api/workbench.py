@@ -30,6 +30,7 @@ from ..modules.workbench import (
     update_task,
 )
 from ..modules.workbench_permissions import WorkbenchPermissionError
+from ..modules.workbench_deliverables import UploadTooLargeError, UploadTypeError
 from .deps import current_user, query_as_lists, require_roles
 from .schemas import (
     DeliverableReviewRequest,
@@ -166,7 +167,7 @@ def add_template_tasks(project_id: str, body: WorkbenchTemplateRequest, _: dict 
 
 
 @router.post("/tasks/{task_id}/deliverables", status_code=status.HTTP_201_CREATED)
-async def submit_deliverable(
+def submit_deliverable(
     task_id: str,
     category_code: str = Form(default="other"),
     deliverable_type: str = Form(default=""),
@@ -176,7 +177,6 @@ async def submit_deliverable(
     user: dict = Depends(engineer_or_pm_user),
 ) -> dict:
     try:
-        content = await file.read()
         fields = {
             "category_code": category_code,
             "deliverable_type": deliverable_type,
@@ -184,11 +184,15 @@ async def submit_deliverable(
             "submitted_by": submitted_by,
         }
         with db_connect() as conn:
-            payload = submit_task_file(conn, task_id, file.filename or "upload", content, fields, user)
+            payload = submit_task_file(conn, task_id, file.filename or "upload", file.file, fields, user)
             conn.commit()
         return payload
     except WorkbenchPermissionError as exc:
         raise _forbidden(exc) from exc
+    except UploadTooLargeError as exc:
+        raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
+    except UploadTypeError as exc:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)) from exc
     except ValueError as exc:
         raise _bad_request(exc) from exc
     except sqlite3.IntegrityError as exc:

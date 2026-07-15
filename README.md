@@ -108,6 +108,8 @@ CUSTOMER_SMTP_PASSWORD
 
 生产环境缺少认证密钥或 SMTP 时服务拒绝启动，且验证码接口绝不返回 `dev_code`。生产环境默认关闭 `/docs`、`/redoc` 和 `/openapi.json`。
 
+上传策略可通过环境变量调整：`CUSTOMER_UPLOAD_MAX_MB` 默认 500 MB，`CUSTOMER_PARSER_MAX_MB` 默认 25 MB，`CUSTOMER_UPLOAD_CHUNK_MB` 默认 1 MB。`CUSTOMER_UPLOAD_ALLOWED_EXTENSIONS` 使用逗号分隔扩展名；默认允许常见工程文档、图片、压缩归档和 CAD/3D 格式，拒绝可执行文件、脚本和未知扩展名。压缩包只归档不解压，大于解析阈值的文档及 3D 模型只归档和索引元数据。
+
 访问地址：
 
 ```text

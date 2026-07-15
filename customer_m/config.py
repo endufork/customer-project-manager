@@ -30,6 +30,21 @@ SMTP_PASSWORD = os.environ.get("CUSTOMER_SMTP_PASSWORD", "").strip()
 SMTP_FROM_EMAIL = os.environ.get("CUSTOMER_SMTP_FROM_EMAIL", SMTP_USERNAME).strip()
 SMTP_FROM_NAME = os.environ.get("CUSTOMER_SMTP_FROM_NAME", "项目管理系统").strip()
 
+UPLOAD_MAX_BYTES = int(os.environ.get("CUSTOMER_UPLOAD_MAX_MB", "500")) * 1024 * 1024
+PARSER_MAX_BYTES = int(os.environ.get("CUSTOMER_PARSER_MAX_MB", "25")) * 1024 * 1024
+UPLOAD_CHUNK_BYTES = int(os.environ.get("CUSTOMER_UPLOAD_CHUNK_MB", "1")) * 1024 * 1024
+UPLOAD_ALLOWED_EXTENSIONS = {
+    extension.strip().lower()
+    for extension in os.environ.get(
+        "CUSTOMER_UPLOAD_ALLOWED_EXTENSIONS",
+        ".txt,.csv,.md,.log,.json,.xml,.yaml,.yml,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,"
+        ".png,.jpg,.jpeg,.bmp,.gif,.tif,.tiff,.webp,.svg,.msg,.eml,"
+        ".zip,.7z,.rar,.tar,.gz,.tgz,.step,.stp,.sldprt,.sldasm,.slddrw,.dwg,.dxf,"
+        ".iges,.igs,.x_t,.x_b,.prt,.asm,.catpart,.catproduct",
+    ).split(",")
+    if extension.strip()
+}
+
 
 def is_non_production_environment() -> bool:
     return APP_ENV in NON_PRODUCTION_ENVS
@@ -165,6 +180,8 @@ MODEL_EXTENSIONS = {
     ".x_b",
     ".prt",
     ".asm",
+    ".catpart",
+    ".catproduct",
 }
 
 TEXT_EXTENSIONS = {".txt", ".csv", ".md", ".log"}

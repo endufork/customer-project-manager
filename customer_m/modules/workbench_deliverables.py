@@ -1,20 +1,29 @@
 """Workbench task deliverable file workflows."""
 
+import hashlib
 import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import BinaryIO
 
-from ..config import MODEL_EXTENSIONS
+from .. import config
 from ..utils import make_id, now_iso, sanitize_path_part
 from .lifecycle import create_event
 from .parsers import extract_text
-from .scanner import sha256_file
 from .workbench_common import _nullable_text, _project_row, record_activity
 from .workbench_permissions import require_task_write
 
 
 logger = logging.getLogger(__name__)
+
+
+class UploadTooLargeError(ValueError):
+    pass
+
+
+class UploadTypeError(ValueError):
+    pass
 
 
 def _category_row(conn: sqlite3.Connection, category_code: str) -> sqlite3.Row:
@@ -38,6 +47,43 @@ def _unique_path(folder: Path, filename: str) -> Path:
         if not candidate.exists():
             return candidate
         counter += 1
+
+
+def _validate_upload_extension(filename: str) -> str:
+    extension = Path(filename).suffix.lower()
+    if not extension or extension not in config.UPLOAD_ALLOWED_EXTENSIONS:
+        raise UploadTypeError(f"不允许上传此文件类型：{extension or '无扩展名'}")
+    return extension
+
+
+def _stream_to_path(source: BinaryIO, target_path: Path) -> tuple[int, str]:
+    source.seek(0)
+    total = 0
+    digest = hashlib.sha256()
+    with target_path.open("xb") as target:
+        while True:
+            chunk = source.read(config.UPLOAD_CHUNK_BYTES)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > config.UPLOAD_MAX_BYTES:
+                raise UploadTooLargeError(
+                    f"文件超过上传上限 {config.UPLOAD_MAX_BYTES // (1024 * 1024)} MB"
+                )
+            target.write(chunk)
+            digest.update(chunk)
+    if total == 0:
+        raise ValueError("请选择要上传的文件")
+    return total, digest.hexdigest()
+
+
+def _remove_partial_upload(target_path: Path | None) -> None:
+    if target_path is None or not target_path.exists():
+        return
+    try:
+        target_path.unlink()
+    except OSError:
+        logger.exception("Failed to remove partial upload path=%s", target_path)
 
 def _refresh_project_file_flags(conn: sqlite3.Connection, project_id: str) -> None:
     flags = conn.execute(
@@ -64,11 +110,11 @@ def submit_task_file(
     conn: sqlite3.Connection,
     task_id: str,
     filename: str,
-    content: bytes,
+    source: BinaryIO,
     fields: dict,
     user: dict | None = None,
 ) -> dict:
-    if not filename or not content:
+    if not filename:
         raise ValueError("请选择要上传的文件")
     task = require_task_write(conn, task_id, user)
     project = _project_row(conn, task["project_id"])
@@ -78,19 +124,25 @@ def submit_task_file(
 
     category = _category_row(conn, (fields.get("category_code") or "other").strip() or "other")
     raw_name = Path(filename).name
+    ext = _validate_upload_extension(raw_name)
     safe_stem = sanitize_path_part(Path(raw_name).stem, "交付文件")
     suffix = Path(raw_name).suffix
     safe_name = f"{safe_stem}{suffix}"
     target_folder = project_folder / category["default_folder"]
+    target_path: Path | None = None
     try:
         target_folder.mkdir(parents=True, exist_ok=True)
         target_path = _unique_path(target_folder, safe_name)
-        target_path.write_bytes(content)
-        ext = target_path.suffix.lower()
+        streamed_size, file_hash = _stream_to_path(source, target_path)
         stat = target_path.stat()
         text_extracted, extracted_text = extract_text(target_path)
-        file_hash = sha256_file(target_path)
+        if stat.st_size != streamed_size:
+            raise OSError("上传文件写入大小校验失败")
+    except (UploadTooLargeError, UploadTypeError, ValueError):
+        _remove_partial_upload(target_path)
+        raise
     except OSError as exc:
+        _remove_partial_upload(target_path)
         logger.exception(
             "Failed to archive task deliverable task_id=%s filename=%s target_folder=%s",
             task_id,
@@ -120,7 +172,7 @@ def submit_task_file(
             str(target_path),
             stat.st_size,
             datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds"),
-            1 if ext in MODEL_EXTENSIONS else 0,
+            1 if ext in config.MODEL_EXTENSIONS else 0,
             text_extracted,
             extracted_text,
             file_hash,
