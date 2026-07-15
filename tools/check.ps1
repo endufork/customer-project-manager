@@ -156,7 +156,7 @@ function Resolve-PythonWithModule {
 function Test-Pytest {
     $python = Resolve-PythonWithModule "pytest"
     if ([string]::IsNullOrWhiteSpace($python)) {
-        throw "Pytest was not found. Install test dependencies with: python -m pip install -r requirements.txt"
+        throw "Pytest was not found. Install test dependencies with: python -m pip install -r requirements-dev.txt"
         return
     }
 

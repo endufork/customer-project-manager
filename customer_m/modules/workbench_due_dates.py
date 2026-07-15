@@ -5,6 +5,8 @@ import sqlite3
 from ..database import row_to_dict
 from ..utils import make_id, now_iso
 from .workbench_common import _date_or_none, _nullable_text, _project_area, _project_number, record_activity
+from .workbench_permissions import require_task_write
+from .notifications import notify_pm_users, notify_task_owner
 
 
 REQUEST_STATUSES = {"pending", "approved", "rejected"}
@@ -185,7 +187,7 @@ def due_date_requests_for_project(conn: sqlite3.Connection, project_id: str) -> 
 
 
 def request_due_date_change(conn: sqlite3.Connection, task_id: str, data: dict, user: dict | None) -> dict:
-    task = _task_row(conn, task_id)
+    task = require_task_write(conn, task_id, user)
     proposed_due_date = _date_or_none(data.get("proposed_due_date") or data.get("due_date"))
     if not proposed_due_date:
         raise ValueError("请选择新的 Due Date")
@@ -256,11 +258,20 @@ def request_due_date_change(conn: sqlite3.Connection, task_id: str, data: dict, 
         record_activity(conn, task["project_id"], "due_date_changed", "修改Due Date", detail, task_id=task_id)
     else:
         record_activity(conn, task["project_id"], "due_date_change_requested", "申请修改Due Date", detail, task_id=task_id)
+        notify_pm_users(
+            conn,
+            "due_date_requested",
+            "改期申请待审批",
+            f"{task['title']}：{detail}",
+            task["project_id"],
+            exclude_user_id=(user or {}).get("id"),
+        )
     return _request_detail(conn, request_id)
 
 
 def review_due_date_change(conn: sqlite3.Connection, request_id: str, data: dict, user: dict | None) -> dict:
     request = _request_row(conn, request_id)
+    task = _task_row(conn, request["task_id"])
     if request["status"] != "pending":
         raise ValueError("该改期申请已经处理")
     action = (data.get("status") or data.get("action") or "").strip().lower()
@@ -296,6 +307,14 @@ def review_due_date_change(conn: sqlite3.Connection, request_id: str, data: dict
             detail,
             task_id=request["task_id"],
         )
+        notify_task_owner(
+            conn,
+            task,
+            "due_date_reviewed",
+            "改期申请已批准",
+            f"{task['title']}：{final_due_date}",
+            exclude_user_id=(user or {}).get("id"),
+        )
     else:
         if not review_note:
             raise ValueError("驳回改期申请需要填写原因")
@@ -315,5 +334,13 @@ def review_due_date_change(conn: sqlite3.Connection, request_id: str, data: dict
             "驳回Due Date修改",
             review_note,
             task_id=request["task_id"],
+        )
+        notify_task_owner(
+            conn,
+            task,
+            "due_date_reviewed",
+            "改期申请被驳回",
+            f"{task['title']}：{review_note}",
+            exclude_user_id=(user or {}).get("id"),
         )
     return _request_detail(conn, request_id)

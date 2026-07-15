@@ -3,6 +3,7 @@
 import sqlite3
 
 from ..database import row_to_dict
+from .file_visibility import visibility_where_clause
 from .workbench_due_dates import due_date_requests_for_project, list_due_date_requests
 from .workbench_common import (
     DONE_STATUSES,
@@ -302,7 +303,11 @@ def list_workbench_tasks(conn: sqlite3.Connection, query: dict[str, list[str]]) 
     }
     return {"tasks": rows, "kpis": kpis}
 
-def list_pending_deliverables(conn: sqlite3.Connection, query: dict[str, list[str]]) -> list[dict]:
+def list_pending_deliverables(
+    conn: sqlite3.Connection,
+    query: dict[str, list[str]],
+    user: dict | None = None,
+) -> list[dict]:
     filters = ["d.status = 'submitted'", "COALESCE(p.is_deleted, 0) = 0"]
     params: list[str] = []
     search = (query.get("search", [""])[0] or "").strip()
@@ -329,6 +334,9 @@ def list_pending_deliverables(conn: sqlite3.Connection, query: dict[str, list[st
         )
         params.extend([like, like, like, like, like, like, like, like, like])
 
+    visibility_clause, visibility_params = visibility_where_clause("pf", user)
+    filters.append(visibility_clause)
+    params.extend(visibility_params)
     where = "WHERE " + " AND ".join(filters)
     rows = []
     for row in conn.execute(
@@ -530,6 +538,9 @@ def list_workbench_inbox(conn: sqlite3.Connection, query: dict[str, list[str]], 
     role = (query.get("role", ["engineer"])[0] or "engineer").strip().lower()
     if role not in {"engineer", "pm"}:
         role = "engineer"
+    user_roles = set((user or {}).get("roles") or [])
+    if role == "pm" and "pm" not in user_roles:
+        role = "engineer"
 
     owner = (query.get("owner", [""])[0] or "").strip()
     if user and not owner:
@@ -537,7 +548,7 @@ def list_workbench_inbox(conn: sqlite3.Connection, query: dict[str, list[str]], 
     else:
         task_payload = list_workbench_tasks(conn, query)
     tasks = task_payload["tasks"]
-    deliverables = list_pending_deliverables(conn, query) if role == "pm" else []
+    deliverables = list_pending_deliverables(conn, query, user) if role == "pm" else []
     task_completions = list_pending_task_completions(conn, query) if role == "pm" else []
     due_date_requests = list_due_date_requests(conn, query) if role == "pm" else []
     risk_reviews = list_pending_risk_reviews(conn, query) if role == "pm" else []
@@ -557,23 +568,29 @@ def list_workbench_inbox(conn: sqlite3.Connection, query: dict[str, list[str]], 
         "kpis": kpis,
     }
 
-def _deliverables_for_project(conn: sqlite3.Connection, project_id: str) -> list[dict]:
+def _deliverables_for_project(
+    conn: sqlite3.Connection,
+    project_id: str,
+    user: dict | None = None,
+) -> list[dict]:
+    visibility_clause, visibility_params = visibility_where_clause("pf", user)
     return [
         row_to_dict(row)
         for row in conn.execute(
-            """
+            f"""
             SELECT d.*, pf.current_name AS file_name, pf.file_path, fc.name AS category_name
             FROM task_deliverables d
             LEFT JOIN project_files pf ON pf.id = d.file_id
             LEFT JOIN file_categories fc ON fc.code = pf.category_code
             WHERE d.project_id = ?
+              AND {visibility_clause}
             ORDER BY d.submitted_at DESC
             """,
-            (project_id,),
+            [project_id, *visibility_params],
         )
     ]
 
-def get_workbench_project(conn: sqlite3.Connection, project_id: str) -> dict:
+def get_workbench_project(conn: sqlite3.Connection, project_id: str, user: dict | None = None) -> dict:
     project = _enrich_project_summary(conn, row_to_dict(_project_row(conn, project_id)))
     tasks = [
         row_to_dict(row)
@@ -598,7 +615,7 @@ def get_workbench_project(conn: sqlite3.Connection, project_id: str) -> dict:
             (project_id,),
         )
     ]
-    deliverables = _deliverables_for_project(conn, project_id)
+    deliverables = _deliverables_for_project(conn, project_id, user)
     by_task: dict[str, list[dict]] = {}
     for deliverable in deliverables:
         by_task.setdefault(deliverable["task_id"], []).append(deliverable)
@@ -643,6 +660,10 @@ def get_workbench_project(conn: sqlite3.Connection, project_id: str) -> dict:
             (project_id,),
         )
     ]
+    if "admin" not in set((user or {}).get("roles") or []):
+        for log in logs:
+            if log.get("activity_type") == "deliverable_submitted":
+                log["detail"] = None
     return {
         "project": project,
         "tasks": tasks,

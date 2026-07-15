@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 
 def auth_headers(client) -> dict[str, str]:
     email = "rongkai@jinxiangsz.com"
@@ -11,6 +13,28 @@ def auth_headers(client) -> dict[str, str]:
         json={"email": email, "code": code_payload["dev_code"]},
     ).json()
     return {"Authorization": f"Bearer {login_payload['token']}"}
+
+
+def test_production_runtime_config_fails_closed(monkeypatch):
+    from customer_m import config
+
+    monkeypatch.setattr(config, "APP_ENV", "production")
+    monkeypatch.setattr(config, "AUTH_SECRET", "local-dev-auth-secret")
+    monkeypatch.setattr(config, "SMTP_HOST", "")
+    monkeypatch.setattr(config, "SMTP_FROM_EMAIL", "")
+    monkeypatch.setattr(config, "SMTP_USERNAME", "")
+    monkeypatch.setattr(config, "SMTP_PASSWORD", "")
+
+    with pytest.raises(RuntimeError, match="生产环境配置不完整"):
+        config.validate_runtime_config()
+
+
+def test_security_headers_are_applied(client):
+    response = client.get("/")
+
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "no-referrer"
 
 
 def create_project(client, headers: dict[str, str]) -> str:

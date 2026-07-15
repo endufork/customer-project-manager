@@ -72,24 +72,45 @@ FastAPI + SQLite WAL + 本地/NAS 文件目录 + Web 前端
 
 - 企业邮箱验证码登录。
 - 当前允许域名：`jinxiangsz.com`。
-- 新用户默认只读，Admin 分配角色。
-- 角色：Admin、PM、Engineer、Readonly。
+- 新用户默认进入待分配状态，Admin 分配角色并启用后才能登录。
+- 角色：Admin、PM、Engineer。
 - 权限必须由后端校验，前端隐藏按钮只是辅助。
+- 文件可见度当前由后端文件索引过滤，最终共享目录保护等 NAS 试用时用 ACL 落地。
 
 ## 本地运行
 
-安装依赖：
+开发和测试环境安装依赖：
 
 ```bat
-python -m pip install -r requirements.txt
-npm install
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+npm ci
 ```
+
+仅运行服务时可以只安装 `requirements.txt`。显式设置的 `CUSTOMER_PROJECT_PYTHON` 优先级最高；未设置时，启动和检查脚本优先使用仓库内 `.venv`，再回退到 Codex 内置运行时或系统 Python。
 
 启动服务：
 
 ```bat
 run_server.cmd
 ```
+
+本地启动脚本会在未显式设置时使用 `CUSTOMER_PROJECT_ENV=development`，允许在 SMTP 未配置时显示测试验证码。正式环境必须显式设置：
+
+```text
+CUSTOMER_PROJECT_ENV=production
+CUSTOMER_AUTH_SECRET=至少32字符的随机值
+CUSTOMER_SMTP_HOST
+CUSTOMER_SMTP_FROM_EMAIL
+CUSTOMER_SMTP_USERNAME
+CUSTOMER_SMTP_PASSWORD
+```
+
+生产环境缺少认证密钥或 SMTP 时服务拒绝启动，且验证码接口绝不返回 `dev_code`。生产环境默认关闭 `/docs`、`/redoc` 和 `/openapi.json`。
+
+上传策略可通过环境变量调整：`CUSTOMER_UPLOAD_MAX_MB` 默认 500 MB，`CUSTOMER_PARSER_MAX_MB` 默认 25 MB，`CUSTOMER_UPLOAD_CHUNK_MB` 默认 1 MB。`CUSTOMER_UPLOAD_ALLOWED_EXTENSIONS` 使用逗号分隔扩展名；默认允许常见工程文档、图片、压缩归档和 CAD/3D 格式，拒绝可执行文件、脚本和未知扩展名。压缩包只归档不解压，大于解析阈值的文档及 3D 模型只归档和索引元数据。
+
+LAN 使用时，项目资料库和工作台只显示并复制项目/共享目录路径。用户把 UNC 路径粘贴到自己电脑的资源管理器地址栏打开；Web 服务不会在服务器上启动 Explorer。
 
 访问地址：
 
@@ -118,6 +139,23 @@ data\customer_projects.db
 ```powershell
 npm run test:e2e
 ```
+
+## 依赖维护
+
+- `requirements.in`：Python 直接运行依赖及兼容范围。
+- `requirements-dev.in`：Python 直接开发、测试依赖及兼容范围。
+- `requirements.txt`：Windows / Python 3.12 完整运行依赖锁。
+- `requirements-dev.txt`：在运行依赖锁基础上补充完整测试依赖锁。
+- `package-lock.json`：Node / Playwright 依赖锁；安装时使用 `npm ci`。
+- `.venv`：本机隔离 Python 环境，不进入 Git；未显式指定 Python 时启动脚本会自动优先使用。
+
+更新 Python 版本范围后重新解析锁文件：
+
+```powershell
+.\tools\lock-dependencies.cmd
+```
+
+锁文件必须和相关代码一起提交；不要只修改 `.in` 文件。
 
 修改后端、前端、API 或静态资源后，应重启本地服务：
 
@@ -163,15 +201,17 @@ DOCUMENTATION_INDEX.md
 
 短期优先级：
 
-1. 将“我的任务”从负责人姓名匹配逐步绑定登录账号。
-2. 做系统内通知和未读计数。
-3. 做项目库状态联动建议：工作台生成建议状态，PM 确认后应用。
-4. 继续完善报表导出、备份和团队试用运维。
+1. 在真实 NAS 目录验证 Engineer / PM / Admin ACL。
+2. 做项目库状态联动建议：工作台生成建议状态，PM 确认后应用。
+3. 团队试用前确认正式运行、SMTP、备份、RPO/RTO 和恢复责任人。
+4. 做一次可记录结果的数据库恢复演练。
+5. 试用后再决定临期/逾期定时提醒、通知保留周期和邮件通知。
 
 暂不优先做：
 
 - 复杂实时文件监听。
 - 复杂甘特图或排产。
+- 结构化报价/PO 管理、独立待办和 Excel/CSV 导出。
 - 深度采购系统写入。
 - 高级统计大屏。
 - 完整移动端。

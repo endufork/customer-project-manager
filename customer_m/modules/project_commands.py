@@ -25,7 +25,7 @@ from .folders import (
 from .lifecycle import create_default_project_todos, create_event, generate_intake_no
 from .project_queries import _project_file_flags, project_group_for_project
 from .project_rules import normalize_project_nature, validate_equipment_no
-from .scanner import scan_project_group_shared_folder
+from .scanner import scan_project_folder, scan_project_group_shared_folder
 from ..utils import make_id, now_iso
 
 def _project_input(data: dict, default_status: str = "inquiry") -> dict:
@@ -443,3 +443,27 @@ def scan_project_shared_folder(conn: sqlite3.Connection, project_id: str) -> dic
     if result["new_files"]:
         create_event(conn, project_id, "shared_folder_scanned", f"扫描共享资料，新增 {result['new_files']} 个文件")
     return result
+
+
+def scan_project_and_shared_folders(conn: sqlite3.Connection, project_id: str) -> dict:
+    project_result = scan_project_folder(conn, project_id)
+    project = conn.execute(
+        "SELECT project_group_id FROM projects WHERE id = ? AND COALESCE(is_deleted, 0) = 0",
+        (project_id,),
+    ).fetchone()
+    if project is None:
+        raise ValueError("项目不存在")
+
+    shared_result: dict = {"skipped": True, "reason": "该项目未关联客户产品/生产线"}
+    if project["project_group_id"]:
+        shared_result = scan_project_group_shared_folder(conn, project["project_group_id"])
+        if shared_result["new_files"] or shared_result["updated_files"] or shared_result["removed_files"] or shared_result["failed_files"]:
+            create_event(
+                conn,
+                project_id,
+                "shared_folder_scanned",
+                "一键扫描共享资料，新增 {new_files} 个，更新 {updated_files} 个，移除 {removed_files} 个文件记录，失败 {failed_files} 个".format(
+                    **shared_result
+                ),
+            )
+    return {"project": project_result, "shared": shared_result}

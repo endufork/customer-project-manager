@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS file_categories (
   code TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   default_folder TEXT NOT NULL,
+  default_visibility TEXT NOT NULL DEFAULT 'engineering',
   sort_order INTEGER NOT NULL,
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))
 );
@@ -165,6 +166,7 @@ CREATE TABLE IF NOT EXISTS project_group_files (
   current_name TEXT NOT NULL,
   extension TEXT,
   category_code TEXT NOT NULL,
+  visibility_code TEXT NOT NULL DEFAULT 'engineering',
   file_path TEXT NOT NULL,
   size_bytes INTEGER CHECK (size_bytes IS NULL OR size_bytes >= 0),
   modified_at TEXT,
@@ -186,6 +188,7 @@ CREATE TABLE IF NOT EXISTS project_files (
   current_name TEXT NOT NULL,
   extension TEXT,
   category_code TEXT NOT NULL,
+  visibility_code TEXT NOT NULL DEFAULT 'engineering',
   file_path TEXT NOT NULL,
   original_source_path TEXT,
   size_bytes INTEGER CHECK (size_bytes IS NULL OR size_bytes >= 0),
@@ -286,7 +289,7 @@ CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL COLLATE NOCASE UNIQUE,
   display_name TEXT,
-  status TEXT NOT NULL DEFAULT 'enabled',
+  status TEXT NOT NULL DEFAULT 'pending',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   last_login_at TEXT
@@ -319,6 +322,24 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   last_seen_at TEXT,
   revoked_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS file_scan_jobs (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+  requested_by_user_id TEXT,
+  requested_by_email TEXT,
+  total_projects INTEGER NOT NULL DEFAULT 0,
+  processed_projects INTEGER NOT NULL DEFAULT 0,
+  total_shared_groups INTEGER NOT NULL DEFAULT 0,
+  processed_shared_groups INTEGER NOT NULL DEFAULT 0,
+  result_json TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  started_at TEXT,
+  completed_at TEXT,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS quotes (
@@ -433,6 +454,8 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_user_roles_role_code ON user_roles(role_code);
 CREATE INDEX IF NOT EXISTS idx_login_codes_email ON login_codes(email);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_file_scan_jobs_status ON file_scan_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_file_scan_jobs_created_at ON file_scan_jobs(created_at);
 CREATE INDEX IF NOT EXISTS idx_quotes_project_id ON quotes(project_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_orders_project_id ON purchase_orders(project_id);
 CREATE INDEX IF NOT EXISTS idx_todos_project_id ON todos(project_id);
@@ -471,11 +494,11 @@ INSERT OR IGNORE INTO project_statuses (code, name, sort_order, is_active) VALUE
 INSERT OR IGNORE INTO file_categories (code, name, default_folder, sort_order, is_active) VALUES
 ('inquiry', '询价需求', '01_输入资料', 10, 1),
 ('solution', '方案资料', '03_方案与图纸', 20, 1),
-('internal_quote', '内部报价', '02_报价与订单', 30, 1),
-('customer_quote', '客户报价', '02_报价与订单', 40, 1),
-('po', 'PO 订单', '02_报价与订单', 50, 1),
+('internal_quote', '内部报价', '02_报价与订单/01_内部报价', 30, 1),
+('customer_quote', '客户报价', '02_报价与订单/02_对客报价', 40, 1),
+('po', 'PO 订单', '02_报价与订单/03_PO订单', 50, 1),
 ('drawing_model', '图纸模型', '03_方案与图纸', 60, 1),
-('acceptance_delivery', '验收发货', '04_交付与验收', 70, 1),
+('acceptance_delivery', '验收发货', '06_验收发货', 70, 1),
 ('communication', '沟通记录', '01_输入资料', 80, 1),
 ('other', '其他', '99_其他', 90, 1);
 

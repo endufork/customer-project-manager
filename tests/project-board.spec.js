@@ -1,16 +1,27 @@
 const { test, expect } = require("@playwright/test");
+const { execFileSync } = require("child_process");
 
-async function login(page) {
+function ensureE2eUser(email) {
+  execFileSync(
+    "powershell",
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/ensure-e2e-user.ps1", "-Email", email, "-Roles", "pm,engineer"],
+    { stdio: "inherit" },
+  );
+}
+
+async function login(page, email) {
+  ensureE2eUser(email);
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "项目管理系统" })).toBeVisible();
-  await page.locator("#loginEmailInput").fill("board.viewer@jinxiangsz.com");
+  await page.locator("#loginEmailInput").fill(email);
   await page.getByRole("button", { name: "发送验证码" }).click();
   await expect(page.locator("#loginCodeInput")).not.toHaveValue("");
   await page.getByRole("button", { name: "登录" }).click();
 }
 
 test("project board opens, filters, shows snapshot, and links to workbench", async ({ page }) => {
-  await login(page);
+  await login(page, `board.viewer.one.${process.env.CUSTOMER_PROJECT_E2E_RUN_ID}@jinxiangsz.com`);
+  await page.getByRole("button", { name: "项目看板", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "项目看板" })).toBeVisible();
   await expect(page.locator("#boardKpis .board-kpi")).toHaveCount(6);
@@ -32,7 +43,8 @@ test("project board opens, filters, shows snapshot, and links to workbench", asy
 });
 
 test("project board risk overview shows cross-project risks", async ({ page }) => {
-  await login(page);
+  await login(page, `board.viewer.two.${process.env.CUSTOMER_PROJECT_E2E_RUN_ID}@jinxiangsz.com`);
+  await page.getByRole("button", { name: "项目看板", exact: true }).click();
 
   await page.getByRole("button", { name: "风险总览" }).click();
   await expect(page.locator("#riskOverviewLayout")).toBeVisible();

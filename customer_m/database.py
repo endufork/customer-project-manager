@@ -1,6 +1,11 @@
 import sqlite3
 
 from .config import AUTH_INITIAL_ADMIN_EMAIL, CATEGORY_DEFAULT_FOLDERS, DATA_DIR, DB_PATH, SCHEMA_PATH
+from .modules.file_visibility import (
+    VISIBILITY_ENGINEERING,
+    category_visibility,
+    sync_file_category_visibility_defaults,
+)
 from .utils import make_id, now_iso
 
 def db_connect() -> sqlite3.Connection:
@@ -19,6 +24,7 @@ def init_db() -> None:
         sql = SCHEMA_PATH.read_text(encoding="utf-8")
         conn.executescript(sql)
         migrate_db(conn)
+        fail_interrupted_file_scan_jobs(conn)
         conn.execute(
             "UPDATE project_statuses SET name = ? WHERE code = ?",
             ("待补WO号", "no_equipment_no"),
@@ -46,6 +52,7 @@ def sync_file_category_defaults(conn: sqlite3.Connection) -> None:
             "UPDATE file_categories SET default_folder = ? WHERE code = ?",
             (folder, code),
         )
+    sync_file_category_visibility_defaults(conn)
 
 def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute(
@@ -106,6 +113,7 @@ def migrate_db(conn: sqlite3.Connection) -> None:
           current_name TEXT NOT NULL,
           extension TEXT,
           category_code TEXT NOT NULL,
+          visibility_code TEXT NOT NULL DEFAULT 'engineering',
           file_path TEXT NOT NULL,
           size_bytes INTEGER CHECK (size_bytes IS NULL OR size_bytes >= 0),
           modified_at TEXT,
@@ -240,7 +248,7 @@ def migrate_db(conn: sqlite3.Connection) -> None:
           id TEXT PRIMARY KEY,
           email TEXT NOT NULL COLLATE NOCASE UNIQUE,
           display_name TEXT,
-          status TEXT NOT NULL DEFAULT 'enabled',
+          status TEXT NOT NULL DEFAULT 'pending',
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
           last_login_at TEXT
@@ -287,6 +295,27 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS file_scan_jobs (
+          id TEXT PRIMARY KEY,
+          status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+          requested_by_user_id TEXT,
+          requested_by_email TEXT,
+          total_projects INTEGER NOT NULL DEFAULT 0,
+          processed_projects INTEGER NOT NULL DEFAULT 0,
+          total_shared_groups INTEGER NOT NULL DEFAULT 0,
+          processed_shared_groups INTEGER NOT NULL DEFAULT 0,
+          result_json TEXT,
+          error TEXT,
+          created_at TEXT NOT NULL,
+          started_at TEXT,
+          completed_at TEXT,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL
+        )
+        """
+    )
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS notifications (
           id TEXT PRIMARY KEY,
           user_id TEXT NOT NULL,
@@ -317,9 +346,16 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     ensure_column(conn, "projects", "is_deleted", "is_deleted INTEGER NOT NULL DEFAULT 0")
     ensure_column(conn, "projects", "deleted_at", "deleted_at TEXT")
     ensure_column(conn, "projects", "deleted_folder_path", "deleted_folder_path TEXT")
+    ensure_column(conn, "file_categories", "default_visibility", "default_visibility TEXT NOT NULL DEFAULT 'engineering'")
+    ensure_column(conn, "project_files", "visibility_code", "visibility_code TEXT NOT NULL DEFAULT 'engineering'")
+    ensure_column(conn, "project_group_files", "visibility_code", "visibility_code TEXT NOT NULL DEFAULT 'engineering'")
     ensure_column(conn, "execution_issues", "scope", "scope TEXT NOT NULL DEFAULT 'equipment'")
+    ensure_column(conn, "execution_issues", "created_by_user_id", "created_by_user_id TEXT")
     ensure_column(conn, "execution_tasks", "owner_user_id", "owner_user_id TEXT")
     ensure_column(conn, "execution_tasks", "owner_email", "owner_email TEXT")
+    sync_file_category_visibility_defaults(conn)
+    _sync_file_visibility_codes(conn)
+    _migrate_readonly_users(conn)
     conn.execute("UPDATE execution_issues SET scope = 'task' WHERE task_id IS NOT NULL AND (scope IS NULL OR scope = 'equipment')")
     conn.execute("UPDATE execution_issues SET scope = 'equipment' WHERE scope IS NULL OR trim(scope) = ''")
     conn.execute("UPDATE projects SET project_nature = ? WHERE project_nature IS NULL OR trim(project_nature) = ''", ("新设备",))
@@ -349,8 +385,10 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_groups_customer_id ON project_groups(customer_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_groups_site_id ON project_groups(site_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_group_files_group_id ON project_group_files(project_group_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_group_files_visibility_code ON project_group_files(visibility_code)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_status_date ON projects(status_date)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_is_deleted ON projects(is_deleted)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_files_visibility_code ON project_files(visibility_code)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_tasks_project_id ON execution_tasks(project_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_tasks_owner_user_id ON execution_tasks(owner_user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_tasks_owner_email ON execution_tasks(owner_email)")
@@ -367,13 +405,81 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_status ON execution_issues(status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_severity ON execution_issues(severity)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_scope ON execution_issues(scope)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_issues_created_by_user_id ON execution_issues(created_by_user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_logs_project_id ON execution_activity_logs(project_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_user_roles_role_code ON user_roles(role_code)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_login_codes_email ON login_codes(email)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_file_scan_jobs_status ON file_scan_jobs(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_file_scan_jobs_created_at ON file_scan_jobs(created_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user_status ON notifications(user_id, status)")
     ensure_initial_admin(conn)
+
+
+def fail_interrupted_file_scan_jobs(conn: sqlite3.Connection) -> None:
+    now = now_iso()
+    conn.execute(
+        """
+        UPDATE file_scan_jobs
+        SET status = 'failed',
+            error = '服务重启，后台扫描任务已中断，请重新发起扫描',
+            completed_at = ?,
+            updated_at = ?
+        WHERE status IN ('pending', 'running')
+        """,
+        (now, now),
+    )
+
+
+def _sync_file_visibility_codes(conn: sqlite3.Connection) -> None:
+    for row in conn.execute("SELECT code FROM file_categories").fetchall():
+        visibility = category_visibility(conn, row["code"])
+        conn.execute(
+            """
+            UPDATE project_files
+            SET visibility_code = ?
+            WHERE category_code = ?
+              AND (visibility_code IS NULL OR trim(visibility_code) = ? OR trim(visibility_code) = '')
+            """,
+            (visibility, row["code"], VISIBILITY_ENGINEERING),
+        )
+        conn.execute(
+            """
+            UPDATE project_group_files
+            SET visibility_code = ?
+            WHERE category_code = ?
+              AND (visibility_code IS NULL OR trim(visibility_code) = ? OR trim(visibility_code) = '')
+            """,
+            (visibility, row["code"], VISIBILITY_ENGINEERING),
+        )
+
+
+def _migrate_readonly_users(conn: sqlite3.Connection) -> None:
+    readonly_only_users = [
+        row["user_id"]
+        for row in conn.execute(
+            """
+            SELECT user_id
+            FROM user_roles
+            GROUP BY user_id
+            HAVING SUM(CASE WHEN role_code <> 'readonly' THEN 1 ELSE 0 END) = 0
+               AND SUM(CASE WHEN role_code = 'readonly' THEN 1 ELSE 0 END) > 0
+            """
+        ).fetchall()
+    ]
+    now = now_iso()
+    for user_id in readonly_only_users:
+        conn.execute(
+            "UPDATE users SET status = 'pending', updated_at = ? WHERE id = ?",
+            (now, user_id),
+        )
+        conn.execute(
+            "UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
+            (now, user_id),
+        )
+    conn.execute("DELETE FROM user_roles WHERE role_code = 'readonly'")
 
 
 def ensure_initial_admin(conn: sqlite3.Connection) -> None:

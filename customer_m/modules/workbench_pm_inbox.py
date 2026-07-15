@@ -136,9 +136,13 @@ def _filter_query(query: dict[str, list[str]]) -> dict[str, list[str]]:
     return filtered
 
 
-def list_workbench_pm_inbox(conn: sqlite3.Connection, query: dict[str, list[str]]) -> dict:
+def list_workbench_pm_inbox(
+    conn: sqlite3.Connection,
+    query: dict[str, list[str]],
+    user: dict | None = None,
+) -> dict:
     filtered_query = _filter_query(query)
-    deliverables = list_pending_deliverables(conn, filtered_query)
+    deliverables = list_pending_deliverables(conn, filtered_query, user)
     completions = list_pending_task_completions(conn, filtered_query)
     due_date_requests = list_due_date_requests(conn, filtered_query)
     risk_reviews = list_pending_risk_reviews(conn, filtered_query)

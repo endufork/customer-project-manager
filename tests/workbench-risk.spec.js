@@ -1,9 +1,16 @@
 const { test, expect } = require("@playwright/test");
+const { execFileSync } = require("child_process");
 
 test("workbench action windows open from the task action row", async ({ page }) => {
+  const email = `workbench.admin.${process.env.CUSTOMER_PROJECT_E2E_RUN_ID}@jinxiangsz.com`;
+  execFileSync(
+    "powershell",
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/ensure-e2e-user.ps1", "-Email", email, "-Roles", "admin,pm"],
+    { stdio: "inherit" },
+  );
   await page.goto("/?view=workbench");
   await expect(page.getByRole("heading", { name: "项目管理系统" })).toBeVisible();
-  await page.locator("#loginEmailInput").fill("rongkai@jinxiangsz.com");
+  await page.locator("#loginEmailInput").fill(email);
   await page.getByRole("button", { name: "发送验证码" }).click();
   await expect(page.locator("#authStatus")).toContainText(/验证码/);
   await expect(page.locator("#loginCodeInput")).not.toHaveValue("");

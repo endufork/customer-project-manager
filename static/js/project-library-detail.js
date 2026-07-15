@@ -3,7 +3,7 @@ async function openDetail(projectId) {
   const { project, files, shared_files: sharedFiles = [], events } = payload;
   const sharedButtons = project.project_group_id
     ? `
-      <button type="button" class="secondary" data-action="open-shared-folder" data-id="${escapeHtml(project.id)}">打开共享资料</button>
+      <button type="button" class="secondary" data-action="copy-path" data-path="${escapeHtml(project.shared_folder_path || "")}" data-path-label="共享资料路径">复制共享路径</button>
     `
     : "";
   const sharedScanButton = project.project_group_id
@@ -11,9 +11,8 @@ async function openDetail(projectId) {
     : "";
   $("#detailContent").innerHTML = `
     <div class="detail-actions">
-      <button type="button" data-action="open-folder" data-id="${escapeHtml(project.id)}">打开项目文件夹</button>
+      <button type="button" data-action="copy-path" data-path="${escapeHtml(project.project_folder_path || "")}" data-path-label="项目路径">复制项目路径</button>
       <button type="button" class="secondary" data-action="open-workbench" data-id="${escapeHtml(project.id)}">打开项目执行</button>
-      <button type="button" class="secondary" data-action="copy-path" data-path="${escapeHtml(project.project_folder_path || "")}">复制路径</button>
       ${sharedButtons}
     </div>
     <div class="scan-toolbar">
@@ -22,6 +21,7 @@ async function openDetail(projectId) {
         <span>把资料放入对应文件夹后，在这里更新文件索引和文件标记。</span>
       </div>
       <div class="scan-buttons">
+        <button type="button" data-action="scan-all-folders" data-id="${escapeHtml(project.id)}">一键扫描</button>
         <button type="button" data-action="scan-folder" data-id="${escapeHtml(project.id)}">扫描项目文件</button>
         ${sharedScanButton}
       </div>
@@ -56,6 +56,7 @@ async function openDetail(projectId) {
         <input type="hidden" name="quote_date" value="${escapeHtml(project.quote_date || "")}" />
         <input type="hidden" name="po_date" value="${escapeHtml(project.po_date || "")}" />
         <input type="hidden" name="actual_ship_date" value="${escapeHtml(project.actual_ship_date || "")}" />
+        <input type="hidden" name="project_name" value="${escapeHtml(project.project_name || "")}" />
         <div class="grid two">
           <label>
             客户集团
@@ -77,7 +78,7 @@ async function openDetail(projectId) {
           </label>
           <label>
             部门/业务单元
-            <input name="department" value="${escapeHtml(project.department || "")}" />
+            <input name="department" list="departmentOptions" value="${escapeHtml(project.department || "")}" />
           </label>
           <label>
             项目来源角色
@@ -97,7 +98,7 @@ async function openDetail(projectId) {
         <div class="grid two">
           <label>
             项目/设备/夹具名称 *
-            <input name="equipment_name" value="${escapeHtml(project.equipment_name || "")}" required />
+            <input name="equipment_name" list="equipmentNameOptions" value="${escapeHtml(project.equipment_name || "")}" required />
           </label>
           <label>
             项目性质
@@ -107,11 +108,11 @@ async function openDetail(projectId) {
         <div class="grid two">
           <label>
             关联原项目/原WO号
-            <input name="related_legacy_no" value="${escapeHtml(project.related_legacy_no || "")}" />
+            <input name="related_legacy_no" list="legacyNumberOptions" value="${escapeHtml(project.related_legacy_no || "")}" />
           </label>
           <label>
             WO号/内部设备号
-            <input name="equipment_no" value="${escapeHtml(project.equipment_no || "")}" />
+            <input name="equipment_no" list="equipmentNoOptions" value="${escapeHtml(project.equipment_no || "")}" />
           </label>
         </div>
         <div class="grid three">
@@ -128,16 +129,10 @@ async function openDetail(projectId) {
             <input name="status_date" type="date" value="${escapeHtml(statusDateValue(project))}" />
           </label>
         </div>
-        <div class="grid two">
-          <label>
-            预计交期
-            <input name="expected_delivery_date" type="date" value="${escapeHtml(project.expected_delivery_date || "")}" />
-          </label>
-          <label>
-            项目名称
-            <input name="project_name" value="${escapeHtml(project.project_name || "")}" />
-          </label>
-        </div>
+        <label>
+          预计交期
+          <input name="expected_delivery_date" type="date" value="${escapeHtml(project.expected_delivery_date || "")}" />
+        </label>
         <label>
           备注
           <textarea name="notes" rows="3">${escapeHtml(project.notes || "")}</textarea>
@@ -256,10 +251,6 @@ function bindDetailActions(project) {
     button.addEventListener("click", async () => {
       const action = button.dataset.action;
       try {
-        if (action === "open-folder") {
-          await api(`/api/projects/${encodeURIComponent(projectId)}/open-folder`, { method: "POST", body: "{}" });
-          showToast("已打开项目文件夹");
-        }
         if (action === "scan-folder") {
           button.disabled = true;
           const result = await api(`/api/projects/${encodeURIComponent(projectId)}/scan`, { method: "POST", body: "{}" });
@@ -267,9 +258,17 @@ function bindDetailActions(project) {
           await loadProjects();
           await openDetail(projectId);
         }
-        if (action === "open-shared-folder") {
-          await api(`/api/projects/${encodeURIComponent(projectId)}/open-shared-folder`, { method: "POST", body: "{}" });
-          showToast("已打开共享资料文件夹");
+        if (action === "scan-all-folders") {
+          button.disabled = true;
+          const result = await api(`/api/projects/${encodeURIComponent(projectId)}/scan-all`, { method: "POST", body: "{}" });
+          const projectResult = result.project || {};
+          const sharedResult = result.shared || {};
+          const sharedText = sharedResult.skipped
+            ? sharedResult.reason || "未扫描共享资料"
+            : `共享新增 ${sharedResult.new_files || 0} 个，更新 ${sharedResult.updated_files || 0} 个，移除 ${sharedResult.removed_files || 0} 个`;
+          showToast(`一键扫描完成：项目新增 ${projectResult.new_files || 0} 个，更新 ${projectResult.updated_files || 0} 个，移除 ${projectResult.removed_files || 0} 个；${sharedText}`);
+          await loadProjects();
+          await openDetail(projectId);
         }
         if (action === "scan-shared-folder") {
           button.disabled = true;
@@ -278,8 +277,10 @@ function bindDetailActions(project) {
           await openDetail(projectId);
         }
         if (action === "copy-path") {
-          await navigator.clipboard.writeText(button.dataset.path || "");
-          showToast("项目路径已复制");
+          const path = button.dataset.path || "";
+          if (!path) throw new Error("当前项目未配置可复制的网络路径");
+          await navigator.clipboard.writeText(path);
+          showToast(`${button.dataset.pathLabel || "路径"}已复制，请粘贴到资源管理器地址栏`);
         }
         if (action === "delete-project") {
           const decision = await confirmProjectDeletion();

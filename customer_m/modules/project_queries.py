@@ -4,6 +4,7 @@ import sqlite3
 
 from ..config import STATUS_DATE_FIELD_BY_STATUS, STATUS_DATE_LABELS
 from ..database import row_to_dict
+from .file_visibility import visibility_where_clause
 from .workbench_common import _enrich_project_summaries
 
 
@@ -150,7 +151,7 @@ def list_project_records(conn: sqlite3.Connection, query: dict[str, list[str]]) 
     )
     return {"projects": rows, "kpis": kpis}
 
-def get_project_detail_payload(conn: sqlite3.Connection, project_id: str) -> dict | None:
+def get_project_detail_payload(conn: sqlite3.Connection, project_id: str, user: dict | None = None) -> dict | None:
     project = row_to_dict(
         conn.execute(
             """
@@ -174,32 +175,38 @@ def get_project_detail_payload(conn: sqlite3.Connection, project_id: str) -> dic
     if project is None:
         return None
 
+    file_visibility_clause, file_visibility_params = visibility_where_clause("f", user)
     files = [
         row_to_dict(row)
         for row in conn.execute(
-            """
-            SELECT f.*, fc.name AS category_name, fc.default_folder AS category_folder
+            f"""
+            SELECT f.*, fc.name AS category_name, fc.default_folder AS category_folder,
+              COALESCE(f.visibility_code, fc.default_visibility, 'engineering') AS visibility_code
             FROM project_files f
             JOIN file_categories fc ON fc.code = f.category_code
             WHERE f.project_id = ?
+              AND {file_visibility_clause}
             ORDER BY fc.default_folder, f.file_path, f.original_name
             """,
-            (project_id,),
+            [project_id, *file_visibility_params],
         )
     ]
     shared_files = []
     if project.get("project_group_id"):
+        shared_visibility_clause, shared_visibility_params = visibility_where_clause("f", user)
         shared_files = [
             row_to_dict(row)
             for row in conn.execute(
-                """
-                SELECT f.*, fc.name AS category_name, fc.default_folder AS category_folder
+                f"""
+                SELECT f.*, fc.name AS category_name, fc.default_folder AS category_folder,
+                  COALESCE(f.visibility_code, fc.default_visibility, 'engineering') AS visibility_code
                 FROM project_group_files f
                 JOIN file_categories fc ON fc.code = f.category_code
                 WHERE f.project_group_id = ?
+                  AND {shared_visibility_clause}
                 ORDER BY fc.default_folder, f.file_path, f.original_name
                 """,
-                (project["project_group_id"],),
+                [project["project_group_id"], *shared_visibility_params],
             )
         ]
     events = [
@@ -209,6 +216,10 @@ def get_project_detail_payload(conn: sqlite3.Connection, project_id: str) -> dic
             (project_id,),
         )
     ]
+    if "admin" not in set((user or {}).get("roles") or []):
+        for event in events:
+            if event.get("event_type") == "workbench_file_submitted":
+                event["detail"] = None
     return {"project": enrich_project_status_date(project), "files": files, "shared_files": shared_files, "events": events}
 
 def _project_file_flags(conn: sqlite3.Connection, project_id: str) -> tuple[int, int, int]:

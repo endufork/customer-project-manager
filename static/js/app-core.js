@@ -23,6 +23,7 @@ const state = {
   sort: { key: "created_at", direction: "desc" },
   detailLastFocused: null,
   toastTimer: null,
+  notificationPollTimer: null,
   auth: { token: null, user: null },
   appReady: false,
 };
@@ -31,6 +32,7 @@ const $ = (selector) => document.querySelector(selector);
 const COLUMN_STORAGE_KEY = "customerProject.visibleColumns.v1";
 const WORKBENCH_OWNER_STORAGE_KEY = "customerProject.workbenchOwner.v1";
 const WORKBENCH_ROLE_STORAGE_KEY = "customerProject.workbenchRole.v1";
+const LAST_VIEW_STORAGE_PREFIX = "customerProject.lastView.v1";
 const AUTH_TOKEN_STORAGE_KEY = "customerProject.authToken.v1";
 
 function escapeHtml(value) {

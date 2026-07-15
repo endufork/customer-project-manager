@@ -3,6 +3,10 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $RepoRoot
 . (Join-Path $PSScriptRoot "runtime.ps1")
 
+if ([string]::IsNullOrWhiteSpace($env:CUSTOMER_PROJECT_ENV)) {
+    $env:CUSTOMER_PROJECT_ENV = "development"
+}
+
 function Test-PythonModule {
     param(
         [string]$Python,
@@ -24,14 +28,14 @@ function Resolve-FastApiPython {
         $candidates += $env:CUSTOMER_PROJECT_PYTHON
     }
 
+    $resolved = Resolve-Python
+    if (-not [string]::IsNullOrWhiteSpace($resolved)) {
+        $candidates += $resolved
+    }
+
     $pathPython = Get-Command python -ErrorAction SilentlyContinue
     if ($pathPython) {
         $candidates += $pathPython.Source
-    }
-
-    $bundled = Get-CodexDependencyPath "python\python.exe"
-    if (-not [string]::IsNullOrWhiteSpace($bundled)) {
-        $candidates += $bundled
     }
 
     foreach ($candidate in ($candidates | Select-Object -Unique)) {

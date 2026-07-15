@@ -9,6 +9,7 @@ from pathlib import Path
 from ..config import MODEL_EXTENSIONS
 from ..utils import make_id, now_iso
 from .file_types import classify_file
+from .file_visibility import category_visibility
 from .folders import default_folder_for, unique_destination
 from .parsers import extract_text
 from .scanner import sha256_file
@@ -70,14 +71,15 @@ def import_source_path(
             )
             raise ValueError(f"导入文件失败，请检查网络路径或权限：{exc}") from exc
         file_id = make_id()
+        visibility_code = category_visibility(conn, category)
         conn.execute(
             """
             INSERT INTO project_files (
               id, project_id, original_name, current_name, extension, category_code,
-              file_path, original_source_path, size_bytes, modified_at, is_3d_model,
+              visibility_code, file_path, original_source_path, size_bytes, modified_at, is_3d_model,
               text_extracted, extracted_text, content_hash, import_method, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new_project_copy', ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new_project_copy', ?, ?)
             """,
             (
                 file_id,
@@ -86,6 +88,7 @@ def import_source_path(
                 destination.name,
                 ext,
                 category,
+                visibility_code,
                 str(destination),
                 str(source),
                 stat.st_size,

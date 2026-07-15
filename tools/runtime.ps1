@@ -55,6 +55,11 @@ function Resolve-Python {
         return $env:CUSTOMER_PROJECT_PYTHON
     }
 
+    $projectVenv = Join-Path $PSScriptRoot "..\.venv\Scripts\python.exe"
+    if (Test-Path $projectVenv) {
+        return (Resolve-Path $projectVenv).Path
+    }
+
     $bundled = Get-CodexDependencyPath "python\python.exe"
     if (-not [string]::IsNullOrWhiteSpace($bundled)) {
         return $bundled

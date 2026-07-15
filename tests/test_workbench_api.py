@@ -39,6 +39,15 @@ def prepare_user(client, admin_headers: dict[str, str], email: str, display_name
     return payload
 
 
+def login_user_headers(client, user: dict) -> dict[str, str]:
+    response = client.post(
+        "/api/auth/login",
+        json={"email": user["email"], "code": user["_dev_code"]},
+    )
+    assert response.status_code == 200, response.text
+    return {"Authorization": f"Bearer {response.json()['token']}"}
+
+
 def create_project(client, headers: dict[str, str]) -> str:
     response = client.post(
         "/api/projects",
@@ -132,6 +141,196 @@ def test_workbench_inbox_uses_logged_in_user_binding_and_legacy_owner_fallback(c
     assert bound_task["owner_user_id"] == engineer["id"]
     assert bound_task["owner_email"] == "engineer-bound@jinxiangsz.com"
     assert bound_task["owner_name"] == "Engineer Bound"
+
+
+def test_engineer_mutations_are_limited_to_owned_bound_objects(client):
+    pm_headers = auth_headers(client)
+    engineer = prepare_user(
+        client,
+        pm_headers,
+        "engineer-owner@jinxiangsz.com",
+        "Engineer Owner",
+        ["engineer"],
+    )
+    other = prepare_user(
+        client,
+        pm_headers,
+        "engineer-cross-account@jinxiangsz.com",
+        "Engineer Cross Account",
+        ["engineer"],
+    )
+    engineer_headers = login_user_headers(client, engineer)
+    other_headers = login_user_headers(client, other)
+    project_id = create_project(client, pm_headers)
+
+    owned_task = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=pm_headers,
+        json={"title": "Owned task", "owner_user_id": engineer["id"], "requires_deliverable": 0},
+    ).json()["id"]
+    legacy_task = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=pm_headers,
+        json={"title": "Legacy task", "owner_name": "Unbound legacy owner", "requires_deliverable": 0},
+    ).json()["id"]
+
+    own_status = client.patch(
+        f"/api/workbench/tasks/{owned_task}",
+        headers=engineer_headers,
+        json={"status": "in_progress", "notes": "Started"},
+    )
+    assert own_status.status_code == 200, own_status.text
+
+    forbidden_fields = client.patch(
+        f"/api/workbench/tasks/{owned_task}",
+        headers=engineer_headers,
+        json={"title": "Engineer renamed task"},
+    )
+    assert forbidden_fields.status_code == 403
+
+    cross_account = client.patch(
+        f"/api/workbench/tasks/{owned_task}",
+        headers=other_headers,
+        json={"status": "blocked", "blocked_reason": "Should not be accepted"},
+    )
+    assert cross_account.status_code == 403
+
+    legacy_write = client.patch(
+        f"/api/workbench/tasks/{legacy_task}",
+        headers=engineer_headers,
+        json={"status": "in_progress"},
+    )
+    assert legacy_write.status_code == 403
+    assert "仅 PM" in legacy_write.json()["detail"]
+
+    cross_completion = client.post(
+        f"/api/workbench/tasks/{owned_task}/completion",
+        headers=other_headers,
+        json={"completion_note": "Cross-account completion"},
+    )
+    assert cross_completion.status_code == 403
+
+    cross_upload = client.post(
+        f"/api/workbench/tasks/{owned_task}/deliverables",
+        headers=other_headers,
+        data={"category_code": "other", "version_note": "Cross-account upload"},
+        files={"file": ("cross-account.txt", b"not allowed", "text/plain")},
+    )
+    assert cross_upload.status_code == 403
+
+    own_due_request = client.post(
+        f"/api/workbench/tasks/{owned_task}/due-date-requests",
+        headers=engineer_headers,
+        json={"proposed_due_date": "2026-07-20", "reason": "Supplier delay"},
+    )
+    assert own_due_request.status_code == 201, own_due_request.text
+
+    issue_response = client.post(
+        f"/api/workbench/projects/{project_id}/issues",
+        headers=engineer_headers,
+        json={"task_id": owned_task, "scope": "task", "title": "Owned task risk", "status": "open"},
+    )
+    assert issue_response.status_code == 201, issue_response.text
+    issue_id = issue_response.json()["id"]
+
+    cross_issue = client.patch(
+        f"/api/workbench/issues/{issue_id}",
+        headers=other_headers,
+        json={"status": "following"},
+    )
+    assert cross_issue.status_code == 403
+
+    issue_metadata = client.patch(
+        f"/api/workbench/issues/{issue_id}",
+        headers=engineer_headers,
+        json={"title": "Engineer renamed risk"},
+    )
+    assert issue_metadata.status_code == 403
+
+    own_issue_action = client.patch(
+        f"/api/workbench/issues/{issue_id}",
+        headers=engineer_headers,
+        json={"status": "resolved", "resolution": "Mitigation completed"},
+    )
+    assert own_issue_action.status_code == 200, own_issue_action.text
+
+
+def test_in_app_notifications_track_unread_and_workflow_reviews(client):
+    pm_headers = auth_headers(client)
+    engineer = prepare_user(
+        client,
+        pm_headers,
+        "notification.engineer@jinxiangsz.com",
+        "Notification Engineer",
+        ["engineer"],
+    )
+    other = prepare_user(
+        client,
+        pm_headers,
+        "notification.other@jinxiangsz.com",
+        "Notification Other",
+        ["engineer"],
+    )
+    engineer_headers = login_user_headers(client, engineer)
+    other_headers = login_user_headers(client, other)
+    project_id = create_project(client, pm_headers)
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=pm_headers,
+        json={"title": "Notification task", "owner_user_id": engineer["id"], "requires_deliverable": 0},
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+
+    engineer_notifications = client.get("/api/notifications", headers=engineer_headers)
+    assert engineer_notifications.status_code == 200
+    assert engineer_notifications.json()["unread_count"] == 1
+    assigned = engineer_notifications.json()["notifications"][0]
+    assert assigned["type"] == "task_assigned"
+
+    cross_account_read = client.patch(
+        f"/api/notifications/{assigned['id']}",
+        headers=other_headers,
+        json={"status": "read"},
+    )
+    assert cross_account_read.status_code == 404
+
+    read_response = client.patch(
+        f"/api/notifications/{assigned['id']}",
+        headers=engineer_headers,
+        json={"status": "read"},
+    )
+    assert read_response.status_code == 200
+    assert client.get("/api/notifications", headers=engineer_headers).json()["unread_count"] == 0
+
+    completion = client.post(
+        f"/api/workbench/tasks/{task_id}/completion",
+        headers=engineer_headers,
+        json={"completion_note": "Ready for PM review"},
+    )
+    assert completion.status_code == 201, completion.text
+    pm_notifications = client.get("/api/notifications", headers=pm_headers).json()
+    assert "completion_submitted" in {item["type"] for item in pm_notifications["notifications"]}
+
+    review = client.patch(
+        f"/api/workbench/tasks/{task_id}/completion",
+        headers=pm_headers,
+        json={"status": "rejected", "reject_reason": "Add verification result"},
+    )
+    assert review.status_code == 200, review.text
+    engineer_types = {
+        item["type"]
+        for item in client.get("/api/notifications", headers=engineer_headers).json()["notifications"]
+    }
+    assert "completion_reviewed" in engineer_types
+
+    read_all = client.post(
+        "/api/notifications/read-all",
+        headers=engineer_headers,
+        json={"status": "read"},
+    )
+    assert read_all.status_code == 200
+    assert client.get("/api/notifications", headers=engineer_headers).json()["unread_count"] == 0
 
 
 def test_workbench_project_list_uses_aggregated_summary(client):
@@ -401,6 +600,53 @@ def test_task_update_without_due_date_preserves_existing_due_date(client):
     assert task["title"] == "Fixture design updated"
     assert task["status"] == "in_progress"
     assert task["due_date"] == "2026-06-12"
+
+
+def test_template_due_dates_use_workdays_and_pm_can_override(client, monkeypatch):
+    from datetime import date
+
+    from customer_m.modules import workbench_tasks
+
+    class Friday(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 7, 17)
+
+    monkeypatch.setattr(workbench_tasks, "date", Friday)
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+    template_response = client.post(
+        f"/api/workbench/projects/{project_id}/templates",
+        headers=headers,
+        json={"template": "inq"},
+    )
+    assert template_response.status_code == 200, template_response.text
+
+    detail = client.get(f"/api/workbench/projects/{project_id}", headers=headers).json()
+    tasks = {task["title"]: task for task in detail["tasks"]}
+    assert tasks["澄清客户需求"]["due_date"] == "2026-07-21"
+    assert tasks["输出大致方案"]["due_date"] == "2026-07-22"
+    assert all(date.fromisoformat(task["due_date"]).weekday() < 5 for task in tasks.values())
+
+    manual_task = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={"title": "PM override task", "due_date": "2026-07-18"},
+    )
+    assert manual_task.status_code == 201, manual_task.text
+    task_id = manual_task.json()["id"]
+    override = client.post(
+        f"/api/workbench/tasks/{task_id}/due-date-requests",
+        headers=headers,
+        json={
+            "proposed_due_date": "2026-07-19",
+            "reason": "PM confirmed weekend commissioning",
+            "direct": True,
+        },
+    )
+    assert override.status_code == 201, override.text
+    assert override.json()["status"] == "approved"
+    assert override.json()["final_due_date"] == "2026-07-19"
 
 
 def test_blocked_task_auto_creates_task_issue(client):
@@ -796,3 +1042,65 @@ def test_rejected_deliverable_must_be_resubmitted(client):
         json={"status": "confirmed", "confirmed_by": "PM"},
     )
     assert confirm_response.status_code == 200, confirm_response.text
+
+
+def test_deliverable_upload_streams_with_size_type_and_parse_limits(client, monkeypatch):
+    from customer_m import config, database
+
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+    monkeypatch.setattr(config, "UPLOAD_MAX_BYTES", 8)
+    monkeypatch.setattr(config, "UPLOAD_CHUNK_BYTES", 4)
+    monkeypatch.setattr(config, "PARSER_MAX_BYTES", 4)
+    monkeypatch.setattr(config, "UPLOAD_ALLOWED_EXTENSIONS", {".txt", ".step"})
+
+    def new_task(title: str) -> str:
+        response = client.post(
+            f"/api/workbench/projects/{project_id}/tasks",
+            headers=headers,
+            json={"title": title, "requires_deliverable": 1},
+        )
+        assert response.status_code == 201, response.text
+        return response.json()["id"]
+
+    oversized = client.post(
+        f"/api/workbench/tasks/{new_task('Oversized upload')}/deliverables",
+        headers=headers,
+        files={"file": ("oversized.txt", b"123456789", "text/plain")},
+    )
+    assert oversized.status_code == 413
+
+    blocked_type = client.post(
+        f"/api/workbench/tasks/{new_task('Blocked type')}/deliverables",
+        headers=headers,
+        files={"file": ("payload.exe", b"binary", "application/octet-stream")},
+    )
+    assert blocked_type.status_code == 415
+
+    large_text = client.post(
+        f"/api/workbench/tasks/{new_task('Archive text without parsing')}/deliverables",
+        headers=headers,
+        files={"file": ("large.txt", b"123456", "text/plain")},
+    )
+    assert large_text.status_code == 201, large_text.text
+
+    model = client.post(
+        f"/api/workbench/tasks/{new_task('Archive 3D model')}/deliverables",
+        headers=headers,
+        files={"file": ("fixture.step", b"123456", "application/octet-stream")},
+    )
+    assert model.status_code == 201, model.text
+
+    with database.db_connect() as conn:
+        files = {
+            row["current_name"]: row
+            for row in conn.execute(
+                "SELECT current_name, is_3d_model, text_extracted, extracted_text FROM project_files WHERE project_id = ?",
+                (project_id,),
+            ).fetchall()
+        }
+    assert "oversized.txt" not in files
+    assert files["large.txt"]["text_extracted"] == 0
+    assert not files["large.txt"]["extracted_text"]
+    assert files["fixture.step"]["is_3d_model"] == 1
+    assert files["fixture.step"]["text_extracted"] == 0

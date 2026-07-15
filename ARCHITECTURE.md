@@ -53,6 +53,7 @@ customer_m/api/
 - `bootstrap.py`：前端启动所需下拉数据和配置。
 - `projects.py`：项目资料库 CRUD、扫描、打开文件夹、目录重命名。
 - `workbench.py`：工程工作台、任务、交付物、风险、Due Date、看板、PM 待处理。
+- `notifications.py`：当前用户通知列表、未读计数和已读状态更新。
 - `system.py`：健康检查、设置、备份等系统接口。
 - `schemas.py`：Pydantic 请求和响应模型。
 - `deps.py`：当前用户、权限、查询参数辅助。
@@ -107,6 +108,10 @@ customer_m/modules/
 - `file_import.py`：散乱文件/上传文件导入标准目录。
 - `scanner.py`：项目目录和共享资料差异扫描。
 - `parsers.py`：Word、Excel、PDF、TXT、CSV 文本提取。
+- 标准项目目录已按报价、PO、机械/电气设计资料、BOM/采购等子目录分层；新项目和新上传/导入文件按分类落入细分目录。
+- 当前项目详情支持一键扫描：调用项目文件夹扫描，并在有关联客户产品/生产线时同步扫描 `00_共享资料`。该入口仍限定在单个项目范围内。
+- Admin 页面提供后台全局扫描维护入口：任务写入 `file_scan_jobs`，后台逐个扫描有效项目文件夹和去重后的共享资料层，页面轮询进度；同一时间只运行一个任务，不开放给 PM 或 Engineer。
+- `tools/restructure_project_folders.py` 用于显式补齐历史项目标准目录和客户产品/生产线共享资料目录；不在应用启动时自动修改客户资料目录。
 
 ### 工程执行工作台
 
@@ -124,12 +129,16 @@ customer_m/modules/
 ### 权限与运维
 
 - `auth.py`：用户、角色、验证码、会话。
-- `system_maintenance.py`：备份、系统维护能力。
+- `notifications.py`：工作流通知生成、接收人选择、列表查询和已读状态。
+- `system_maintenance.py`：备份、后台扫描任务、进度持久化和系统维护能力。
 
 认证和角色边界：
 
 - 初始管理员邮箱会自动获得 `Admin + PM`，避免系统冷启动后无人分配角色。
-- 新用户默认 `Readonly`，由 Admin 显式分配角色。
+- 新用户默认进入 `pending` 状态，由 Admin 显式分配 `Admin`、`PM` 或 `Engineer` 角色并启用。
+- 当前不保留独立 `Readonly` 业务角色，避免小团队试用阶段权限模型过度复杂。
+- 只有 `enabled` 用户的未撤销会话可以通过认证；账号改为 `pending` 或 `disabled` 时立即撤销现有会话。
+- 启用账号必须至少有一个有效业务角色，历史 `readonly` 迁移会同步撤销旧会话。
 - 验证码错误次数必须在失败路径落库，达到上限后阻断继续尝试。
 - SMTP 发信失败记录日志并降级处理，不能让登录验证码接口直接崩溃。
 
@@ -158,6 +167,7 @@ static/styles.css
 - `workbench-risks.js`：风险窗口和风险闭环。
 - `workbench-board.js`：项目看板和风险总览。
 - `pm-inbox.js`：PM 待处理中心。
+- `notifications.js`：通知入口、未读计数、通知列表、已读操作和项目执行跳转。
 - `form-utils.js`、`ui-shell.js`、`workbench-utils.js`、`project-config.js`、`workbench-config.js`：通用辅助和配置。
 
 前端只按 `roles` 判断入口显示和操作能力；同时具备 `PM` 与 `Engineer` 的用户可切换工作台视角。
@@ -186,6 +196,9 @@ tests/
 - 项目搜索和项目目录流转。
 - 工作台任务、交付物、Due Date、风险、PM 待处理。
 - 项目看板和跨项目风险总览 Playwright 冒烟。
+- pending/disabled 会话失效、旧 readonly 会话迁移、启用角色校验和工作台文件权限回归。
+
+Playwright 使用 `.playwright-cache/` 下每次运行独立的数据库、项目根目录、日志目录和动态端口；测试账号准备脚本拒绝连接非测试数据库。
 
 常用验证：
 
@@ -193,6 +206,19 @@ tests/
 .\tools\check.cmd
 npm run test:e2e
 ```
+
+## 依赖边界
+
+Python 依赖分为两层：
+
+- `requirements.in` / `requirements-dev.in` 记录直接依赖和允许升级范围。
+- `requirements.txt` / `requirements-dev.txt` 锁定 Windows、Python 3.12 下的完整依赖闭包。
+
+服务启动只需要运行依赖锁；开发、单元测试和 FastAPI `TestClient` 使用开发依赖锁。锁文件通过 `tools/lock-dependencies.cmd` 从 `.in` 文件重新解析，不能依赖 FastAPI 等组件未声明的传递依赖。
+
+本地 Python 环境放在仓库 `.venv` 并排除出 Git。除非显式设置 `CUSTOMER_PROJECT_PYTHON`，运行和检查脚本优先选择该环境，避免共享 Codex Python 或系统 Python 中的包版本覆盖项目锁定版本。
+
+Node 当前只承载 Playwright E2E 测试，直接依赖和完整闭包由 `package.json`、`package-lock.json` 管理，安装使用 `npm ci`。
 
 ## 文件安全边界
 
@@ -202,6 +228,11 @@ npm run test:e2e
 - 删除项目资料必须进入系统回收站或保留原文件。
 - 扫描只更新数据库索引，不删除物理文件。
 - 目录迁移必须同步数据库路径。
+- 文件记录按 `engineering`、`pm_only`、`admin_only` 做后端可见度过滤；内部报价默认工程师可见，客户报价和 PO 默认 PM 可见。
+- 项目详情、工作台项目详情、个人待办和 PM 待处理中心共用后端文件可见度规则；不能只在单个页面隐藏文件。
+- 非管理员的执行日志和项目事件不回传交付文件名，避免日志绕过文件可见度。
+- 旧项目目录结构调整必须通过显式工具或人工确认执行，不在应用启动时自动搬动客户资料。
+- 后端过滤只能保护系统 API 和页面；直接浏览 NAS/共享盘必须依赖 NAS / Windows ACL，正式试用时再按真实目录落地。
 - NAS、UNC、权限不足、文件占用等异常必须记录日志并返回可读错误。
 
 ## 后续架构方向
@@ -209,14 +240,13 @@ npm run test:e2e
 短期：
 
 - 我的任务绑定登录账号。
-- 系统内通知。
 - 项目库状态联动建议。
 - 报表导出。
 - 备份和团队试用运维。
 
 中期：
 
-- 通知中心模块。
+- 通知保留策略、临期/逾期定时提醒和邮件增强。
 - 报表模块。
 - BOM 管理模块。
 - SMTP 邮件提醒。

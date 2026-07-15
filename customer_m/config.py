@@ -9,12 +9,18 @@ DB_PATH = Path(os.environ.get("CUSTOMER_PROJECT_DB_PATH", DATA_DIR / "customer_p
 SCHEMA_PATH = BASE_DIR / "mvp-sqlite-schema-v0.2.sql"
 LOG_DIR_PATH = os.environ.get("CUSTOMER_PROJECT_LOG_DIR", "").strip()
 
+APP_ENV = os.environ.get("CUSTOMER_PROJECT_ENV", "production").strip().lower() or "production"
+NON_PRODUCTION_ENVS = {"development", "test"}
+LOCAL_DEV_AUTH_SECRET = "local-dev-auth-secret"
+
 AUTH_EMAIL_DOMAIN = os.environ.get("CUSTOMER_AUTH_EMAIL_DOMAIN", "jinxiangsz.com").strip().lower()
 AUTH_INITIAL_ADMIN_EMAIL = os.environ.get("CUSTOMER_AUTH_INITIAL_ADMIN_EMAIL", "rongkai@jinxiangsz.com").strip().lower()
 AUTH_CODE_TTL_SECONDS = int(os.environ.get("CUSTOMER_AUTH_CODE_TTL_SECONDS", "600"))
 AUTH_CODE_RESEND_SECONDS = int(os.environ.get("CUSTOMER_AUTH_CODE_RESEND_SECONDS", "60"))
 AUTH_SESSION_DAYS = int(os.environ.get("CUSTOMER_AUTH_SESSION_DAYS", "7"))
-AUTH_SECRET = os.environ.get("CUSTOMER_AUTH_SECRET", "local-dev-auth-secret")
+AUTH_SECRET = os.environ.get("CUSTOMER_AUTH_SECRET", "").strip()
+if not AUTH_SECRET and APP_ENV in NON_PRODUCTION_ENVS:
+    AUTH_SECRET = LOCAL_DEV_AUTH_SECRET
 
 SMTP_HOST = os.environ.get("CUSTOMER_SMTP_HOST", "").strip()
 SMTP_PORT = int(os.environ.get("CUSTOMER_SMTP_PORT", "465"))
@@ -23,6 +29,48 @@ SMTP_USERNAME = os.environ.get("CUSTOMER_SMTP_USERNAME", "").strip()
 SMTP_PASSWORD = os.environ.get("CUSTOMER_SMTP_PASSWORD", "").strip()
 SMTP_FROM_EMAIL = os.environ.get("CUSTOMER_SMTP_FROM_EMAIL", SMTP_USERNAME).strip()
 SMTP_FROM_NAME = os.environ.get("CUSTOMER_SMTP_FROM_NAME", "项目管理系统").strip()
+
+UPLOAD_MAX_BYTES = int(os.environ.get("CUSTOMER_UPLOAD_MAX_MB", "500")) * 1024 * 1024
+PARSER_MAX_BYTES = int(os.environ.get("CUSTOMER_PARSER_MAX_MB", "25")) * 1024 * 1024
+UPLOAD_CHUNK_BYTES = int(os.environ.get("CUSTOMER_UPLOAD_CHUNK_MB", "1")) * 1024 * 1024
+UPLOAD_ALLOWED_EXTENSIONS = {
+    extension.strip().lower()
+    for extension in os.environ.get(
+        "CUSTOMER_UPLOAD_ALLOWED_EXTENSIONS",
+        ".txt,.csv,.md,.log,.json,.xml,.yaml,.yml,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,"
+        ".png,.jpg,.jpeg,.bmp,.gif,.tif,.tiff,.webp,.svg,.msg,.eml,"
+        ".zip,.7z,.rar,.tar,.gz,.tgz,.step,.stp,.sldprt,.sldasm,.slddrw,.dwg,.dxf,"
+        ".iges,.igs,.x_t,.x_b,.prt,.asm,.catpart,.catproduct",
+    ).split(",")
+    if extension.strip()
+}
+
+
+def is_non_production_environment() -> bool:
+    return APP_ENV in NON_PRODUCTION_ENVS
+
+
+def dev_login_code_enabled() -> bool:
+    return is_non_production_environment()
+
+
+def api_docs_enabled() -> bool:
+    return is_non_production_environment()
+
+
+def validate_runtime_config() -> None:
+    if APP_ENV not in {"production", *NON_PRODUCTION_ENVS}:
+        raise RuntimeError("CUSTOMER_PROJECT_ENV 必须为 production、development 或 test")
+    if is_non_production_environment():
+        return
+
+    errors = []
+    if len(AUTH_SECRET) < 32 or AUTH_SECRET == LOCAL_DEV_AUTH_SECRET:
+        errors.append("CUSTOMER_AUTH_SECRET 必须设置为至少 32 个字符的随机值")
+    if not (SMTP_HOST and SMTP_FROM_EMAIL and SMTP_USERNAME and SMTP_PASSWORD):
+        errors.append("生产环境必须完整配置 SMTP host、发信邮箱、用户名和密码")
+    if errors:
+        raise RuntimeError("生产环境配置不完整：" + "；".join(errors))
 
 SINGLE_DEVICE_CONTAINER = "01_独立项目"
 PROJECT_GROUP_CONTAINER = "02_客户产品项目"
@@ -61,19 +109,28 @@ STATUS_DATE_FIELD_BY_STATUS = {
 STANDARD_PROJECT_FOLDERS = (
     "01_输入资料",
     "02_报价与订单",
+    "02_报价与订单/01_内部报价",
+    "02_报价与订单/02_对客报价",
+    "02_报价与订单/03_PO订单",
     "03_方案与图纸",
-    "04_交付与验收",
+    "03_方案与图纸/01_机械",
+    "03_方案与图纸/02_电气",
+    "04_BOM与采购",
+    "04_BOM与采购/01_BOM",
+    "04_BOM与采购/02_采购商务",
+    "05_装配调试",
+    "06_验收发货",
     "99_其他",
 )
 CATEGORY_DEFAULT_FOLDERS = {
     "inquiry": "01_输入资料",
     "communication": "01_输入资料",
-    "internal_quote": "02_报价与订单",
-    "customer_quote": "02_报价与订单",
-    "po": "02_报价与订单",
+    "internal_quote": "02_报价与订单/01_内部报价",
+    "customer_quote": "02_报价与订单/02_对客报价",
+    "po": "02_报价与订单/03_PO订单",
     "solution": "03_方案与图纸",
-    "drawing_model": "03_方案与图纸",
-    "acceptance_delivery": "04_交付与验收",
+    "drawing_model": "03_方案与图纸/01_机械",
+    "acceptance_delivery": "06_验收发货",
     "other": "99_其他",
 }
 LEGACY_CATEGORY_FOLDERS = {
@@ -87,10 +144,24 @@ LEGACY_CATEGORY_FOLDERS = {
     "08_沟通记录": "communication",
     "99_其他": "other",
 }
+STANDARD_CATEGORY_FOLDERS = {
+    "01_输入资料": "inquiry",
+    "02_报价与订单/01_内部报价": "internal_quote",
+    "02_报价与订单/02_对客报价": "customer_quote",
+    "02_报价与订单/03_PO订单": "po",
+    "03_方案与图纸": "solution",
+    "03_方案与图纸/01_机械": "drawing_model",
+    "03_方案与图纸/02_电气": "drawing_model",
+    "04_BOM与采购/01_BOM": "other",
+    "04_BOM与采购/02_采购商务": "other",
+    "05_装配调试": "other",
+    "06_验收发货": "acceptance_delivery",
+    "99_其他": "other",
+}
 STANDARD_FOLDER_FALLBACK_CATEGORIES = {
     "01_输入资料": "inquiry",
     "03_方案与图纸": "solution",
-    "04_交付与验收": "acceptance_delivery",
+    "06_验收发货": "acceptance_delivery",
     "99_其他": "other",
 }
 
@@ -109,6 +180,8 @@ MODEL_EXTENSIONS = {
     ".x_b",
     ".prt",
     ".asm",
+    ".catpart",
+    ".catproduct",
 }
 
 TEXT_EXTENSIONS = {".txt", ".csv", ".md", ".log"}

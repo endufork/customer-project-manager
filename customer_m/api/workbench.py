@@ -29,6 +29,8 @@ from ..modules.workbench import (
     update_issue,
     update_task,
 )
+from ..modules.workbench_permissions import WorkbenchPermissionError
+from ..modules.workbench_deliverables import UploadTooLargeError, UploadTypeError
 from .deps import current_user, query_as_lists, require_roles
 from .schemas import (
     DeliverableReviewRequest,
@@ -54,6 +56,10 @@ def _bad_request(exc: Exception) -> HTTPException:
 
 def _integrity_error(exc: sqlite3.IntegrityError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"数据约束错误：{exc}")
+
+
+def _forbidden(exc: WorkbenchPermissionError) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
 
 def _model_data(body, *, exclude_unset: bool = False) -> dict:
@@ -95,9 +101,9 @@ def workbench_inbox(request: Request, user: dict = Depends(current_user)) -> dic
 
 
 @router.get("/pm-inbox", response_model=WorkbenchPmInboxPayload)
-def workbench_pm_inbox(request: Request, _: dict = Depends(pm_user)) -> dict:
+def workbench_pm_inbox(request: Request, user: dict = Depends(pm_user)) -> dict:
     with db_connect() as conn:
-        return list_workbench_pm_inbox(conn, query_as_lists(request))
+        return list_workbench_pm_inbox(conn, query_as_lists(request), user)
 
 
 @router.get("/tasks")
@@ -113,10 +119,10 @@ def due_date_requests(request: Request, _: dict = Depends(pm_user)) -> dict:
 
 
 @router.get("/projects/{project_id}")
-def workbench_project(project_id: str, _: dict = Depends(current_user)) -> dict:
+def workbench_project(project_id: str, user: dict = Depends(current_user)) -> dict:
     try:
         with db_connect() as conn:
-            return get_workbench_project(conn, project_id)
+            return get_workbench_project(conn, project_id, user)
     except ValueError as exc:
         raise _bad_request(exc) from exc
 
@@ -135,12 +141,14 @@ def add_task(project_id: str, body: WorkbenchTaskRequest, _: dict = Depends(pm_u
 
 
 @router.post("/projects/{project_id}/issues", status_code=status.HTTP_201_CREATED)
-def add_issue(project_id: str, body: WorkbenchIssueRequest, _: dict = Depends(engineer_or_pm_user)) -> dict:
+def add_issue(project_id: str, body: WorkbenchIssueRequest, user: dict = Depends(engineer_or_pm_user)) -> dict:
     try:
         with db_connect() as conn:
-            payload = create_issue(conn, project_id, _model_data(body))
+            payload = create_issue(conn, project_id, _model_data(body), user)
             conn.commit()
         return payload
+    except WorkbenchPermissionError as exc:
+        raise _forbidden(exc) from exc
     except ValueError as exc:
         raise _bad_request(exc) from exc
     except sqlite3.IntegrityError as exc:
@@ -159,17 +167,16 @@ def add_template_tasks(project_id: str, body: WorkbenchTemplateRequest, _: dict 
 
 
 @router.post("/tasks/{task_id}/deliverables", status_code=status.HTTP_201_CREATED)
-async def submit_deliverable(
+def submit_deliverable(
     task_id: str,
     category_code: str = Form(default="other"),
     deliverable_type: str = Form(default=""),
     version_note: str = Form(default=""),
     submitted_by: str = Form(default=""),
     file: UploadFile = File(...),
-    _: dict = Depends(engineer_or_pm_user),
+    user: dict = Depends(engineer_or_pm_user),
 ) -> dict:
     try:
-        content = await file.read()
         fields = {
             "category_code": category_code,
             "deliverable_type": deliverable_type,
@@ -177,9 +184,15 @@ async def submit_deliverable(
             "submitted_by": submitted_by,
         }
         with db_connect() as conn:
-            payload = submit_task_file(conn, task_id, file.filename or "upload", content, fields)
+            payload = submit_task_file(conn, task_id, file.filename or "upload", file.file, fields, user)
             conn.commit()
         return payload
+    except WorkbenchPermissionError as exc:
+        raise _forbidden(exc) from exc
+    except UploadTooLargeError as exc:
+        raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
+    except UploadTypeError as exc:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)) from exc
     except ValueError as exc:
         raise _bad_request(exc) from exc
     except sqlite3.IntegrityError as exc:
@@ -197,6 +210,8 @@ def add_due_date_request(
             payload = request_due_date_change(conn, task_id, _model_data(body), user)
             conn.commit()
         return payload
+    except WorkbenchPermissionError as exc:
+        raise _forbidden(exc) from exc
     except ValueError as exc:
         raise _bad_request(exc) from exc
     except sqlite3.IntegrityError as exc:
@@ -214,6 +229,8 @@ def submit_completion(
             payload = submit_task_completion(conn, task_id, _model_data(body), user)
             conn.commit()
         return payload
+    except WorkbenchPermissionError as exc:
+        raise _forbidden(exc) from exc
     except ValueError as exc:
         raise _bad_request(exc) from exc
     except sqlite3.IntegrityError as exc:
@@ -238,13 +255,15 @@ def patch_completion(
 
 
 @router.patch("/tasks/{task_id}")
-def patch_task(task_id: str, body: WorkbenchTaskRequest, _: dict = Depends(engineer_or_pm_user)) -> dict:
+def patch_task(task_id: str, body: WorkbenchTaskRequest, user: dict = Depends(engineer_or_pm_user)) -> dict:
     try:
         with db_connect() as conn:
             data = guard_regular_task_due_date_update(conn, task_id, _model_data(body, exclude_unset=True))
-            payload = update_task(conn, task_id, data)
+            payload = update_task(conn, task_id, data, user)
             conn.commit()
         return payload
+    except WorkbenchPermissionError as exc:
+        raise _forbidden(exc) from exc
     except ValueError as exc:
         raise _bad_request(exc) from exc
     except sqlite3.IntegrityError as exc:
@@ -269,6 +288,8 @@ def patch_issue(issue_id: str, body: WorkbenchIssueRequest, user: dict = Depends
             payload = update_issue(conn, issue_id, _model_data(body, exclude_unset=True), user)
             conn.commit()
         return payload
+    except WorkbenchPermissionError as exc:
+        raise _forbidden(exc) from exc
     except ValueError as exc:
         raise _bad_request(exc) from exc
     except sqlite3.IntegrityError as exc:
@@ -276,10 +297,10 @@ def patch_issue(issue_id: str, body: WorkbenchIssueRequest, user: dict = Depends
 
 
 @router.patch("/deliverables/{deliverable_id}")
-def patch_deliverable(deliverable_id: str, body: DeliverableReviewRequest, _: dict = Depends(pm_user)) -> dict:
+def patch_deliverable(deliverable_id: str, body: DeliverableReviewRequest, user: dict = Depends(pm_user)) -> dict:
     try:
         with db_connect() as conn:
-            payload = review_deliverable(conn, deliverable_id, _model_data(body))
+            payload = review_deliverable(conn, deliverable_id, _model_data(body), user)
             conn.commit()
         return payload
     except ValueError as exc:

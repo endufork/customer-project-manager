@@ -13,6 +13,8 @@
 - 支持客户集团、法人主体、工厂/站点、部门/业务单元层级。
 - 支持客户产品/生产线及共享资料。
 - 项目需求来源与 PO/采购主体可以分开记录。
+- 文件分类和文件记录增加可见度字段，用于在系统内按角色过滤报价、PO 等敏感文件。
+- 增加 `file_scan_jobs`，持久化 Admin 后台全局扫描的状态、进度、结果和失败原因。
 
 ## 2. 编号策略
 
@@ -22,6 +24,8 @@
 |---|---|---|---|---|
 | INQ号 | `intake_no` | 是 | 是 | 系统自动生成，项目创建时立即可用，用于前期工程支持 |
 | WO号/内部设备号 | `equipment_no` | 否 | 填写后唯一 | 公司内部正式执行编号，可能后续补充 |
+
+2026-07-15 确认：当前保持 INQ 与 WO 一一对应，不增加 Inquiry / Opportunity 父实体。一份报价包含多台设备时，每台设备分别建立项目和 INQ，后续分别补充 WO；共用报价和产品资料放在客户产品/生产线共享层。
 
 推荐 INQ号格式：
 
@@ -60,8 +64,15 @@ D:\01_CustomerProject\
     编号_联系人_设备名称\
       01_输入资料\
       02_报价与订单\
+        01_内部报价\
+        02_对客报价\
+        03_PO订单\
       03_方案与图纸\
-      04_交付与验收\
+      04_BOM与采购\
+        01_BOM\
+        02_采购商务\
+      05_装配调试\
+      06_验收发货\
       99_其他\
 ```
 
@@ -135,6 +146,31 @@ D:\01_CustomerProject\
 
 当项目还没有 WO号/内部设备号时，可使用该状态，或继续使用 `询价录入` 并通过“WO号为空”筛选。
 
+### 5.4 file_categories 文件分类
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| code | TEXT | 是 | 分类代码 |
+| name | TEXT | 是 | 显示名称 |
+| default_folder | TEXT | 是 | 默认归档目录 |
+| default_visibility | TEXT | 是 | 默认可见度：`engineering`、`pm_only`、`admin_only` |
+| sort_order | INTEGER | 是 | 排序 |
+| is_active | INTEGER | 是 | 是否启用 |
+
+当前默认可见度：
+
+| 分类 | 可见度 |
+|---|---|
+| 询价需求 | `engineering` |
+| 方案资料 | `engineering` |
+| 内部报价 | `engineering` |
+| 客户报价 | `pm_only` |
+| PO 订单 | `pm_only` |
+| 图纸模型 | `engineering` |
+| 验收发货 | `engineering` |
+| 沟通记录 | `engineering` |
+| 其他 | `engineering` |
+
 ## 6. 主数据表调整
 
 ### 6.1 projects 项目
@@ -191,6 +227,53 @@ D:\01_CustomerProject\
 ### 6.3 purchase_orders PO 记录
 
 字段 `currency` 改为 `currency_code`，关联 `currencies.code`。
+
+### 6.4 project_files 项目文件
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| id | TEXT | 是 | 系统主键 |
+| project_id | TEXT | 是 | 所属项目 |
+| original_name | TEXT | 是 | 原文件名 |
+| current_name | TEXT | 是 | 当前文件名 |
+| extension | TEXT | 否 | 扩展名 |
+| category_code | TEXT | 是 | 文件分类 |
+| visibility_code | TEXT | 是 | 文件可见度，默认跟随分类 |
+| file_path | TEXT | 是 | 文件路径 |
+| original_source_path | TEXT | 否 | 原始来源路径 |
+| size_bytes | INTEGER | 否 | 文件大小 |
+| modified_at | TEXT | 否 | 文件修改时间 |
+| is_3d_model | INTEGER | 是 | 是否 3D/图纸模型 |
+| text_extracted | INTEGER | 是 | 是否已提取文本 |
+| extracted_text | TEXT | 否 | 提取文本 |
+| content_hash | TEXT | 否 | 内容哈希 |
+| import_method | TEXT | 是 | 导入方式 |
+| created_at | TEXT | 是 | 创建时间 |
+| updated_at | TEXT | 是 | 更新时间 |
+
+### 6.5 project_group_files 共享文件
+
+与 `project_files` 类似，但归属于 `project_group_id`。同样使用 `visibility_code` 控制系统内可见度。
+
+当前可见度只保护系统页面和 API 返回结果；直接浏览 NAS/共享目录必须依赖 NAS / Windows ACL。
+
+### 6.6 file_scan_jobs 后台文件扫描任务
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| id | TEXT | 是 | 扫描任务主键 |
+| status | TEXT | 是 | `pending`、`running`、`completed`、`failed` |
+| requested_by_user_id | TEXT | 否 | 发起扫描的 Admin 用户 |
+| requested_by_email | TEXT | 否 | 发起人邮箱快照 |
+| total_projects | INTEGER | 是 | 项目扫描范围总数 |
+| processed_projects | INTEGER | 是 | 已处理项目数 |
+| total_shared_groups | INTEGER | 是 | 共享资料范围总数 |
+| processed_shared_groups | INTEGER | 是 | 已处理共享资料数 |
+| result_json | TEXT | 否 | 当前统计或最终扫描结果 JSON |
+| error | TEXT | 否 | 任务级失败原因 |
+| created_at / started_at / completed_at / updated_at | TEXT | 部分必填 | 任务生命周期时间 |
+
+同一时间只创建一个 `pending` 或 `running` 全局扫描任务。服务重启时，未完成任务标记为 `failed`，由 Admin 重新发起。
 
 ## 7. 当前确认配置
 

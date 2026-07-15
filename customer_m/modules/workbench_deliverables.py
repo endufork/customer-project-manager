@@ -1,24 +1,35 @@
 """Workbench task deliverable file workflows."""
 
+import hashlib
 import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import BinaryIO
 
-from ..config import MODEL_EXTENSIONS
+from .. import config
 from ..utils import make_id, now_iso, sanitize_path_part
 from .lifecycle import create_event
+from .notifications import notify_pm_users, notify_task_owner
 from .parsers import extract_text
-from .scanner import sha256_file
 from .workbench_common import _nullable_text, _project_row, record_activity
+from .workbench_permissions import require_task_write
 
 
 logger = logging.getLogger(__name__)
 
 
+class UploadTooLargeError(ValueError):
+    pass
+
+
+class UploadTypeError(ValueError):
+    pass
+
+
 def _category_row(conn: sqlite3.Connection, category_code: str) -> sqlite3.Row:
     row = conn.execute(
-        "SELECT code, name, default_folder FROM file_categories WHERE code = ? AND is_active = 1",
+        "SELECT code, name, default_folder, default_visibility FROM file_categories WHERE code = ? AND is_active = 1",
         (category_code,),
     ).fetchone()
     if row is None:
@@ -37,6 +48,43 @@ def _unique_path(folder: Path, filename: str) -> Path:
         if not candidate.exists():
             return candidate
         counter += 1
+
+
+def _validate_upload_extension(filename: str) -> str:
+    extension = Path(filename).suffix.lower()
+    if not extension or extension not in config.UPLOAD_ALLOWED_EXTENSIONS:
+        raise UploadTypeError(f"不允许上传此文件类型：{extension or '无扩展名'}")
+    return extension
+
+
+def _stream_to_path(source: BinaryIO, target_path: Path) -> tuple[int, str]:
+    source.seek(0)
+    total = 0
+    digest = hashlib.sha256()
+    with target_path.open("xb") as target:
+        while True:
+            chunk = source.read(config.UPLOAD_CHUNK_BYTES)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > config.UPLOAD_MAX_BYTES:
+                raise UploadTooLargeError(
+                    f"文件超过上传上限 {config.UPLOAD_MAX_BYTES // (1024 * 1024)} MB"
+                )
+            target.write(chunk)
+            digest.update(chunk)
+    if total == 0:
+        raise ValueError("请选择要上传的文件")
+    return total, digest.hexdigest()
+
+
+def _remove_partial_upload(target_path: Path | None) -> None:
+    if target_path is None or not target_path.exists():
+        return
+    try:
+        target_path.unlink()
+    except OSError:
+        logger.exception("Failed to remove partial upload path=%s", target_path)
 
 def _refresh_project_file_flags(conn: sqlite3.Connection, project_id: str) -> None:
     flags = conn.execute(
@@ -63,14 +111,13 @@ def submit_task_file(
     conn: sqlite3.Connection,
     task_id: str,
     filename: str,
-    content: bytes,
+    source: BinaryIO,
     fields: dict,
+    user: dict | None = None,
 ) -> dict:
-    if not filename or not content:
+    if not filename:
         raise ValueError("请选择要上传的文件")
-    task = conn.execute("SELECT * FROM execution_tasks WHERE id = ?", (task_id,)).fetchone()
-    if task is None:
-        raise ValueError("任务不存在")
+    task = require_task_write(conn, task_id, user)
     project = _project_row(conn, task["project_id"])
     project_folder = Path(project["project_folder_path"] or "")
     if not project_folder.exists() or not project_folder.is_dir():
@@ -78,19 +125,25 @@ def submit_task_file(
 
     category = _category_row(conn, (fields.get("category_code") or "other").strip() or "other")
     raw_name = Path(filename).name
+    ext = _validate_upload_extension(raw_name)
     safe_stem = sanitize_path_part(Path(raw_name).stem, "交付文件")
     suffix = Path(raw_name).suffix
     safe_name = f"{safe_stem}{suffix}"
     target_folder = project_folder / category["default_folder"]
+    target_path: Path | None = None
     try:
         target_folder.mkdir(parents=True, exist_ok=True)
         target_path = _unique_path(target_folder, safe_name)
-        target_path.write_bytes(content)
-        ext = target_path.suffix.lower()
+        streamed_size, file_hash = _stream_to_path(source, target_path)
         stat = target_path.stat()
         text_extracted, extracted_text = extract_text(target_path)
-        file_hash = sha256_file(target_path)
+        if stat.st_size != streamed_size:
+            raise OSError("上传文件写入大小校验失败")
+    except (UploadTooLargeError, UploadTypeError, ValueError):
+        _remove_partial_upload(target_path)
+        raise
     except OSError as exc:
+        _remove_partial_upload(target_path)
         logger.exception(
             "Failed to archive task deliverable task_id=%s filename=%s target_folder=%s",
             task_id,
@@ -104,10 +157,10 @@ def submit_task_file(
         """
         INSERT INTO project_files (
           id, project_id, original_name, current_name, extension, category_code,
-          file_path, original_source_path, size_bytes, modified_at, is_3d_model,
+          visibility_code, file_path, original_source_path, size_bytes, modified_at, is_3d_model,
           text_extracted, extracted_text, content_hash, import_method, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'new_project_copy', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'new_project_copy', ?, ?)
         """,
         (
             file_id,
@@ -116,10 +169,11 @@ def submit_task_file(
             target_path.name,
             ext,
             category["code"],
+            category["default_visibility"],
             str(target_path),
             stat.st_size,
             datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds"),
-            1 if ext in MODEL_EXTENSIONS else 0,
+            1 if ext in config.MODEL_EXTENSIONS else 0,
             text_extracted,
             extracted_text,
             file_hash,
@@ -167,6 +221,14 @@ def submit_task_file(
     _refresh_project_file_flags(conn, task["project_id"])
     record_activity(conn, task["project_id"], "deliverable_submitted", "提交交付文件", target_path.name, task_id=task_id)
     create_event(conn, task["project_id"], "workbench_file_submitted", "提交交付文件", target_path.name)
+    notify_pm_users(
+        conn,
+        "deliverable_submitted",
+        "交付文件待确认",
+        f"{task['title']}：{target_path.name}",
+        task["project_id"],
+        exclude_user_id=(user or {}).get("id"),
+    )
     logger.info(
         "Archived task deliverable task_id=%s project_id=%s file_id=%s path=%s",
         task_id,
@@ -182,12 +244,18 @@ def submit_task_file(
         "submitted": True,
     }
 
-def review_deliverable(conn: sqlite3.Connection, deliverable_id: str, data: dict) -> dict:
+def review_deliverable(
+    conn: sqlite3.Connection,
+    deliverable_id: str,
+    data: dict,
+    user: dict | None = None,
+) -> dict:
     row = conn.execute("SELECT * FROM task_deliverables WHERE id = ?", (deliverable_id,)).fetchone()
     if row is None:
         raise ValueError("交付物不存在")
     if row["status"] != "submitted":
         raise ValueError("只能确认或驳回待确认的交付物；驳回后必须重新提交文件")
+    task = conn.execute("SELECT * FROM execution_tasks WHERE id = ?", (row["task_id"],)).fetchone()
     action = (data.get("status") or data.get("action") or "").strip()
     now = now_iso()
     if action == "confirmed":
@@ -210,6 +278,15 @@ def review_deliverable(conn: sqlite3.Connection, deliverable_id: str, data: dict
         )
         record_activity(conn, row["project_id"], "deliverable_confirmed", "确认交付物", reviewer, task_id=row["task_id"])
         create_event(conn, row["project_id"], "workbench_file_confirmed", "确认交付物", reviewer)
+        if task:
+            notify_task_owner(
+                conn,
+                task,
+                "deliverable_reviewed",
+                "交付文件已确认",
+                task["title"],
+                exclude_user_id=(user or {}).get("id"),
+            )
         return {"id": deliverable_id, "project_id": row["project_id"], "task_id": row["task_id"], "status": "confirmed"}
     if action == "rejected":
         reason = _nullable_text(data.get("reject_reason"))
@@ -234,5 +311,14 @@ def review_deliverable(conn: sqlite3.Connection, deliverable_id: str, data: dict
         )
         record_activity(conn, row["project_id"], "deliverable_rejected", "驳回交付物", reason, task_id=row["task_id"])
         create_event(conn, row["project_id"], "workbench_file_rejected", "驳回交付物", reason)
+        if task:
+            notify_task_owner(
+                conn,
+                task,
+                "deliverable_reviewed",
+                "交付文件被驳回",
+                f"{task['title']}：{reason}",
+                exclude_user_id=(user or {}).get("id"),
+            )
         return {"id": deliverable_id, "project_id": row["project_id"], "task_id": row["task_id"], "status": "rejected"}
     raise ValueError("交付物操作无效")

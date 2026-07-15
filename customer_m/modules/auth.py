@@ -8,12 +8,12 @@ import secrets
 import smtplib
 import sqlite3
 
+from .. import config as app_config
 from ..config import (
     AUTH_CODE_RESEND_SECONDS,
     AUTH_CODE_TTL_SECONDS,
     AUTH_EMAIL_DOMAIN,
     AUTH_INITIAL_ADMIN_EMAIL,
-    AUTH_SECRET,
     AUTH_SESSION_DAYS,
     SMTP_FROM_EMAIL,
     SMTP_FROM_NAME,
@@ -27,7 +27,7 @@ from ..database import row_to_dict
 from ..utils import make_id, now_iso
 
 
-VALID_ROLES = ("admin", "pm", "engineer", "readonly")
+VALID_ROLES = ("admin", "pm", "engineer")
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +52,7 @@ def _parse_time(value: str | None) -> datetime | None:
 
 
 def _hash_value(value: str) -> str:
-    return hashlib.sha256(f"{AUTH_SECRET}:{value}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{app_config.AUTH_SECRET}:{value}".encode("utf-8")).hexdigest()
 
 
 def _smtp_configured() -> bool:
@@ -102,13 +102,9 @@ def ensure_user(conn: sqlite3.Connection, email: str) -> dict:
         conn.execute(
             """
             INSERT INTO users (id, email, display_name, status, created_at, updated_at)
-            VALUES (?, ?, ?, 'enabled', ?, ?)
+            VALUES (?, ?, ?, 'pending', ?, ?)
             """,
             (user_id, email, default_display_name(email), now, now),
-        )
-        conn.execute(
-            "INSERT INTO user_roles (user_id, role_code, created_at) VALUES (?, 'readonly', ?)",
-            (user_id, now),
         )
     else:
         user_id = row["id"]
@@ -127,6 +123,9 @@ def ensure_user(conn: sqlite3.Connection, email: str) -> dict:
 
 def request_login_code(conn: sqlite3.Connection, raw_email: str) -> dict:
     email = normalize_email(raw_email)
+    smtp_configured = _smtp_configured()
+    if not smtp_configured and not app_config.dev_login_code_enabled():
+        raise ValueError("生产环境 SMTP 未配置，登录验证码不可用，请联系管理员")
     ensure_user(conn, email)
     latest = conn.execute(
         """
@@ -152,7 +151,6 @@ def request_login_code(conn: sqlite3.Connection, raw_email: str) -> dict:
         """,
         (make_id(), email, _hash_value(f"{email}:{code}"), expires_at.isoformat(timespec="seconds"), created_at.isoformat(timespec="seconds")),
     )
-    smtp_configured = _smtp_configured()
     sent = send_login_code_email(email, code)
     if smtp_configured and not sent:
         raise ValueError("验证码邮件发送失败，请稍后再试或联系管理员")
@@ -220,6 +218,8 @@ def login_with_code(conn: sqlite3.Connection, raw_email: str, code: str) -> dict
 
     user = ensure_user(conn, email)
     if user["status"] != "enabled":
+        if user["status"] == "pending":
+            raise ValueError("账号待管理员分配角色，请联系管理员")
         raise ValueError("该用户已停用，请联系管理员")
     token = secrets.token_urlsafe(32)
     now = _now()
@@ -251,8 +251,11 @@ def authenticate_token(conn: sqlite3.Connection, token: str | None) -> dict | No
     expires_at = _parse_time(row["expires_at"])
     if expires_at is None or expires_at < _now():
         return None
+    user = user_payload(conn, row["user_id"])
+    if user is None or user.get("status") != "enabled":
+        return None
     conn.execute("UPDATE auth_sessions SET last_seen_at = ? WHERE id = ?", (now_iso(), row["id"]))
-    return user_payload(conn, row["user_id"])
+    return user
 
 
 def revoke_token(conn: sqlite3.Connection, token: str | None) -> None:
@@ -334,27 +337,44 @@ def update_user(conn: sqlite3.Connection, user_id: str, data: dict) -> dict:
     if row is None:
         raise ValueError("用户不存在")
     display_name = str(data.get("display_name", row["display_name"] or "")).strip()
-    status = str(data.get("status", row["status"] or "enabled")).strip() or "enabled"
-    if status not in ("enabled", "disabled"):
+    status = str(data.get("status", row["status"] or "pending")).strip() or "pending"
+    if status not in ("pending", "enabled", "disabled"):
         raise ValueError("用户状态无效")
+    existing_roles = [
+        item["role_code"]
+        for item in conn.execute(
+            "SELECT role_code FROM user_roles WHERE user_id = ? ORDER BY role_code",
+            (user_id,),
+        )
+    ]
+    roles = existing_roles
+    if "roles" in data:
+        raw_roles = data.get("roles", [])
+        if isinstance(raw_roles, str):
+            raw_roles = [item.strip() for item in raw_roles.split(",") if item.strip()]
+        invalid_roles = [role for role in raw_roles if role not in VALID_ROLES]
+        if invalid_roles:
+            raise ValueError(f"用户角色无效：{', '.join(invalid_roles)}")
+        roles = sorted(set(raw_roles))
+    if status == "enabled" and not roles:
+        raise ValueError("启用用户至少需要一个角色")
     now = now_iso()
     conn.execute(
         "UPDATE users SET display_name = ?, status = ?, updated_at = ? WHERE id = ?",
         (display_name, status, now, user_id),
     )
     if "roles" in data:
-        roles = data.get("roles", [])
-        if isinstance(roles, str):
-            roles = [item.strip() for item in roles.split(",") if item.strip()]
-        roles = [role for role in roles if role in VALID_ROLES]
-        if not roles:
-            roles = ["readonly"]
         conn.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
-        for role in sorted(set(roles)):
+        for role in roles:
             conn.execute(
                 "INSERT INTO user_roles (user_id, role_code, created_at) VALUES (?, ?, ?)",
                 (user_id, role, now),
             )
+    if status != "enabled":
+        conn.execute(
+            "UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
+            (now, user_id),
+        )
     payload = user_payload(conn, user_id)
     if payload is None:
         raise ValueError("用户不存在")
