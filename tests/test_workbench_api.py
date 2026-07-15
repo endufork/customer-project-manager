@@ -39,6 +39,15 @@ def prepare_user(client, admin_headers: dict[str, str], email: str, display_name
     return payload
 
 
+def login_user_headers(client, user: dict) -> dict[str, str]:
+    response = client.post(
+        "/api/auth/login",
+        json={"email": user["email"], "code": user["_dev_code"]},
+    )
+    assert response.status_code == 200, response.text
+    return {"Authorization": f"Bearer {response.json()['token']}"}
+
+
 def create_project(client, headers: dict[str, str]) -> str:
     response = client.post(
         "/api/projects",
@@ -132,6 +141,118 @@ def test_workbench_inbox_uses_logged_in_user_binding_and_legacy_owner_fallback(c
     assert bound_task["owner_user_id"] == engineer["id"]
     assert bound_task["owner_email"] == "engineer-bound@jinxiangsz.com"
     assert bound_task["owner_name"] == "Engineer Bound"
+
+
+def test_engineer_mutations_are_limited_to_owned_bound_objects(client):
+    pm_headers = auth_headers(client)
+    engineer = prepare_user(
+        client,
+        pm_headers,
+        "engineer-owner@jinxiangsz.com",
+        "Engineer Owner",
+        ["engineer"],
+    )
+    other = prepare_user(
+        client,
+        pm_headers,
+        "engineer-cross-account@jinxiangsz.com",
+        "Engineer Cross Account",
+        ["engineer"],
+    )
+    engineer_headers = login_user_headers(client, engineer)
+    other_headers = login_user_headers(client, other)
+    project_id = create_project(client, pm_headers)
+
+    owned_task = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=pm_headers,
+        json={"title": "Owned task", "owner_user_id": engineer["id"], "requires_deliverable": 0},
+    ).json()["id"]
+    legacy_task = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=pm_headers,
+        json={"title": "Legacy task", "owner_name": "Unbound legacy owner", "requires_deliverable": 0},
+    ).json()["id"]
+
+    own_status = client.patch(
+        f"/api/workbench/tasks/{owned_task}",
+        headers=engineer_headers,
+        json={"status": "in_progress", "notes": "Started"},
+    )
+    assert own_status.status_code == 200, own_status.text
+
+    forbidden_fields = client.patch(
+        f"/api/workbench/tasks/{owned_task}",
+        headers=engineer_headers,
+        json={"title": "Engineer renamed task"},
+    )
+    assert forbidden_fields.status_code == 403
+
+    cross_account = client.patch(
+        f"/api/workbench/tasks/{owned_task}",
+        headers=other_headers,
+        json={"status": "blocked", "blocked_reason": "Should not be accepted"},
+    )
+    assert cross_account.status_code == 403
+
+    legacy_write = client.patch(
+        f"/api/workbench/tasks/{legacy_task}",
+        headers=engineer_headers,
+        json={"status": "in_progress"},
+    )
+    assert legacy_write.status_code == 403
+    assert "仅 PM" in legacy_write.json()["detail"]
+
+    cross_completion = client.post(
+        f"/api/workbench/tasks/{owned_task}/completion",
+        headers=other_headers,
+        json={"completion_note": "Cross-account completion"},
+    )
+    assert cross_completion.status_code == 403
+
+    cross_upload = client.post(
+        f"/api/workbench/tasks/{owned_task}/deliverables",
+        headers=other_headers,
+        data={"category_code": "other", "version_note": "Cross-account upload"},
+        files={"file": ("cross-account.txt", b"not allowed", "text/plain")},
+    )
+    assert cross_upload.status_code == 403
+
+    own_due_request = client.post(
+        f"/api/workbench/tasks/{owned_task}/due-date-requests",
+        headers=engineer_headers,
+        json={"proposed_due_date": "2026-07-20", "reason": "Supplier delay"},
+    )
+    assert own_due_request.status_code == 201, own_due_request.text
+
+    issue_response = client.post(
+        f"/api/workbench/projects/{project_id}/issues",
+        headers=engineer_headers,
+        json={"task_id": owned_task, "scope": "task", "title": "Owned task risk", "status": "open"},
+    )
+    assert issue_response.status_code == 201, issue_response.text
+    issue_id = issue_response.json()["id"]
+
+    cross_issue = client.patch(
+        f"/api/workbench/issues/{issue_id}",
+        headers=other_headers,
+        json={"status": "following"},
+    )
+    assert cross_issue.status_code == 403
+
+    issue_metadata = client.patch(
+        f"/api/workbench/issues/{issue_id}",
+        headers=engineer_headers,
+        json={"title": "Engineer renamed risk"},
+    )
+    assert issue_metadata.status_code == 403
+
+    own_issue_action = client.patch(
+        f"/api/workbench/issues/{issue_id}",
+        headers=engineer_headers,
+        json={"status": "resolved", "resolution": "Mitigation completed"},
+    )
+    assert own_issue_action.status_code == 200, own_issue_action.text
 
 
 def test_workbench_project_list_uses_aggregated_summary(client):

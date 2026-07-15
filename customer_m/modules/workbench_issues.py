@@ -14,6 +14,11 @@ from .workbench_common import (
     _project_row,
     record_activity,
 )
+from .workbench_permissions import (
+    require_issue_create,
+    require_issue_patch_fields,
+    require_issue_write,
+)
 
 
 ISSUE_ACTIVE_STATUSES = {"open", "following", "resolved"}
@@ -115,7 +120,7 @@ def _sync_linked_blocked_task(
         )
 
 
-def create_issue(conn: sqlite3.Connection, project_id: str, data: dict) -> dict:
+def create_issue(conn: sqlite3.Connection, project_id: str, data: dict, user: dict | None = None) -> dict:
     _project_row(conn, project_id)
     title = (data.get("title") or "").strip()
     if not title:
@@ -125,15 +130,16 @@ def create_issue(conn: sqlite3.Connection, project_id: str, data: dict) -> dict:
     task_id = raw_task_id if scope == "task" else None
     if scope == "task" and not task_id:
         raise ValueError("任务级风险必须关联任务")
+    require_issue_create(conn, project_id, task_id, user)
     issue_id = make_id()
     now = now_iso()
     conn.execute(
         """
         INSERT INTO execution_issues (
           id, project_id, task_id, scope, title, issue_type, source, severity,
-          owner_name, status, due_date, resolution, created_at, updated_at
+          owner_name, status, due_date, resolution, created_by_user_id, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             issue_id,
@@ -148,6 +154,7 @@ def create_issue(conn: sqlite3.Connection, project_id: str, data: dict) -> dict:
             _clean_issue_status(data.get("status")),
             _date_or_none(data.get("due_date")),
             _nullable_text(data.get("resolution")),
+            (user or {}).get("id"),
             now,
             now,
         ),
@@ -189,6 +196,8 @@ def update_issue(conn: sqlite3.Connection, issue_id: str, data: dict, user: dict
     row = conn.execute("SELECT * FROM execution_issues WHERE id = ?", (issue_id,)).fetchone()
     if row is None:
         raise ValueError("风险/问题不存在")
+    require_issue_write(conn, row, user)
+    require_issue_patch_fields(data, user)
     is_pm = _is_pm(user)
     title = (data.get("title") or row["title"] or "").strip()
     if not title:

@@ -7,6 +7,7 @@ from ..database import row_to_dict
 from ..utils import make_id, now_iso
 from .lifecycle import create_event
 from .workbench_issues import create_issue, link_issue_to_task
+from .workbench_permissions import require_task_patch_fields, require_task_write
 from .workbench_common import (
     _bool_value,
     _clean_task_status,
@@ -147,7 +148,12 @@ def _open_task_issue_exists(conn: sqlite3.Connection, task_id: str) -> bool:
     )
 
 
-def ensure_blocked_task_has_issue(conn: sqlite3.Connection, task: sqlite3.Row | dict, data: dict) -> None:
+def ensure_blocked_task_has_issue(
+    conn: sqlite3.Connection,
+    task: sqlite3.Row | dict,
+    data: dict,
+    user: dict | None = None,
+) -> None:
     status = data.get("status") or task["status"]
     if status != "blocked":
         return
@@ -174,6 +180,7 @@ def ensure_blocked_task_has_issue(conn: sqlite3.Connection, task: sqlite3.Row | 
             "status": "open",
             "resolution": reason,
         },
+        user,
     )
 
 def create_task(conn: sqlite3.Connection, project_id: str, data: dict) -> dict:
@@ -222,8 +229,9 @@ def create_task(conn: sqlite3.Connection, project_id: str, data: dict) -> dict:
     create_event(conn, project_id, "workbench_task_created", "新增执行任务", title)
     return {"id": task_id, "created": True}
 
-def update_task(conn: sqlite3.Connection, task_id: str, data: dict) -> dict:
-    row = _task_row(conn, task_id)
+def update_task(conn: sqlite3.Connection, task_id: str, data: dict, user: dict | None = None) -> dict:
+    row = require_task_write(conn, task_id, user)
+    require_task_patch_fields(data, user)
     title = (data.get("title") or row["title"] or "").strip()
     if not title:
         raise ValueError("任务名称不能为空")
@@ -307,12 +315,12 @@ def update_task(conn: sqlite3.Connection, task_id: str, data: dict) -> dict:
         ),
     )
     updated_task = conn.execute("SELECT * FROM execution_tasks WHERE id = ?", (task_id,)).fetchone()
-    ensure_blocked_task_has_issue(conn, updated_task, {**data, "status": status})
+    ensure_blocked_task_has_issue(conn, updated_task, {**data, "status": status}, user)
     record_activity(conn, row["project_id"], "task_updated", "更新任务", title, task_id=task_id)
     return {"id": task_id, "updated": True}
 
 def submit_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, user: dict | None = None) -> dict:
-    row = _task_row(conn, task_id)
+    row = require_task_write(conn, task_id, user)
     if row["requires_deliverable"]:
         raise ValueError("该任务需要提交文件，不能只提交完成说明")
     if row["status"] in {"confirmed", "completed", "cancelled"}:

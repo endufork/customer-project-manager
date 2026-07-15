@@ -5,6 +5,7 @@ import sqlite3
 from ..database import row_to_dict
 from ..utils import make_id, now_iso
 from .workbench_common import _date_or_none, _nullable_text, _project_area, _project_number, record_activity
+from .workbench_permissions import require_task_write
 
 
 REQUEST_STATUSES = {"pending", "approved", "rejected"}
@@ -185,7 +186,7 @@ def due_date_requests_for_project(conn: sqlite3.Connection, project_id: str) -> 
 
 
 def request_due_date_change(conn: sqlite3.Connection, task_id: str, data: dict, user: dict | None) -> dict:
-    task = _task_row(conn, task_id)
+    task = require_task_write(conn, task_id, user)
     proposed_due_date = _date_or_none(data.get("proposed_due_date") or data.get("due_date"))
     if not proposed_due_date:
         raise ValueError("请选择新的 Due Date")

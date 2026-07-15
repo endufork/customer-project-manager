@@ -11,6 +11,7 @@ from .lifecycle import create_event
 from .parsers import extract_text
 from .scanner import sha256_file
 from .workbench_common import _nullable_text, _project_row, record_activity
+from .workbench_permissions import require_task_write
 
 
 logger = logging.getLogger(__name__)
@@ -65,12 +66,11 @@ def submit_task_file(
     filename: str,
     content: bytes,
     fields: dict,
+    user: dict | None = None,
 ) -> dict:
     if not filename or not content:
         raise ValueError("请选择要上传的文件")
-    task = conn.execute("SELECT * FROM execution_tasks WHERE id = ?", (task_id,)).fetchone()
-    if task is None:
-        raise ValueError("任务不存在")
+    task = require_task_write(conn, task_id, user)
     project = _project_row(conn, task["project_id"])
     project_folder = Path(project["project_folder_path"] or "")
     if not project_folder.exists() or not project_folder.is_dir():
