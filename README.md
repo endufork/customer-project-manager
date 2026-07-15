@@ -110,6 +110,8 @@ CUSTOMER_SMTP_PASSWORD
 
 上传策略可通过环境变量调整：`CUSTOMER_UPLOAD_MAX_MB` 默认 500 MB，`CUSTOMER_PARSER_MAX_MB` 默认 25 MB，`CUSTOMER_UPLOAD_CHUNK_MB` 默认 1 MB。`CUSTOMER_UPLOAD_ALLOWED_EXTENSIONS` 使用逗号分隔扩展名；默认允许常见工程文档、图片、压缩归档和 CAD/3D 格式，拒绝可执行文件、脚本和未知扩展名。压缩包只归档不解压，大于解析阈值的文档及 3D 模型只归档和索引元数据。
 
+LAN 使用时，项目资料库和工作台只显示并复制项目/共享目录路径。用户把 UNC 路径粘贴到自己电脑的资源管理器地址栏打开；Web 服务不会在服务器上启动 Explorer。
+
 访问地址：
 
 ```text

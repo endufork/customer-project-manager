@@ -1,9 +1,6 @@
 """FastAPI project routes."""
 
-import logging
-import os
 import sqlite3
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
@@ -12,8 +9,6 @@ from ..modules.projects import (
     create_project_record,
     delete_project_record,
     get_project_detail_payload,
-    get_project_folder_path,
-    get_project_shared_folder_path,
     list_project_records,
     rename_project_folder_to_wo,
     scan_project_and_shared_folders,
@@ -26,7 +21,6 @@ from .schemas import DeleteProjectRequest, ProjectDetailPayload, ProjectListPayl
 
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
-logger = logging.getLogger(__name__)
 
 
 def _bad_request(exc: Exception) -> HTTPException:
@@ -147,35 +141,4 @@ def rename_project_folder(project_id: str, _: dict = Depends(pm_user)) -> dict:
         raise _bad_request(exc) from exc
 
 
-@router.post("/{project_id}/open-folder")
-def open_project_folder(project_id: str, _: dict = Depends(current_user)) -> dict:
-    try:
-        with db_connect() as conn:
-            folder_path = get_project_folder_path(conn, project_id)
-        folder = Path(folder_path)
-        if not folder.exists():
-            raise ValueError("项目文件夹不存在")
-        os.startfile(str(folder))
-        return {"opened": True, "path": str(folder)}
-    except ValueError as exc:
-        raise _bad_request(exc) from exc
-    except OSError as exc:
-        logger.exception("Failed to open project folder project_id=%s", project_id)
-        raise _bad_request(f"打开项目文件夹失败，请检查网络路径或权限：{exc}") from exc
-
-
-@router.post("/{project_id}/open-shared-folder")
-def open_shared_project_folder(project_id: str, _: dict = Depends(current_user)) -> dict:
-    try:
-        with db_connect() as conn:
-            folder_path = get_project_shared_folder_path(conn, project_id)
-        folder = Path(folder_path)
-        if not folder.exists():
-            raise ValueError("共享资料文件夹不存在")
-        os.startfile(str(folder))
-        return {"opened": True, "path": str(folder)}
-    except ValueError as exc:
-        raise _bad_request(exc) from exc
-    except OSError as exc:
-        logger.exception("Failed to open shared project folder project_id=%s", project_id)
-        raise _bad_request(f"打开共享资料文件夹失败，请检查网络路径或权限：{exc}") from exc
+__all__ = ["router"]

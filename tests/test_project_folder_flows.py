@@ -90,6 +90,18 @@ def test_create_project_with_group_creates_shared_folder(client):
     assert shared_folder.is_dir()
 
 
+def test_web_api_cannot_launch_server_file_explorer(client):
+    headers = auth_headers(client)
+    created = create_project(client, headers, project_group_name="LAN Path Line")
+    project_id = created["id"]
+    detail = project_detail(client, headers, project_id)
+
+    assert detail["project_folder_path"]
+    assert detail["shared_folder_path"]
+    assert client.post(f"/api/projects/{project_id}/open-folder", headers=headers).status_code == 404
+    assert client.post(f"/api/projects/{project_id}/open-shared-folder", headers=headers).status_code == 404
+
+
 def test_inq_to_wo_keeps_empty_project_folder_and_standard_dirs(client):
     headers = auth_headers(client)
     created = create_project(client, headers)

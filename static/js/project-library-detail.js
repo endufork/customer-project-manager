@@ -3,7 +3,7 @@ async function openDetail(projectId) {
   const { project, files, shared_files: sharedFiles = [], events } = payload;
   const sharedButtons = project.project_group_id
     ? `
-      <button type="button" class="secondary" data-action="open-shared-folder" data-id="${escapeHtml(project.id)}">打开共享资料</button>
+      <button type="button" class="secondary" data-action="copy-path" data-path="${escapeHtml(project.shared_folder_path || "")}" data-path-label="共享资料路径">复制共享路径</button>
     `
     : "";
   const sharedScanButton = project.project_group_id
@@ -11,9 +11,8 @@ async function openDetail(projectId) {
     : "";
   $("#detailContent").innerHTML = `
     <div class="detail-actions">
-      <button type="button" data-action="open-folder" data-id="${escapeHtml(project.id)}">打开项目文件夹</button>
+      <button type="button" data-action="copy-path" data-path="${escapeHtml(project.project_folder_path || "")}" data-path-label="项目路径">复制项目路径</button>
       <button type="button" class="secondary" data-action="open-workbench" data-id="${escapeHtml(project.id)}">打开项目执行</button>
-      <button type="button" class="secondary" data-action="copy-path" data-path="${escapeHtml(project.project_folder_path || "")}">复制路径</button>
       ${sharedButtons}
     </div>
     <div class="scan-toolbar">
@@ -252,10 +251,6 @@ function bindDetailActions(project) {
     button.addEventListener("click", async () => {
       const action = button.dataset.action;
       try {
-        if (action === "open-folder") {
-          await api(`/api/projects/${encodeURIComponent(projectId)}/open-folder`, { method: "POST", body: "{}" });
-          showToast("已打开项目文件夹");
-        }
         if (action === "scan-folder") {
           button.disabled = true;
           const result = await api(`/api/projects/${encodeURIComponent(projectId)}/scan`, { method: "POST", body: "{}" });
@@ -275,10 +270,6 @@ function bindDetailActions(project) {
           await loadProjects();
           await openDetail(projectId);
         }
-        if (action === "open-shared-folder") {
-          await api(`/api/projects/${encodeURIComponent(projectId)}/open-shared-folder`, { method: "POST", body: "{}" });
-          showToast("已打开共享资料文件夹");
-        }
         if (action === "scan-shared-folder") {
           button.disabled = true;
           const result = await api(`/api/projects/${encodeURIComponent(projectId)}/scan-shared`, { method: "POST", body: "{}" });
@@ -286,8 +277,10 @@ function bindDetailActions(project) {
           await openDetail(projectId);
         }
         if (action === "copy-path") {
-          await navigator.clipboard.writeText(button.dataset.path || "");
-          showToast("项目路径已复制");
+          const path = button.dataset.path || "";
+          if (!path) throw new Error("当前项目未配置可复制的网络路径");
+          await navigator.clipboard.writeText(path);
+          showToast(`${button.dataset.pathLabel || "路径"}已复制，请粘贴到资源管理器地址栏`);
         }
         if (action === "delete-project") {
           const decision = await confirmProjectDeletion();

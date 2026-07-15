@@ -132,7 +132,7 @@ function renderWorkbenchWorkspace(payload) {
         <p>${escapeHtml(project.customer_name || "")}${project.site_name ? ` · ${escapeHtml(project.site_name)}` : ""}${project.project_group_name ? ` · ${escapeHtml(project.project_group_name)}` : ""}</p>
       </div>
       <div class="workbench-header-actions">
-        <button type="button" class="secondary" data-action="open-folder">打开资料夹</button>
+        <button type="button" class="secondary" data-action="copy-path" data-path="${escapeHtml(project.project_folder_path || "")}">复制资料路径</button>
         <button type="button" class="secondary" data-action="open-library-detail">资料库详情</button>
       </div>
     </div>
@@ -300,11 +300,12 @@ function bindLogDrawer(workspace) {
   closeDialogOnBackdrop(workspace.querySelector("#logDrawer"));
 }
 
-async function handleWorkbenchShellAction(action, projectId) {
-  if (action === "open-folder") {
-    if (!projectId) throw new Error("项目ID缺失，请刷新页面后重试");
-    await api(`/api/projects/${encodeURIComponent(projectId)}/open-folder`, { method: "POST", body: "{}" });
-    showToast("已打开项目文件夹");
+async function handleWorkbenchShellAction(action, projectId, button) {
+  if (action === "copy-path") {
+    const path = button?.dataset.path || "";
+    if (!path) throw new Error("当前项目未配置可复制的网络路径");
+    await navigator.clipboard.writeText(path);
+    showToast("资料路径已复制，请粘贴到资源管理器地址栏");
     return true;
   }
   if (action === "open-library-detail") {
@@ -342,7 +343,7 @@ function bindWorkbenchWorkspaceActions(projectId) {
     button.addEventListener("click", async () => {
       const action = button.dataset.action;
       try {
-        if (await handleWorkbenchShellAction(action, projectId)) return;
+        if (await handleWorkbenchShellAction(action, projectId, button)) return;
         if (await handleTaskAction(action, button, projectId)) return;
         if (await handleDueDateAction(action, button, projectId)) return;
         if (await handleDeliverableAction(action, button, () => loadWorkbenchProjects(projectId))) return;
