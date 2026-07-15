@@ -888,3 +888,27 @@ project-management-platform-architecture-plan-v0.1.md
 
 - 持续保持 Playwright 测试数据与正常数据库隔离，新增浏览器用例不得依赖真实项目数据。
 - 团队试用时继续观察单个超大项目扫描耗时，再决定是否需要取消任务、失败范围重试或更细批次。
+
+## 26. 2026-07-15 项目对抗式审查与整改入口
+
+### 审查结论
+
+- 当前版本适合单机受控演示，进入 25 人局域网试用前仍需完成认证、对象授权、上传资源限制、NAS ACL 和恢复能力收口。
+- 项目事实与执行过程分离、文件不破坏源资料、任务/风险/交付物闭环方向继续保持。
+- 当前需求基线与实际多用户产品存在冲突，报价、PO、待办、导出和备份的 MVP 范围需要重新确认。
+- 一个 INQ 拆多个 WO 的业务关系无法由当前项目级唯一 `intake_no` 自然表达，数据模型调整前必须先确认真实业务规则。
+
+### 实施原则
+
+- 可直接修复的安全默认值和测试缺口先处理。
+- 涉及数据模型、角色边界、文件权限、MVP 范围、通知和部署方式的事项先由负责人确认。
+- 每类整改单独提交，安全修复必须配套负向权限测试。
+
+### 相关文档
+
+```text
+adversarial-project-review-v0.1.md
+team-trial-auth-requirements-v0.1.md
+file-visibility-permission-principles-v0.1.md
+project-management-platform-architecture-plan-v0.1.md
+```

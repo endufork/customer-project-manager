@@ -16,8 +16,9 @@
 1. `AGENTS.md`
 2. `branch-change-management-v0.1.md`
 3. `ARCHITECTURE.md`
-4. `project-management-platform-architecture-plan-v0.1.md`
-5. `engineering-workbench-gap-plan-v0.1.md`
+4. `adversarial-project-review-v0.1.md`
+5. `project-management-platform-architecture-plan-v0.1.md`
+6. `engineering-workbench-gap-plan-v0.1.md`
 
 ### 准备讨论产品方向
 
@@ -73,6 +74,10 @@
 - `team-trial-auth-requirements-v0.1.md`：企业邮箱验证码登录、角色权限、Due Date 审批、通知和上线试用需求。
 - `file-visibility-permission-principles-v0.1.md`：文件可见度、角色边界和后续 NAS ACL 落地原则。
 
+### 审查与整改
+
+- `adversarial-project-review-v0.1.md`：项目需求、业务流程、代码安全、开发流程和文档完整性的对抗式审查，以及整改优先级和待确认决策。
+
 ### 部署、备份和运行
 
 - `local-nas-deployment-backup-plan-v0.1.md`：本地 NAS、备份、邮件通知、远程访问和预算讨论结论。
@@ -98,6 +103,7 @@
 
 当前已有充分记录的方面：
 
+- 项目整体对抗式审查、整改分级和团队试用退出条件。
 - 项目资料库需求和数据模型。
 - 新项目入口。
 - 文件夹、扫描、解析和目录安全原则。
