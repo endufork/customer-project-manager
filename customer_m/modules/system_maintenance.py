@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+import json
 import logging
 from pathlib import Path
 import sqlite3
 
 from .. import config
 from ..database import db_connect, get_setting
-from ..utils import now_iso
+from ..utils import make_id, now_iso
 from .scanner import scan_project_folder, scan_project_group_shared_folder
 
 
@@ -65,7 +67,153 @@ def _merge_scan_result(totals: dict, result: dict) -> None:
         totals[key] += int(result.get(key) or 0)
 
 
-def run_global_file_scan() -> dict:
+def _job_result(row: sqlite3.Row) -> dict:
+    try:
+        result = json.loads(row["result_json"] or "{}")
+    except (TypeError, ValueError):
+        result = {}
+    total = int(row["total_projects"] or 0) + int(row["total_shared_groups"] or 0)
+    processed = int(row["processed_projects"] or 0) + int(row["processed_shared_groups"] or 0)
+    progress_percent = 100 if row["status"] == "completed" else int(processed * 100 / total) if total else 0
+    return {
+        "id": row["id"],
+        "status": row["status"],
+        "requested_by_user_id": row["requested_by_user_id"],
+        "requested_by_email": row["requested_by_email"],
+        "total_projects": int(row["total_projects"] or 0),
+        "processed_projects": int(row["processed_projects"] or 0),
+        "total_shared_groups": int(row["total_shared_groups"] or 0),
+        "processed_shared_groups": int(row["processed_shared_groups"] or 0),
+        "progress_percent": progress_percent,
+        "result": result,
+        "error": row["error"],
+        "created_at": row["created_at"],
+        "started_at": row["started_at"],
+        "completed_at": row["completed_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def get_global_file_scan_job(job_id: str) -> dict:
+    with db_connect() as conn:
+        row = conn.execute("SELECT * FROM file_scan_jobs WHERE id = ?", (job_id,)).fetchone()
+    if row is None:
+        raise ValueError("全局扫描任务不存在")
+    return _job_result(row)
+
+
+def get_latest_global_file_scan_job() -> dict | None:
+    with db_connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM file_scan_jobs ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+    return _job_result(row) if row is not None else None
+
+
+def create_global_file_scan_job(user: dict | None = None) -> dict:
+    now = now_iso()
+    with db_connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        active = conn.execute(
+            """
+            SELECT * FROM file_scan_jobs
+            WHERE status IN ('pending', 'running')
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        if active is not None:
+            conn.commit()
+            payload = _job_result(active)
+            payload["created"] = False
+            return payload
+        job_id = make_id()
+        conn.execute(
+            """
+            INSERT INTO file_scan_jobs (
+              id, status, requested_by_user_id, requested_by_email,
+              created_at, updated_at
+            )
+            VALUES (?, 'pending', ?, ?, ?, ?)
+            """,
+            (job_id, (user or {}).get("id"), (user or {}).get("email"), now, now),
+        )
+        row = conn.execute("SELECT * FROM file_scan_jobs WHERE id = ?", (job_id,)).fetchone()
+        conn.commit()
+    payload = _job_result(row)
+    payload["created"] = True
+    return payload
+
+
+def _update_scan_job_progress(job_id: str, progress: dict) -> None:
+    now = now_iso()
+    with db_connect() as conn:
+        conn.execute(
+            """
+            UPDATE file_scan_jobs
+            SET total_projects = ?, processed_projects = ?,
+                total_shared_groups = ?, processed_shared_groups = ?,
+                result_json = ?, updated_at = ?
+            WHERE id = ? AND status = 'running'
+            """,
+            (
+                int(progress.get("total_projects") or 0),
+                int(progress.get("processed_projects") or 0),
+                int(progress.get("total_shared_groups") or 0),
+                int(progress.get("processed_shared_groups") or 0),
+                json.dumps(progress.get("result") or {}, ensure_ascii=False),
+                now,
+                job_id,
+            ),
+        )
+        conn.commit()
+
+
+def run_global_file_scan_job(job_id: str) -> None:
+    started_at = now_iso()
+    with db_connect() as conn:
+        updated = conn.execute(
+            """
+            UPDATE file_scan_jobs
+            SET status = 'running', started_at = ?, updated_at = ?, error = NULL
+            WHERE id = ? AND status = 'pending'
+            """,
+            (started_at, started_at, job_id),
+        ).rowcount
+        conn.commit()
+    if not updated:
+        logger.warning("Global scan job was not pending job_id=%s", job_id)
+        return
+    try:
+        result = run_global_file_scan(lambda progress: _update_scan_job_progress(job_id, progress))
+        completed_at = now_iso()
+        with db_connect() as conn:
+            conn.execute(
+                """
+                UPDATE file_scan_jobs
+                SET status = 'completed', result_json = ?, error = NULL,
+                    completed_at = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (json.dumps(result, ensure_ascii=False), completed_at, completed_at, job_id),
+            )
+            conn.commit()
+    except Exception as exc:
+        completed_at = now_iso()
+        logger.exception("Global scan background job failed job_id=%s", job_id)
+        with db_connect() as conn:
+            conn.execute(
+                """
+                UPDATE file_scan_jobs
+                SET status = 'failed', error = ?, completed_at = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (str(exc), completed_at, completed_at, job_id),
+            )
+            conn.commit()
+
+
+def run_global_file_scan(progress_callback: Callable[[dict], None] | None = None) -> dict:
     failures: list[dict] = []
     project_totals = _empty_scan_totals()
     shared_totals = _empty_scan_totals()
@@ -99,6 +247,30 @@ def run_global_file_scan() -> dict:
             ).fetchall()
         ]
 
+    processed_projects = 0
+    processed_shared_groups = 0
+
+    def report_progress() -> None:
+        if progress_callback is None:
+            return
+        progress_callback(
+            {
+                "total_projects": len(projects),
+                "processed_projects": processed_projects,
+                "total_shared_groups": len(project_groups),
+                "processed_shared_groups": processed_shared_groups,
+                "result": {
+                    "scanned_projects": processed_projects,
+                    "scanned_shared_groups": processed_shared_groups,
+                    "project": dict(project_totals),
+                    "shared": dict(shared_totals),
+                    "failures": list(failures),
+                    "failed_scopes": len(failures),
+                },
+            }
+        )
+
+    report_progress()
     for project in projects:
         try:
             with db_connect() as scan_conn:
@@ -116,6 +288,9 @@ def run_global_file_scan() -> dict:
                     "error": str(exc),
                 }
             )
+        finally:
+            processed_projects += 1
+            report_progress()
 
     for group in project_groups:
         try:
@@ -134,6 +309,9 @@ def run_global_file_scan() -> dict:
                     "error": str(exc),
                 }
             )
+        finally:
+            processed_shared_groups += 1
+            report_progress()
 
     result = {
         "scanned_projects": len(projects),

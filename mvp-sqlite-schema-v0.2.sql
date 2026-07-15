@@ -324,6 +324,24 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   FOREIGN KEY (user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS file_scan_jobs (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+  requested_by_user_id TEXT,
+  requested_by_email TEXT,
+  total_projects INTEGER NOT NULL DEFAULT 0,
+  processed_projects INTEGER NOT NULL DEFAULT 0,
+  total_shared_groups INTEGER NOT NULL DEFAULT 0,
+  processed_shared_groups INTEGER NOT NULL DEFAULT 0,
+  result_json TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  started_at TEXT,
+  completed_at TEXT,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS quotes (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
@@ -436,6 +454,8 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_user_roles_role_code ON user_roles(role_code);
 CREATE INDEX IF NOT EXISTS idx_login_codes_email ON login_codes(email);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_file_scan_jobs_status ON file_scan_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_file_scan_jobs_created_at ON file_scan_jobs(created_at);
 CREATE INDEX IF NOT EXISTS idx_quotes_project_id ON quotes(project_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_orders_project_id ON purchase_orders(project_id);
 CREATE INDEX IF NOT EXISTS idx_todos_project_id ON todos(project_id);

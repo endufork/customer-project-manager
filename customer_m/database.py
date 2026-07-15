@@ -24,6 +24,7 @@ def init_db() -> None:
         sql = SCHEMA_PATH.read_text(encoding="utf-8")
         conn.executescript(sql)
         migrate_db(conn)
+        fail_interrupted_file_scan_jobs(conn)
         conn.execute(
             "UPDATE project_statuses SET name = ? WHERE code = ?",
             ("待补WO号", "no_equipment_no"),
@@ -294,6 +295,27 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS file_scan_jobs (
+          id TEXT PRIMARY KEY,
+          status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+          requested_by_user_id TEXT,
+          requested_by_email TEXT,
+          total_projects INTEGER NOT NULL DEFAULT 0,
+          processed_projects INTEGER NOT NULL DEFAULT 0,
+          total_shared_groups INTEGER NOT NULL DEFAULT 0,
+          processed_shared_groups INTEGER NOT NULL DEFAULT 0,
+          result_json TEXT,
+          error TEXT,
+          created_at TEXT NOT NULL,
+          started_at TEXT,
+          completed_at TEXT,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL
+        )
+        """
+    )
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS notifications (
           id TEXT PRIMARY KEY,
           user_id TEXT NOT NULL,
@@ -387,8 +409,25 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_user_roles_role_code ON user_roles(role_code)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_login_codes_email ON login_codes(email)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_file_scan_jobs_status ON file_scan_jobs(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_file_scan_jobs_created_at ON file_scan_jobs(created_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)")
     ensure_initial_admin(conn)
+
+
+def fail_interrupted_file_scan_jobs(conn: sqlite3.Connection) -> None:
+    now = now_iso()
+    conn.execute(
+        """
+        UPDATE file_scan_jobs
+        SET status = 'failed',
+            error = '服务重启，后台扫描任务已中断，请重新发起扫描',
+            completed_at = ?,
+            updated_at = ?
+        WHERE status IN ('pending', 'running')
+        """,
+        (now, now),
+    )
 
 
 def _sync_file_visibility_codes(conn: sqlite3.Connection) -> None:

@@ -4,6 +4,8 @@ const AUTH_ROLE_LABELS = {
   engineer: "工程师",
 };
 
+let globalScanPollingJobId = "";
+
 function authRoles() {
   return state.auth.user?.roles || [];
 }
@@ -139,6 +141,7 @@ async function loadUsers() {
   if (search) params.set("search", search);
   const payload = await api(`/api/users?${params.toString()}`);
   renderUsers(payload.users || []);
+  await loadLatestGlobalScanStatus();
 }
 
 function renderUsers(users) {
@@ -224,26 +227,90 @@ async function deleteUser(card) {
   await loadUsers();
 }
 
-async function runGlobalScan() {
+function globalScanIsActive(job) {
+  return ["pending", "running"].includes(job?.status);
+}
+
+function renderGlobalScanStatus(job) {
   const button = $("#globalScanButton");
   const status = $("#globalScanStatus");
-  button.disabled = true;
-  status.textContent = "正在扫描全部项目和共享资料，请不要重复点击。";
-  try {
-    const result = await api("/api/system/global-scan", { method: "POST", body: "{}" });
-    const project = result.project || {};
-    const shared = result.shared || {};
+  if (!job) {
+    button.disabled = false;
+    status.textContent = "全局扫描只更新文件索引，不移动或删除物理文件。";
+    return;
+  }
+  button.disabled = globalScanIsActive(job);
+  const result = job.result || {};
+  const project = result.project || {};
+  const shared = result.shared || {};
+  if (globalScanIsActive(job)) {
     status.textContent =
-      `扫描完成：项目 ${result.scanned_projects || 0} 个，共享资料 ${result.scanned_shared_groups || 0} 个；` +
-      `项目新增 ${project.new_files || 0}、更新 ${project.updated_files || 0}、移除索引 ${project.removed_files || 0}；` +
-      `共享新增 ${shared.new_files || 0}、更新 ${shared.updated_files || 0}、移除索引 ${shared.removed_files || 0}；` +
-      `失败范围 ${result.failed_scopes || 0} 个。`;
-    showToast("全局扫描完成");
-    await loadBootstrap();
+      `后台扫描 ${job.progress_percent || 0}%：项目 ${job.processed_projects || 0}/${job.total_projects || 0}，` +
+      `共享资料 ${job.processed_shared_groups || 0}/${job.total_shared_groups || 0}；` +
+      `已新增 ${Number(project.new_files || 0) + Number(shared.new_files || 0)} 个文件索引。`;
+    return;
+  }
+  if (job.status === "failed") {
+    status.textContent = `后台扫描失败：${job.error || "未知错误"}`;
+    return;
+  }
+  status.textContent =
+    `扫描完成：项目 ${result.scanned_projects || 0} 个，共享资料 ${result.scanned_shared_groups || 0} 个；` +
+    `项目新增 ${project.new_files || 0}、更新 ${project.updated_files || 0}、移除索引 ${project.removed_files || 0}；` +
+    `共享新增 ${shared.new_files || 0}、更新 ${shared.updated_files || 0}、移除索引 ${shared.removed_files || 0}；` +
+    `失败范围 ${result.failed_scopes || 0} 个。`;
+}
+
+function waitForGlobalScanPoll() {
+  return new Promise((resolve) => window.setTimeout(resolve, 1000));
+}
+
+async function pollGlobalScan(jobId) {
+  if (!jobId || globalScanPollingJobId === jobId) return;
+  globalScanPollingJobId = jobId;
+  try {
+    while (globalScanPollingJobId === jobId) {
+      const job = await api(`/api/system/global-scan/${encodeURIComponent(jobId)}`);
+      renderGlobalScanStatus(job);
+      if (!globalScanIsActive(job)) {
+        if (job.status === "completed") {
+          showToast("全局扫描完成");
+          await loadBootstrap();
+        } else {
+          showToast(job.error || "全局扫描失败");
+        }
+        break;
+      }
+      await waitForGlobalScanPoll();
+    }
   } catch (error) {
-    status.textContent = error.message;
+    $("#globalScanStatus").textContent = error.message;
     showToast(error.message);
   } finally {
+    if (globalScanPollingJobId === jobId) globalScanPollingJobId = "";
+    $("#globalScanButton").disabled = false;
+  }
+}
+
+async function loadLatestGlobalScanStatus() {
+  const payload = await api("/api/system/global-scan");
+  const job = payload.job || null;
+  renderGlobalScanStatus(job);
+  if (globalScanIsActive(job)) pollGlobalScan(job.id).catch(console.error);
+}
+
+async function runGlobalScan() {
+  const button = $("#globalScanButton");
+  button.disabled = true;
+  $("#globalScanStatus").textContent = "正在创建后台扫描任务。";
+  try {
+    const job = await api("/api/system/global-scan", { method: "POST", body: "{}" });
+    renderGlobalScanStatus(job);
+    if (!job.created) showToast("已有全局扫描任务正在运行");
+    await pollGlobalScan(job.id);
+  } catch (error) {
+    $("#globalScanStatus").textContent = error.message;
+    showToast(error.message);
     button.disabled = false;
   }
 }

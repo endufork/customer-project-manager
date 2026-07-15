@@ -39,7 +39,7 @@ def test_base_schema_contains_auth_tables(tmp_path):
             )
         }
 
-    assert {"users", "user_roles", "login_codes", "auth_sessions"}.issubset(tables)
+    assert {"users", "user_roles", "login_codes", "auth_sessions", "file_scan_jobs"}.issubset(tables)
 
 
 def test_login_code_dev_flow(client):

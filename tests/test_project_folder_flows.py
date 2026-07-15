@@ -237,8 +237,19 @@ def test_admin_global_scan_scans_all_and_removes_stale_indexes(client, monkeypat
     monkeypatch.setattr(system_maintenance, "db_connect", counted_db_connect)
     response = client.post("/api/system/global-scan", headers=headers, json={})
 
-    assert response.status_code == 200, response.text
-    payload = response.json()
+    assert response.status_code == 202, response.text
+    created_job = response.json()
+    assert created_job["created"] is True
+    assert created_job["status"] == "pending"
+
+    status_response = client.get(f"/api/system/global-scan/{created_job['id']}", headers=headers)
+    assert status_response.status_code == 200, status_response.text
+    job = status_response.json()
+    assert job["status"] == "completed"
+    assert job["progress_percent"] == 100
+    assert job["processed_projects"] == 1
+    assert job["processed_shared_groups"] == 1
+    payload = job["result"]
     assert payload["scanned_projects"] == 1
     assert payload["scanned_shared_groups"] == 1
     assert payload["project"]["new_files"] == 1
@@ -246,7 +257,38 @@ def test_admin_global_scan_scans_all_and_removes_stale_indexes(client, monkeypat
     assert payload["shared"]["new_files"] == 1
     assert payload["shared"]["removed_files"] == 1
     assert payload["failed_scopes"] == 0
-    assert connection_count == 3
+
+    latest_response = client.get("/api/system/global-scan", headers=headers)
+    assert latest_response.status_code == 200, latest_response.text
+    assert latest_response.json()["job"]["id"] == created_job["id"]
+    assert connection_count >= 9
+
+
+def test_global_scan_reuses_active_job(client):
+    from customer_m.modules.system_maintenance import create_global_file_scan_job
+
+    first = create_global_file_scan_job({"email": "admin@jinxiangsz.com"})
+    second = create_global_file_scan_job({"email": "other-admin@jinxiangsz.com"})
+
+    assert first["created"] is True
+    assert first["status"] == "pending"
+    assert second["created"] is False
+    assert second["id"] == first["id"]
+
+
+def test_interrupted_global_scan_is_marked_failed(client):
+    from customer_m import database
+    from customer_m.modules.system_maintenance import create_global_file_scan_job, get_global_file_scan_job
+
+    created = create_global_file_scan_job({"email": "admin@jinxiangsz.com"})
+    with database.db_connect() as conn:
+        database.fail_interrupted_file_scan_jobs(conn)
+        conn.commit()
+
+    job = get_global_file_scan_job(created["id"])
+    assert job["status"] == "failed"
+    assert "服务重启" in job["error"]
+    assert job["completed_at"] is not None
 
 
 def test_global_scan_requires_admin(client):
