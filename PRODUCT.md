@@ -6,13 +6,13 @@ product
 
 ## Users
 
-This is an internal project management system for a non-standard equipment manufacturing supplier. Primary users are PMs, engineers, admins, and read-only viewers.
+This is an internal project management system for a non-standard equipment manufacturing supplier. Primary users are PMs, engineers, and admins.
 
 PMs use the system to create and coordinate project work, track due dates, review deliverables, confirm task completion, handle risks, and keep project execution moving.
 
 Engineers use the system to see assigned work, submit deliverables or completion notes, request due date changes, mark blocked work, create or resolve risks, and keep project facts tied to the project archive.
 
-Admins manage users, roles, configuration, and deletion or recovery-sensitive operations. Read-only users inspect project status without changing workflow state.
+Admins manage users, roles, configuration, and deletion or recovery-sensitive operations. The current team-trial scope does not include a separate read-only role; it can be reconsidered when a real management-viewer use case exists.
 
 ## Product Purpose
 
