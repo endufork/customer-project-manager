@@ -204,6 +204,19 @@ Playwright 使用 `.playwright-cache/` 下每次运行独立的数据库、项�
 npm run test:e2e
 ```
 
+## 依赖边界
+
+Python 依赖分为两层：
+
+- `requirements.in` / `requirements-dev.in` 记录直接依赖和允许升级范围。
+- `requirements.txt` / `requirements-dev.txt` 锁定 Windows、Python 3.12 下的完整依赖闭包。
+
+服务启动只需要运行依赖锁；开发、单元测试和 FastAPI `TestClient` 使用开发依赖锁。锁文件通过 `tools/lock-dependencies.cmd` 从 `.in` 文件重新解析，不能依赖 FastAPI 等组件未声明的传递依赖。
+
+本地 Python 环境放在仓库 `.venv` 并排除出 Git。除非显式设置 `CUSTOMER_PROJECT_PYTHON`，运行和检查脚本优先选择该环境，避免共享 Codex Python 或系统 Python 中的包版本覆盖项目锁定版本。
+
+Node 当前只承载 Playwright E2E 测试，直接依赖和完整闭包由 `package.json`、`package-lock.json` 管理，安装使用 `npm ci`。
+
 ## 文件安全边界
 
 文件系统操作必须遵守：

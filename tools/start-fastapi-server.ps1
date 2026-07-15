@@ -24,14 +24,14 @@ function Resolve-FastApiPython {
         $candidates += $env:CUSTOMER_PROJECT_PYTHON
     }
 
+    $resolved = Resolve-Python
+    if (-not [string]::IsNullOrWhiteSpace($resolved)) {
+        $candidates += $resolved
+    }
+
     $pathPython = Get-Command python -ErrorAction SilentlyContinue
     if ($pathPython) {
         $candidates += $pathPython.Source
-    }
-
-    $bundled = Get-CodexDependencyPath "python\python.exe"
-    if (-not [string]::IsNullOrWhiteSpace($bundled)) {
-        $candidates += $bundled
     }
 
     foreach ($candidate in ($candidates | Select-Object -Unique)) {

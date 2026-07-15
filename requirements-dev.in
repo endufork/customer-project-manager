@@ -1,0 +1,5 @@
+# Direct development and test dependencies. Compile into requirements-dev.txt.
+-r requirements.in
+
+pytest>=9.1,<10
+httpx2>=2.7,<3

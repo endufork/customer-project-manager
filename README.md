@@ -79,12 +79,15 @@ FastAPI + SQLite WAL + 本地/NAS 文件目录 + Web 前端
 
 ## 本地运行
 
-安装依赖：
+开发和测试环境安装依赖：
 
 ```bat
-python -m pip install -r requirements.txt
-npm install
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+npm ci
 ```
+
+仅运行服务时可以只安装 `requirements.txt`。显式设置的 `CUSTOMER_PROJECT_PYTHON` 优先级最高；未设置时，启动和检查脚本优先使用仓库内 `.venv`，再回退到 Codex 内置运行时或系统 Python。
 
 启动服务：
 
@@ -119,6 +122,23 @@ data\customer_projects.db
 ```powershell
 npm run test:e2e
 ```
+
+## 依赖维护
+
+- `requirements.in`：Python 直接运行依赖及兼容范围。
+- `requirements-dev.in`：Python 直接开发、测试依赖及兼容范围。
+- `requirements.txt`：Windows / Python 3.12 完整运行依赖锁。
+- `requirements-dev.txt`：在运行依赖锁基础上补充完整测试依赖锁。
+- `package-lock.json`：Node / Playwright 依赖锁；安装时使用 `npm ci`。
+- `.venv`：本机隔离 Python 环境，不进入 Git；未显式指定 Python 时启动脚本会自动优先使用。
+
+更新 Python 版本范围后重新解析锁文件：
+
+```powershell
+.\tools\lock-dependencies.cmd
+```
+
+锁文件必须和相关代码一起提交；不要只修改 `.in` 文件。
 
 修改后端、前端、API 或静态资源后，应重启本地服务：
 
