@@ -10,6 +10,7 @@ from typing import BinaryIO
 from .. import config
 from ..utils import make_id, now_iso, sanitize_path_part
 from .lifecycle import create_event
+from .notifications import notify_pm_users, notify_task_owner
 from .parsers import extract_text
 from .workbench_common import _nullable_text, _project_row, record_activity
 from .workbench_permissions import require_task_write
@@ -220,6 +221,14 @@ def submit_task_file(
     _refresh_project_file_flags(conn, task["project_id"])
     record_activity(conn, task["project_id"], "deliverable_submitted", "提交交付文件", target_path.name, task_id=task_id)
     create_event(conn, task["project_id"], "workbench_file_submitted", "提交交付文件", target_path.name)
+    notify_pm_users(
+        conn,
+        "deliverable_submitted",
+        "交付文件待确认",
+        f"{task['title']}：{target_path.name}",
+        task["project_id"],
+        exclude_user_id=(user or {}).get("id"),
+    )
     logger.info(
         "Archived task deliverable task_id=%s project_id=%s file_id=%s path=%s",
         task_id,
@@ -235,12 +244,18 @@ def submit_task_file(
         "submitted": True,
     }
 
-def review_deliverable(conn: sqlite3.Connection, deliverable_id: str, data: dict) -> dict:
+def review_deliverable(
+    conn: sqlite3.Connection,
+    deliverable_id: str,
+    data: dict,
+    user: dict | None = None,
+) -> dict:
     row = conn.execute("SELECT * FROM task_deliverables WHERE id = ?", (deliverable_id,)).fetchone()
     if row is None:
         raise ValueError("交付物不存在")
     if row["status"] != "submitted":
         raise ValueError("只能确认或驳回待确认的交付物；驳回后必须重新提交文件")
+    task = conn.execute("SELECT * FROM execution_tasks WHERE id = ?", (row["task_id"],)).fetchone()
     action = (data.get("status") or data.get("action") or "").strip()
     now = now_iso()
     if action == "confirmed":
@@ -263,6 +278,15 @@ def review_deliverable(conn: sqlite3.Connection, deliverable_id: str, data: dict
         )
         record_activity(conn, row["project_id"], "deliverable_confirmed", "确认交付物", reviewer, task_id=row["task_id"])
         create_event(conn, row["project_id"], "workbench_file_confirmed", "确认交付物", reviewer)
+        if task:
+            notify_task_owner(
+                conn,
+                task,
+                "deliverable_reviewed",
+                "交付文件已确认",
+                task["title"],
+                exclude_user_id=(user or {}).get("id"),
+            )
         return {"id": deliverable_id, "project_id": row["project_id"], "task_id": row["task_id"], "status": "confirmed"}
     if action == "rejected":
         reason = _nullable_text(data.get("reject_reason"))
@@ -287,5 +311,14 @@ def review_deliverable(conn: sqlite3.Connection, deliverable_id: str, data: dict
         )
         record_activity(conn, row["project_id"], "deliverable_rejected", "驳回交付物", reason, task_id=row["task_id"])
         create_event(conn, row["project_id"], "workbench_file_rejected", "驳回交付物", reason)
+        if task:
+            notify_task_owner(
+                conn,
+                task,
+                "deliverable_reviewed",
+                "交付文件被驳回",
+                f"{task['title']}：{reason}",
+                exclude_user_id=(user or {}).get("id"),
+            )
         return {"id": deliverable_id, "project_id": row["project_id"], "task_id": row["task_id"], "status": "rejected"}
     raise ValueError("交付物操作无效")

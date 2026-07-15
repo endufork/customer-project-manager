@@ -4,6 +4,7 @@ import sqlite3
 
 from ..utils import make_id, now_iso
 from .lifecycle import create_event
+from .notifications import create_notification, notify_pm_users, notify_task_owner
 from .workbench_common import (
     _clean_issue_scope,
     _clean_issue_severity,
@@ -161,6 +162,15 @@ def create_issue(conn: sqlite3.Connection, project_id: str, data: dict, user: di
     )
     record_activity(conn, project_id, "issue_created", "新增风险/问题", title, issue_id=issue_id)
     create_event(conn, project_id, "workbench_issue_created", "新增风险/问题", title)
+    if user and not _is_pm(user):
+        notify_pm_users(
+            conn,
+            "risk_created",
+            "新增风险待关注",
+            title,
+            project_id,
+            exclude_user_id=user.get("id"),
+        )
     return {"id": issue_id, "created": True}
 
 def link_issue_to_task(conn: sqlite3.Connection, issue_id: str, task: sqlite3.Row | dict, reason: str | None = None) -> dict:
@@ -271,6 +281,37 @@ def update_issue(conn: sqlite3.Connection, issue_id: str, data: dict, user: dict
         "open": "重新打开风险",
     }.get(status, "更新风险/问题")
     record_activity(conn, row["project_id"], activity_type, activity_title, title, issue_id=issue_id)
+    if user and not is_pm and status == "resolved":
+        notify_pm_users(
+            conn,
+            "risk_resolved",
+            "风险解决待确认",
+            title,
+            row["project_id"],
+            exclude_user_id=user.get("id"),
+        )
+    elif user and is_pm and status != row["status"]:
+        task = _task_row(conn, row["task_id"])
+        notification_title = "风险处理结果已更新"
+        if task:
+            notify_task_owner(
+                conn,
+                task,
+                "risk_reviewed",
+                notification_title,
+                f"{title}：{status}",
+                exclude_user_id=user.get("id"),
+            )
+        else:
+            create_notification(
+                conn,
+                row["created_by_user_id"],
+                "risk_reviewed",
+                notification_title,
+                f"{title}：{status}",
+                related_type="project",
+                related_id=row["project_id"],
+            )
     return {"id": issue_id, "project_id": row["project_id"], "status": status, "updated": True}
 
 def delete_issue(conn: sqlite3.Connection, issue_id: str) -> dict:

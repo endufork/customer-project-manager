@@ -1,4 +1,13 @@
 @media (max-width: 960px) {
+  .notification-item {
+    flex-direction: column;
+  }
+
+  .notification-item-actions,
+  .notification-dialog-actions {
+    justify-content: flex-start;
+  }
+
   .topbar,
   .settings,
   .workspace,

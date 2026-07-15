@@ -23,6 +23,7 @@ const state = {
   sort: { key: "created_at", direction: "desc" },
   detailLastFocused: null,
   toastTimer: null,
+  notificationPollTimer: null,
   auth: { token: null, user: null },
   appReady: false,
 };

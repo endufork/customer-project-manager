@@ -42,6 +42,10 @@ class LogoutPayload(BaseModel):
     ok: bool = True
 
 
+class NotificationReadRequest(_StrictRequest):
+    status: str = "read"
+
+
 class UserListPayload(BaseModel):
     users: list[dict] = Field(default_factory=list)
 

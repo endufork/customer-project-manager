@@ -44,6 +44,9 @@
       </div>
       <div class="settings">
         <div id="authUserBadge" class="auth-user-badge"></div>
+        <button id="notificationButton" type="button" class="secondary notification-button" aria-haspopup="dialog">
+          通知 <span id="notificationUnreadBadge" class="notification-unread-badge" hidden>0</span>
+        </button>
         <button id="logoutButton" type="button" class="secondary">退出</button>
       </div>
       <div class="hidden-settings" hidden>
@@ -448,11 +451,28 @@
       </form>
     </dialog>
 
+    <dialog id="notificationDialog" class="workbench-dialog notification-dialog" aria-labelledby="notificationDialogTitle">
+      <div class="workbench-dialog-shell">
+        <header class="workbench-dialog-header">
+          <div>
+            <h3 id="notificationDialogTitle">系统通知</h3>
+            <p>任务、交付、改期和风险处理结果</p>
+          </div>
+          <div class="notification-dialog-actions">
+            <button id="notificationReadAllButton" type="button" class="secondary">全部标为已读</button>
+            <button id="notificationCloseButton" type="button" class="secondary">关闭</button>
+          </div>
+        </header>
+        <div id="notificationList" class="notification-list"></div>
+      </div>
+    </dialog>
+
     <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="false"></div>
 
     <script src="/static/js/app-core.js"></script>
     <script src="/static/js/auth.js"></script>
     <script src="/static/js/ui-shell.js"></script>
+    <script src="/static/js/notifications.js"></script>
     <script src="/static/js/form-utils.js"></script>
     <script src="/static/js/project-config.js"></script>
     <script src="/static/js/project-library-format.js"></script>

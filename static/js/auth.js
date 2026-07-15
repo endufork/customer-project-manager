@@ -60,15 +60,27 @@ function rememberHomeView(view) {
 }
 
 function showAuthView() {
+  stopNotificationPolling();
   state.auth = { token: null, user: null };
   state.appReady = false;
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-  document.body.classList.remove("authenticated");
+  document.body.classList.remove("authenticated", "app-initializing");
+  document.querySelector("body > nav")?.removeAttribute("inert");
+  document.querySelector("body > main")?.removeAttribute("inert");
+  document.body.removeAttribute("aria-busy");
   $("#authView").hidden = false;
+}
+
+function setAppInitializing(isInitializing) {
+  document.body.classList.toggle("app-initializing", isInitializing);
+  document.body.toggleAttribute("aria-busy", isInitializing);
+  document.querySelector("body > nav")?.toggleAttribute("inert", isInitializing);
+  document.querySelector("body > main")?.toggleAttribute("inert", isInitializing);
 }
 
 function showAuthenticatedApp() {
   document.body.classList.add("authenticated");
+  setAppInitializing(true);
   $("#authView").hidden = true;
   const user = state.auth.user;
   $("#authUserBadge").textContent = user.display_name || user.email.split("@")[0];
@@ -85,6 +97,7 @@ function showAuthenticatedApp() {
   localStorage.setItem(WORKBENCH_OWNER_STORAGE_KEY, owner);
   $("#workbenchRoleSelect").value = preferredWorkbenchRole();
   $("#workbenchRoleSelect").disabled = !(userHasRole("pm") && userHasRole("engineer"));
+  startNotificationPolling();
 }
 
 async function restoreAuthSession() {

@@ -84,6 +84,75 @@
   height: 38px;
 }
 
+.notification-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notification-unread-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #b42318;
+  color: #fff;
+  font-size: 11px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.notification-dialog {
+  width: min(720px, calc(100vw - 32px));
+}
+
+.notification-dialog-actions,
+.notification-item-actions,
+.notification-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-list {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.notification-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.notification-item.unread {
+  border-color: #9fcabb;
+  background: #f1f8f5;
+}
+
+.notification-copy {
+  min-width: 0;
+}
+
+.notification-copy p,
+.notification-copy small {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.notification-item-actions {
+  flex: 0 0 auto;
+  align-self: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .admin-maintenance {
   display: flex;
   justify-content: space-between;

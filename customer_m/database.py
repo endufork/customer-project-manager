@@ -414,6 +414,7 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_file_scan_jobs_status ON file_scan_jobs(status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_file_scan_jobs_created_at ON file_scan_jobs(created_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user_status ON notifications(user_id, status)")
     ensure_initial_admin(conn)
 
 

@@ -6,6 +6,7 @@ from datetime import date
 from ..database import row_to_dict
 from ..utils import make_id, now_iso
 from .lifecycle import create_event
+from .notifications import notify_pm_users, notify_task_owner
 from .workbench_issues import create_issue, link_issue_to_task
 from .workbench_permissions import require_task_patch_fields, require_task_write
 from .workdays import add_workdays
@@ -228,6 +229,7 @@ def create_task(conn: sqlite3.Connection, project_id: str, data: dict) -> dict:
     ensure_blocked_task_has_issue(conn, task, data)
     record_activity(conn, project_id, "task_created", "新增任务", title, task_id=task_id)
     create_event(conn, project_id, "workbench_task_created", "新增执行任务", title)
+    notify_task_owner(conn, task, "task_assigned", "你有一项新任务", title)
     return {"id": task_id, "created": True}
 
 def update_task(conn: sqlite3.Connection, task_id: str, data: dict, user: dict | None = None) -> dict:
@@ -318,6 +320,15 @@ def update_task(conn: sqlite3.Connection, task_id: str, data: dict, user: dict |
     updated_task = conn.execute("SELECT * FROM execution_tasks WHERE id = ?", (task_id,)).fetchone()
     ensure_blocked_task_has_issue(conn, updated_task, {**data, "status": status}, user)
     record_activity(conn, row["project_id"], "task_updated", "更新任务", title, task_id=task_id)
+    if updated_task and updated_task["owner_user_id"] != row["owner_user_id"]:
+        notify_task_owner(
+            conn,
+            updated_task,
+            "task_assigned",
+            "任务已分配给你",
+            title,
+            exclude_user_id=(user or {}).get("id"),
+        )
     return {"id": task_id, "updated": True}
 
 def submit_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, user: dict | None = None) -> dict:
@@ -365,6 +376,14 @@ def submit_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, u
     )
     record_activity(conn, row["project_id"], "task_completion_submitted", "提交完成说明", detail, task_id=task_id)
     create_event(conn, row["project_id"], "workbench_task_submitted", "提交完成说明", row["title"])
+    notify_pm_users(
+        conn,
+        "completion_submitted",
+        "任务完成说明待确认",
+        row["title"],
+        row["project_id"],
+        exclude_user_id=(user or {}).get("id"),
+    )
     return {"id": task_id, "project_id": row["project_id"], "submitted": True, "status": "submitted"}
 
 def review_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, user: dict | None = None) -> dict:
@@ -390,6 +409,14 @@ def review_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, u
         )
         record_activity(conn, row["project_id"], "task_completion_confirmed", "确认任务完成", reviewer, task_id=task_id)
         create_event(conn, row["project_id"], "workbench_task_confirmed", "确认任务完成", row["title"])
+        notify_task_owner(
+            conn,
+            row,
+            "completion_reviewed",
+            "任务完成已确认",
+            row["title"],
+            exclude_user_id=(user or {}).get("id"),
+        )
         return {"id": task_id, "project_id": row["project_id"], "status": "confirmed"}
     if action == "rejected":
         reason = _nullable_text(data.get("reject_reason")) or _nullable_text(data.get("review_note"))
@@ -406,6 +433,14 @@ def review_task_completion(conn: sqlite3.Connection, task_id: str, data: dict, u
             (f"任务完成驳回：{reason}", now, task_id),
         )
         record_activity(conn, row["project_id"], "task_completion_rejected", "驳回任务完成", reason, task_id=task_id)
+        notify_task_owner(
+            conn,
+            row,
+            "completion_reviewed",
+            "任务完成被驳回",
+            f"{row['title']}：{reason}",
+            exclude_user_id=(user or {}).get("id"),
+        )
         create_event(conn, row["project_id"], "workbench_task_rejected", "驳回任务完成", row["title"])
         return {"id": task_id, "project_id": row["project_id"], "status": "rework"}
     raise ValueError("任务确认操作无效")

@@ -255,6 +255,84 @@ def test_engineer_mutations_are_limited_to_owned_bound_objects(client):
     assert own_issue_action.status_code == 200, own_issue_action.text
 
 
+def test_in_app_notifications_track_unread_and_workflow_reviews(client):
+    pm_headers = auth_headers(client)
+    engineer = prepare_user(
+        client,
+        pm_headers,
+        "notification.engineer@jinxiangsz.com",
+        "Notification Engineer",
+        ["engineer"],
+    )
+    other = prepare_user(
+        client,
+        pm_headers,
+        "notification.other@jinxiangsz.com",
+        "Notification Other",
+        ["engineer"],
+    )
+    engineer_headers = login_user_headers(client, engineer)
+    other_headers = login_user_headers(client, other)
+    project_id = create_project(client, pm_headers)
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=pm_headers,
+        json={"title": "Notification task", "owner_user_id": engineer["id"], "requires_deliverable": 0},
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+
+    engineer_notifications = client.get("/api/notifications", headers=engineer_headers)
+    assert engineer_notifications.status_code == 200
+    assert engineer_notifications.json()["unread_count"] == 1
+    assigned = engineer_notifications.json()["notifications"][0]
+    assert assigned["type"] == "task_assigned"
+
+    cross_account_read = client.patch(
+        f"/api/notifications/{assigned['id']}",
+        headers=other_headers,
+        json={"status": "read"},
+    )
+    assert cross_account_read.status_code == 404
+
+    read_response = client.patch(
+        f"/api/notifications/{assigned['id']}",
+        headers=engineer_headers,
+        json={"status": "read"},
+    )
+    assert read_response.status_code == 200
+    assert client.get("/api/notifications", headers=engineer_headers).json()["unread_count"] == 0
+
+    completion = client.post(
+        f"/api/workbench/tasks/{task_id}/completion",
+        headers=engineer_headers,
+        json={"completion_note": "Ready for PM review"},
+    )
+    assert completion.status_code == 201, completion.text
+    pm_notifications = client.get("/api/notifications", headers=pm_headers).json()
+    assert "completion_submitted" in {item["type"] for item in pm_notifications["notifications"]}
+
+    review = client.patch(
+        f"/api/workbench/tasks/{task_id}/completion",
+        headers=pm_headers,
+        json={"status": "rejected", "reject_reason": "Add verification result"},
+    )
+    assert review.status_code == 200, review.text
+    engineer_types = {
+        item["type"]
+        for item in client.get("/api/notifications", headers=engineer_headers).json()["notifications"]
+    }
+    assert "completion_reviewed" in engineer_types
+
+    read_all = client.post(
+        "/api/notifications/read-all",
+        headers=engineer_headers,
+        json={"status": "read"},
+    )
+    assert read_all.status_code == 200
+    assert client.get("/api/notifications", headers=engineer_headers).json()["unread_count"] == 0
+
+
 def test_workbench_project_list_uses_aggregated_summary(client):
     headers = auth_headers(client)
     project_id = create_project(client, headers)

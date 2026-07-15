@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config
 from .api.auth import router as auth_router
+from .api.notifications import router as notifications_router
 from .api.bootstrap import router as bootstrap_router
 from .api.projects import router as projects_router
 from .api.system import router as system_router
@@ -82,6 +83,7 @@ app = FastAPI(
 )
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(auth_router)
+app.include_router(notifications_router)
 app.include_router(bootstrap_router)
 app.include_router(projects_router)
 app.include_router(system_router)

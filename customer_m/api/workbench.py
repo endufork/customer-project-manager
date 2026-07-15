@@ -297,10 +297,10 @@ def patch_issue(issue_id: str, body: WorkbenchIssueRequest, user: dict = Depends
 
 
 @router.patch("/deliverables/{deliverable_id}")
-def patch_deliverable(deliverable_id: str, body: DeliverableReviewRequest, _: dict = Depends(pm_user)) -> dict:
+def patch_deliverable(deliverable_id: str, body: DeliverableReviewRequest, user: dict = Depends(pm_user)) -> dict:
     try:
         with db_connect() as conn:
-            payload = review_deliverable(conn, deliverable_id, _model_data(body))
+            payload = review_deliverable(conn, deliverable_id, _model_data(body), user)
             conn.commit()
         return payload
     except ValueError as exc:

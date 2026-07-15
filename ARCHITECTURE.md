@@ -53,6 +53,7 @@ customer_m/api/
 - `bootstrap.py`：前端启动所需下拉数据和配置。
 - `projects.py`：项目资料库 CRUD、扫描、打开文件夹、目录重命名。
 - `workbench.py`：工程工作台、任务、交付物、风险、Due Date、看板、PM 待处理。
+- `notifications.py`：当前用户通知列表、未读计数和已读状态更新。
 - `system.py`：健康检查、设置、备份等系统接口。
 - `schemas.py`：Pydantic 请求和响应模型。
 - `deps.py`：当前用户、权限、查询参数辅助。
@@ -128,6 +129,7 @@ customer_m/modules/
 ### 权限与运维
 
 - `auth.py`：用户、角色、验证码、会话。
+- `notifications.py`：工作流通知生成、接收人选择、列表查询和已读状态。
 - `system_maintenance.py`：备份、后台扫描任务、进度持久化和系统维护能力。
 
 认证和角色边界：
@@ -165,6 +167,7 @@ static/styles.css
 - `workbench-risks.js`：风险窗口和风险闭环。
 - `workbench-board.js`：项目看板和风险总览。
 - `pm-inbox.js`：PM 待处理中心。
+- `notifications.js`：通知入口、未读计数、通知列表、已读操作和项目执行跳转。
 - `form-utils.js`、`ui-shell.js`、`workbench-utils.js`、`project-config.js`、`workbench-config.js`：通用辅助和配置。
 
 前端只按 `roles` 判断入口显示和操作能力；同时具备 `PM` 与 `Engineer` 的用户可切换工作台视角。
@@ -237,14 +240,13 @@ Node 当前只承载 Playwright E2E 测试，直接依赖和完整闭包由 `pac
 短期：
 
 - 我的任务绑定登录账号。
-- 系统内通知。
 - 项目库状态联动建议。
 - 报表导出。
 - 备份和团队试用运维。
 
 中期：
 
-- 通知中心模块。
+- 通知保留策略、临期/逾期定时提醒和邮件增强。
 - 报表模块。
 - BOM 管理模块。
 - SMTP 邮件提醒。

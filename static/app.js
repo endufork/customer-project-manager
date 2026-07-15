@@ -45,6 +45,7 @@ async function saveSettings() {
 function bindEvents() {
   const debouncedLoadProjects = debounce(() => loadProjects().catch(console.error), 300);
   bindAuthEvents();
+  bindNotificationEvents();
   $("#projectForm").addEventListener("submit", createProject);
   document.addEventListener("focusout", (event) => {
     const target = event.target;
@@ -172,33 +173,39 @@ function bindEvents() {
 }
 
 async function startAuthenticatedApp() {
-  await loadBootstrap();
-  if (isWorkbenchFocusMode()) {
-    switchView("workbench", false);
-    await loadWorkbench(initialWorkbenchProjectId());
-  } else {
-    const homeView = preferredHomeView();
-    if (homeView === "workbench") {
-      state.workbenchMode = "tasks";
+  state.appReady = false;
+  setAppInitializing(true);
+  try {
+    await loadBootstrap();
+    if (isWorkbenchFocusMode()) {
       switchView("workbench", false);
-      await loadWorkbench();
-    } else if (homeView === "pmInbox") {
-      switchView("pmInbox", false);
-      await loadPmInbox();
-    } else if (homeView === "library") {
-      switchView("library", false);
-      await loadProjects();
-    } else if (homeView === "admin") {
-      switchView("admin", false);
-      await loadUsers();
-    } else if (homeView === "create") {
-      switchView("create", false);
+      await loadWorkbench(initialWorkbenchProjectId());
     } else {
-      switchView("board", false);
-      await loadProjectBoard();
+      const homeView = preferredHomeView();
+      if (homeView === "workbench") {
+        state.workbenchMode = "tasks";
+        switchView("workbench", false);
+        await loadWorkbench();
+      } else if (homeView === "pmInbox") {
+        switchView("pmInbox", false);
+        await loadPmInbox();
+      } else if (homeView === "library") {
+        switchView("library", false);
+        await loadProjects();
+      } else if (homeView === "admin") {
+        switchView("admin", false);
+        await loadUsers();
+      } else if (homeView === "create") {
+        switchView("create", false);
+      } else {
+        switchView("board", false);
+        await loadProjectBoard();
+      }
     }
+  } finally {
+    state.appReady = true;
+    setAppInitializing(false);
   }
-  state.appReady = true;
 }
 
 async function boot() {
