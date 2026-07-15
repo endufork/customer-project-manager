@@ -440,7 +440,24 @@ Web API 使用 `os.startfile()` 在 FastAPI 所在 Windows 主机打开 Explorer
 | C-11 | Due Date 计算口径 | 工作日；PM 可覆盖 | 已实施；法定节假日/调休表未接入 |
 | C-12 | 正式运行与备份参数 | 团队试用前确认 | 未确认、试用阻塞项 |
 
-## 9. 团队试用退出条件
+## 9. 整改追踪矩阵
+
+| 审查项 / 决策 | 实施提交 | 主要自动化证据 | 当前状态 |
+|---|---|---|---|
+| SEC-01、SEC-02：生产认证、安全头、API 文档保护 | `6da122c` | `test_production_runtime_config_fails_closed`、`test_production_without_smtp_never_returns_dev_code_or_creates_user`、`test_security_headers_are_applied` | 已完成 |
+| AUTHZ-01、C-03、C-04：Engineer 对象级权限和历史任务保护 | `3070d67` | `test_engineer_mutations_are_limited_to_owned_bound_objects`，覆盖跨账号和历史未绑定任务 403 | 已完成；历史任务仍需 PM 补绑账号 |
+| FILE-01、C-05：应用内文件可见度 | 既有基线，本轮复核 | `test_project_detail_filters_files_by_user_role` 及工作台文件可见度测试 | 应用层已完成；真实 NAS ACL 待实测 |
+| FILE-02、C-07：LAN 文件夹操作 | `c6ba6b3` | `lan-path.spec.js`，确认只复制客户端路径且不调用服务器 Explorer 接口 | 已完成 |
+| FILE-03、C-08：上传和解析资源限制 | `66abb0e` | `test_deliverable_upload_streams_with_size_type_and_parse_limits` | 已完成；试用期继续校准默认值 |
+| FLOW-01、C-09：按角色默认首页 | `81d6cb2` | `role-home.spec.js` | 已完成 |
+| FLOW-02、C-11：模板工作日 Due Date | `3387e88` | `test_template_due_dates_use_workdays_and_pm_can_override` | 周一至周五规则已完成；节假日/调休表后置 |
+| FLOW-01、C-10：通知 v1 | `42b7af3` | `test_in_app_notifications_track_unread_and_workflow_reviews`、`notifications.spec.js` | v1 已完成；定时提醒、保留策略和邮件后置 |
+| REQ-01、C-01、C-02：业务边界和 MVP 范围 | `69d174f`、`2f659ed` | 文档决策复核 | 已确认：不引入 Inquiry 父实体，结构化报价/PO/独立待办/导出移出当前 MVP |
+| OPS-01、C-12：正式运行、备份和恢复 | 尚未实施 | 当前仅有备份接口测试，尚无真实恢复演练和 NAS ACL 记录 | 团队试用阻塞项 |
+
+本轮自动检查基线为 `tools/check.cmd` 54 项 Python 测试、JavaScript 语法检查和 7 项 Playwright 用例全部通过。矩阵中的“已完成”仅代表应用代码与自动化验收完成，不替代真实 NAS、SMTP 和恢复演练。
+
+## 10. 团队试用退出条件
 
 以下条件全部满足后，才建议从单机演示进入小团队 LAN 试用：
 
@@ -455,7 +472,7 @@ Web API 使用 `os.startfile()` 在 FastAPI 所在 Windows 主机打开 Explorer
 - 所有自动检查通过，关键权限负向用例进入测试套件。
 - 正式运行机器、日志、备份、SMTP 和维护责任人有书面记录。
 
-## 10. 后续记录规则
+## 11. 后续记录规则
 
 - 每类整改单独提交，不把安全修复、数据模型调整和 UI 改版混为一个 commit。
 - 修复安全问题时同步增加负向权限测试。
