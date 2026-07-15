@@ -183,8 +183,9 @@ def test_scan_all_scans_project_and_shared_folders(client):
     assert payload["shared"]["new_files"] == 1
 
 
-def test_admin_global_scan_scans_all_and_removes_stale_indexes(client):
+def test_admin_global_scan_scans_all_and_removes_stale_indexes(client, monkeypatch):
     from customer_m import database
+    from customer_m.modules import system_maintenance
     from customer_m.utils import make_id, now_iso
 
     headers = auth_headers(client)
@@ -225,6 +226,15 @@ def test_admin_global_scan_scans_all_and_removes_stale_indexes(client):
         )
         conn.commit()
 
+    connection_count = 0
+    real_db_connect = database.db_connect
+
+    def counted_db_connect():
+        nonlocal connection_count
+        connection_count += 1
+        return real_db_connect()
+
+    monkeypatch.setattr(system_maintenance, "db_connect", counted_db_connect)
     response = client.post("/api/system/global-scan", headers=headers, json={})
 
     assert response.status_code == 200, response.text
@@ -236,6 +246,7 @@ def test_admin_global_scan_scans_all_and_removes_stale_indexes(client):
     assert payload["shared"]["new_files"] == 1
     assert payload["shared"]["removed_files"] == 1
     assert payload["failed_scopes"] == 0
+    assert connection_count == 3
 
 
 def test_global_scan_requires_admin(client):

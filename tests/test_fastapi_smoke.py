@@ -74,6 +74,98 @@ def test_new_user_stays_pending_until_admin_assigns_role(client):
     assert login_response.json()["detail"] == "账号待管理员分配角色，请联系管理员"
 
 
+def test_pending_user_cannot_be_enabled_without_a_role(client):
+    initial_email = "rongkai@jinxiangsz.com"
+    initial_code = client.post("/api/auth/request-code", json={"email": initial_email}).json()["dev_code"]
+    initial_login = client.post("/api/auth/login", json={"email": initial_email, "code": initial_code}).json()
+    admin_headers = {"Authorization": f"Bearer {initial_login['token']}"}
+
+    email = "pending-without-role@jinxiangsz.com"
+    client.post("/api/auth/request-code", json={"email": email})
+    users = client.get("/api/users", headers=admin_headers).json()["users"]
+    user = next(item for item in users if item["email"] == email)
+
+    response = client.patch(
+        f"/api/users/{user['id']}",
+        headers=admin_headers,
+        json={"status": "enabled"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "启用用户至少需要一个角色"
+
+
+def test_disabling_user_immediately_invalidates_existing_session(client):
+    initial_email = "rongkai@jinxiangsz.com"
+    initial_code = client.post("/api/auth/request-code", json={"email": initial_email}).json()["dev_code"]
+    initial_login = client.post("/api/auth/login", json={"email": initial_email, "code": initial_code}).json()
+    admin_headers = {"Authorization": f"Bearer {initial_login['token']}"}
+
+    email = "disable-session@jinxiangsz.com"
+    code = client.post("/api/auth/request-code", json={"email": email}).json()["dev_code"]
+    users = client.get("/api/users", headers=admin_headers).json()["users"]
+    user = next(item for item in users if item["email"] == email)
+    enabled = client.patch(
+        f"/api/users/{user['id']}",
+        headers=admin_headers,
+        json={"status": "enabled", "roles": ["engineer"]},
+    )
+    assert enabled.status_code == 200, enabled.text
+    login = client.post("/api/auth/login", json={"email": email, "code": code})
+    assert login.status_code == 200, login.text
+    user_headers = {"Authorization": f"Bearer {login.json()['token']}"}
+    assert client.get("/api/auth/me", headers=user_headers).status_code == 200
+
+    disabled = client.patch(
+        f"/api/users/{user['id']}",
+        headers=admin_headers,
+        json={"status": "disabled", "roles": ["engineer"]},
+    )
+
+    assert disabled.status_code == 200, disabled.text
+    assert client.get("/api/auth/me", headers=user_headers).status_code == 401
+    assert client.get("/api/projects", headers=user_headers).status_code == 401
+
+
+def test_readonly_user_migration_revokes_existing_sessions(client):
+    from customer_m import database
+    from customer_m.modules import auth
+    from customer_m.utils import make_id, now_iso
+
+    now = now_iso()
+    token = "legacy-readonly-token"
+    user_id = make_id()
+    with database.db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO users (id, email, display_name, status, created_at, updated_at)
+            VALUES (?, 'legacy-readonly@jinxiangsz.com', 'Legacy Readonly', 'enabled', ?, ?)
+            """,
+            (user_id, now, now),
+        )
+        conn.execute(
+            "INSERT INTO user_roles (user_id, role_code, created_at) VALUES (?, 'readonly', ?)",
+            (user_id, now),
+        )
+        conn.execute(
+            """
+            INSERT INTO auth_sessions (id, user_id, token_hash, expires_at, created_at, last_seen_at)
+            VALUES (?, ?, ?, '2099-01-01T00:00:00+00:00', ?, ?)
+            """,
+            (make_id(), user_id, auth._hash_value(token), now, now),
+        )
+        database.migrate_db(conn)
+        conn.commit()
+
+    response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 401
+    with database.db_connect() as conn:
+        user = conn.execute("SELECT status FROM users WHERE id = ?", (user_id,)).fetchone()
+        session = conn.execute("SELECT revoked_at FROM auth_sessions WHERE user_id = ?", (user_id,)).fetchone()
+    assert user["status"] == "pending"
+    assert session["revoked_at"] is not None
+
+
 def test_wrong_login_code_attempts_are_persisted(client):
     from customer_m import database
 
@@ -333,8 +425,11 @@ def test_project_detail_filters_files_by_user_role(client):
         ("customer.xlsx", "customer_quote", "pm_only"),
         ("po.pdf", "po", "pm_only"),
     ]
+    file_ids = {}
     with database.db_connect() as conn:
         for file_name, category_code, visibility_code in file_rows:
+            file_id = make_id()
+            file_ids[file_name] = file_id
             conn.execute(
                 """
                 INSERT INTO project_files (
@@ -346,7 +441,7 @@ def test_project_detail_filters_files_by_user_role(client):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 10, ?, 0, 0, NULL, ?, 'new_project_copy', ?, ?)
                 """,
                 (
-                    make_id(),
+                    file_id,
                     project_id,
                     file_name,
                     file_name,
@@ -362,9 +457,65 @@ def test_project_detail_filters_files_by_user_role(client):
             )
         conn.commit()
 
+    task_response = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=admin_headers,
+        json={"title": "Visibility task", "owner_user_id": engineer["id"]},
+    )
+    assert task_response.status_code == 201, task_response.text
+    task_id = task_response.json()["id"]
+    with database.db_connect() as conn:
+        for file_name, _, _ in file_rows:
+            conn.execute(
+                """
+                INSERT INTO task_deliverables (
+                  id, task_id, project_id, file_id, deliverable_type, version_note,
+                  status, submitted_by, submitted_at, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, 'test', NULL, 'submitted', 'Tester', ?, ?, ?)
+                """,
+                (make_id(), task_id, project_id, file_ids[file_name], now, now, now),
+            )
+        conn.execute(
+            """
+            INSERT INTO execution_activity_logs (
+              id, project_id, task_id, issue_id, activity_type, title, detail, created_at
+            )
+            VALUES (?, ?, ?, NULL, 'deliverable_submitted', '提交交付文件', 'customer.xlsx', ?)
+            """,
+            (make_id(), project_id, task_id, now),
+        )
+        conn.execute(
+            """
+            INSERT INTO project_events (id, project_id, event_type, title, detail, created_at)
+            VALUES (?, ?, 'workbench_file_submitted', '提交交付文件', 'customer.xlsx', ?)
+            """,
+            (make_id(), project_id, now),
+        )
+        conn.commit()
+
     engineer_detail = client.get(f"/api/projects/{project_id}", headers=engineer_headers)
     assert engineer_detail.status_code == 200, engineer_detail.text
     assert [item["current_name"] for item in engineer_detail.json()["files"]] == ["internal.xlsx"]
+    submitted_event = next(
+        item for item in engineer_detail.json()["events"] if item["event_type"] == "workbench_file_submitted"
+    )
+    assert submitted_event["detail"] is None
+
+    engineer_workbench = client.get(f"/api/workbench/projects/{project_id}", headers=engineer_headers)
+    assert engineer_workbench.status_code == 200, engineer_workbench.text
+    workbench_payload = engineer_workbench.json()
+    assert [item["file_name"] for item in workbench_payload["deliverables"]] == ["internal.xlsx"]
+    assert [item["file_name"] for item in workbench_payload["tasks"][0]["deliverables"]] == ["internal.xlsx"]
+    submitted_log = next(
+        item for item in workbench_payload["logs"] if item["activity_type"] == "deliverable_submitted"
+    )
+    assert submitted_log["detail"] is None
+
+    forced_pm_inbox = client.get("/api/workbench/inbox?role=pm", headers=engineer_headers)
+    assert forced_pm_inbox.status_code == 200, forced_pm_inbox.text
+    assert forced_pm_inbox.json()["role"] == "engineer"
+    assert forced_pm_inbox.json()["deliverables"] == []
 
     pm_detail = client.get(f"/api/projects/{project_id}", headers=admin_headers)
     assert pm_detail.status_code == 200, pm_detail.text

@@ -95,9 +95,9 @@ def workbench_inbox(request: Request, user: dict = Depends(current_user)) -> dic
 
 
 @router.get("/pm-inbox", response_model=WorkbenchPmInboxPayload)
-def workbench_pm_inbox(request: Request, _: dict = Depends(pm_user)) -> dict:
+def workbench_pm_inbox(request: Request, user: dict = Depends(pm_user)) -> dict:
     with db_connect() as conn:
-        return list_workbench_pm_inbox(conn, query_as_lists(request))
+        return list_workbench_pm_inbox(conn, query_as_lists(request), user)
 
 
 @router.get("/tasks")
@@ -113,10 +113,10 @@ def due_date_requests(request: Request, _: dict = Depends(pm_user)) -> dict:
 
 
 @router.get("/projects/{project_id}")
-def workbench_project(project_id: str, _: dict = Depends(current_user)) -> dict:
+def workbench_project(project_id: str, user: dict = Depends(current_user)) -> dict:
     try:
         with db_connect() as conn:
-            return get_workbench_project(conn, project_id)
+            return get_workbench_project(conn, project_id, user)
     except ValueError as exc:
         raise _bad_request(exc) from exc
 

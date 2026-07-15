@@ -10,6 +10,10 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $RepoRoot
 . (Join-Path $PSScriptRoot "runtime.ps1")
 
+if ($env:CUSTOMER_PROJECT_ENV -ne "test" -or [string]::IsNullOrWhiteSpace($env:CUSTOMER_PROJECT_TEST_ROOT)) {
+    throw "E2E user preparation is only allowed in an isolated test environment."
+}
+
 $python = Resolve-Python
 if ([string]::IsNullOrWhiteSpace($python)) {
     throw "Python was not found. Install Python, add it to PATH, or set CUSTOMER_PROJECT_PYTHON."

@@ -216,6 +216,10 @@ def get_project_detail_payload(conn: sqlite3.Connection, project_id: str, user: 
             (project_id,),
         )
     ]
+    if "admin" not in set((user or {}).get("roles") or []):
+        for event in events:
+            if event.get("event_type") == "workbench_file_submitted":
+                event["detail"] = None
     return {"project": enrich_project_status_date(project), "files": files, "shared_files": shared_files, "events": events}
 
 def _project_file_flags(conn: sqlite3.Connection, project_id: str) -> tuple[int, int, int]:

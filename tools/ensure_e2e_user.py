@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -14,7 +15,21 @@ from customer_m.modules.auth import VALID_ROLES, default_display_name, normalize
 from customer_m.utils import make_id, now_iso
 
 
+def require_isolated_test_database() -> None:
+    if os.environ.get("CUSTOMER_PROJECT_ENV") != "test":
+        raise RuntimeError("E2E user preparation requires CUSTOMER_PROJECT_ENV=test")
+    test_root_value = os.environ.get("CUSTOMER_PROJECT_TEST_ROOT", "").strip()
+    db_path_value = os.environ.get("CUSTOMER_PROJECT_DB_PATH", "").strip()
+    if not test_root_value or not db_path_value:
+        raise RuntimeError("E2E test root and database path must be configured")
+    test_root = Path(test_root_value).resolve(strict=False)
+    db_path = Path(db_path_value).resolve(strict=False)
+    if not db_path.is_relative_to(test_root):
+        raise RuntimeError("E2E database must be located under CUSTOMER_PROJECT_TEST_ROOT")
+
+
 def main() -> int:
+    require_isolated_test_database()
     parser = argparse.ArgumentParser(description="Prepare an enabled test user for Playwright e2e tests.")
     parser.add_argument("--email", required=True)
     parser.add_argument("--roles", default="pm,engineer")

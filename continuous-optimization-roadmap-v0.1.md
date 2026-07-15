@@ -869,3 +869,22 @@ project-management-platform-architecture-plan-v0.1.md
 file-visibility-permission-principles-v0.1.md
 project-management-platform-architecture-plan-v0.1.md
 ```
+
+## 25. 2026-07-15 权限闭环与扫描事务收紧
+
+### 决策内容
+
+- E2E 测试必须使用独立数据库、项目根目录、日志目录和动态端口，禁止复用正常服务。
+- 账号不是 `enabled` 时，任何历史 token 都不能继续访问；状态降级时立即撤销会话。
+- 文件可见度必须同时覆盖项目详情、工作台交付物、个人待办和 PM 待处理中心，查询参数不能提升实际角色。
+- 全局扫描按单个项目和共享目录提交短事务，后台任务化留到后续运维阶段。
+
+### 暂不做
+
+- 本阶段不引入消息队列或复杂扫描调度器。
+- 本阶段不在本地模拟 NAS ACL；直接共享目录权限仍由 NAS / Windows ACL 负责。
+
+### 下一步动作
+
+- 持续保持 Playwright 测试数据与正常数据库隔离，新增浏览器用例不得依赖真实项目数据。
+- 团队试用时继续观察单个超大项目扫描耗时，再决定是否建设持久化后台扫描任务和进度接口。

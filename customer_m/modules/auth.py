@@ -249,8 +249,11 @@ def authenticate_token(conn: sqlite3.Connection, token: str | None) -> dict | No
     expires_at = _parse_time(row["expires_at"])
     if expires_at is None or expires_at < _now():
         return None
+    user = user_payload(conn, row["user_id"])
+    if user is None or user.get("status") != "enabled":
+        return None
     conn.execute("UPDATE auth_sessions SET last_seen_at = ? WHERE id = ?", (now_iso(), row["id"]))
-    return user_payload(conn, row["user_id"])
+    return user
 
 
 def revoke_token(conn: sqlite3.Connection, token: str | None) -> None:
@@ -335,24 +338,41 @@ def update_user(conn: sqlite3.Connection, user_id: str, data: dict) -> dict:
     status = str(data.get("status", row["status"] or "pending")).strip() or "pending"
     if status not in ("pending", "enabled", "disabled"):
         raise ValueError("用户状态无效")
+    existing_roles = [
+        item["role_code"]
+        for item in conn.execute(
+            "SELECT role_code FROM user_roles WHERE user_id = ? ORDER BY role_code",
+            (user_id,),
+        )
+    ]
+    roles = existing_roles
+    if "roles" in data:
+        raw_roles = data.get("roles", [])
+        if isinstance(raw_roles, str):
+            raw_roles = [item.strip() for item in raw_roles.split(",") if item.strip()]
+        invalid_roles = [role for role in raw_roles if role not in VALID_ROLES]
+        if invalid_roles:
+            raise ValueError(f"用户角色无效：{', '.join(invalid_roles)}")
+        roles = sorted(set(raw_roles))
+    if status == "enabled" and not roles:
+        raise ValueError("启用用户至少需要一个角色")
     now = now_iso()
     conn.execute(
         "UPDATE users SET display_name = ?, status = ?, updated_at = ? WHERE id = ?",
         (display_name, status, now, user_id),
     )
     if "roles" in data:
-        roles = data.get("roles", [])
-        if isinstance(roles, str):
-            roles = [item.strip() for item in roles.split(",") if item.strip()]
-        roles = [role for role in roles if role in VALID_ROLES]
-        if status == "enabled" and not roles:
-            raise ValueError("启用用户至少需要一个角色")
         conn.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
-        for role in sorted(set(roles)):
+        for role in roles:
             conn.execute(
                 "INSERT INTO user_roles (user_id, role_code, created_at) VALUES (?, ?, ?)",
                 (user_id, role, now),
             )
+    if status != "enabled":
+        conn.execute(
+            "UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
+            (now, user_id),
+        )
     payload = user_payload(conn, user_id)
     if payload is None:
         raise ValueError("用户不存在")

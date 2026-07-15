@@ -433,6 +433,10 @@ def _migrate_readonly_users(conn: sqlite3.Connection) -> None:
             "UPDATE users SET status = 'pending', updated_at = ? WHERE id = ?",
             (now, user_id),
         )
+        conn.execute(
+            "UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
+            (now, user_id),
+        )
     conn.execute("DELETE FROM user_roles WHERE role_code = 'readonly'")
 
 
