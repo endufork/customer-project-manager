@@ -95,6 +95,19 @@ npm ci
 run_server.cmd
 ```
 
+本地启动脚本会在未显式设置时使用 `CUSTOMER_PROJECT_ENV=development`，允许在 SMTP 未配置时显示测试验证码。正式环境必须显式设置：
+
+```text
+CUSTOMER_PROJECT_ENV=production
+CUSTOMER_AUTH_SECRET=至少32字符的随机值
+CUSTOMER_SMTP_HOST
+CUSTOMER_SMTP_FROM_EMAIL
+CUSTOMER_SMTP_USERNAME
+CUSTOMER_SMTP_PASSWORD
+```
+
+生产环境缺少认证密钥或 SMTP 时服务拒绝启动，且验证码接口绝不返回 `dev_code`。生产环境默认关闭 `/docs`、`/redoc` 和 `/openapi.json`。
+
 访问地址：
 
 ```text

@@ -8,12 +8,12 @@ import secrets
 import smtplib
 import sqlite3
 
+from .. import config as app_config
 from ..config import (
     AUTH_CODE_RESEND_SECONDS,
     AUTH_CODE_TTL_SECONDS,
     AUTH_EMAIL_DOMAIN,
     AUTH_INITIAL_ADMIN_EMAIL,
-    AUTH_SECRET,
     AUTH_SESSION_DAYS,
     SMTP_FROM_EMAIL,
     SMTP_FROM_NAME,
@@ -52,7 +52,7 @@ def _parse_time(value: str | None) -> datetime | None:
 
 
 def _hash_value(value: str) -> str:
-    return hashlib.sha256(f"{AUTH_SECRET}:{value}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{app_config.AUTH_SECRET}:{value}".encode("utf-8")).hexdigest()
 
 
 def _smtp_configured() -> bool:
@@ -123,6 +123,9 @@ def ensure_user(conn: sqlite3.Connection, email: str) -> dict:
 
 def request_login_code(conn: sqlite3.Connection, raw_email: str) -> dict:
     email = normalize_email(raw_email)
+    smtp_configured = _smtp_configured()
+    if not smtp_configured and not app_config.dev_login_code_enabled():
+        raise ValueError("生产环境 SMTP 未配置，登录验证码不可用，请联系管理员")
     ensure_user(conn, email)
     latest = conn.execute(
         """
@@ -148,7 +151,6 @@ def request_login_code(conn: sqlite3.Connection, raw_email: str) -> dict:
         """,
         (make_id(), email, _hash_value(f"{email}:{code}"), expires_at.isoformat(timespec="seconds"), created_at.isoformat(timespec="seconds")),
     )
-    smtp_configured = _smtp_configured()
     sent = send_login_code_email(email, code)
     if smtp_configured and not sent:
         raise ValueError("验证码邮件发送失败，请稍后再试或联系管理员")

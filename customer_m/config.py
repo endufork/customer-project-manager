@@ -9,12 +9,18 @@ DB_PATH = Path(os.environ.get("CUSTOMER_PROJECT_DB_PATH", DATA_DIR / "customer_p
 SCHEMA_PATH = BASE_DIR / "mvp-sqlite-schema-v0.2.sql"
 LOG_DIR_PATH = os.environ.get("CUSTOMER_PROJECT_LOG_DIR", "").strip()
 
+APP_ENV = os.environ.get("CUSTOMER_PROJECT_ENV", "production").strip().lower() or "production"
+NON_PRODUCTION_ENVS = {"development", "test"}
+LOCAL_DEV_AUTH_SECRET = "local-dev-auth-secret"
+
 AUTH_EMAIL_DOMAIN = os.environ.get("CUSTOMER_AUTH_EMAIL_DOMAIN", "jinxiangsz.com").strip().lower()
 AUTH_INITIAL_ADMIN_EMAIL = os.environ.get("CUSTOMER_AUTH_INITIAL_ADMIN_EMAIL", "rongkai@jinxiangsz.com").strip().lower()
 AUTH_CODE_TTL_SECONDS = int(os.environ.get("CUSTOMER_AUTH_CODE_TTL_SECONDS", "600"))
 AUTH_CODE_RESEND_SECONDS = int(os.environ.get("CUSTOMER_AUTH_CODE_RESEND_SECONDS", "60"))
 AUTH_SESSION_DAYS = int(os.environ.get("CUSTOMER_AUTH_SESSION_DAYS", "7"))
-AUTH_SECRET = os.environ.get("CUSTOMER_AUTH_SECRET", "local-dev-auth-secret")
+AUTH_SECRET = os.environ.get("CUSTOMER_AUTH_SECRET", "").strip()
+if not AUTH_SECRET and APP_ENV in NON_PRODUCTION_ENVS:
+    AUTH_SECRET = LOCAL_DEV_AUTH_SECRET
 
 SMTP_HOST = os.environ.get("CUSTOMER_SMTP_HOST", "").strip()
 SMTP_PORT = int(os.environ.get("CUSTOMER_SMTP_PORT", "465"))
@@ -23,6 +29,33 @@ SMTP_USERNAME = os.environ.get("CUSTOMER_SMTP_USERNAME", "").strip()
 SMTP_PASSWORD = os.environ.get("CUSTOMER_SMTP_PASSWORD", "").strip()
 SMTP_FROM_EMAIL = os.environ.get("CUSTOMER_SMTP_FROM_EMAIL", SMTP_USERNAME).strip()
 SMTP_FROM_NAME = os.environ.get("CUSTOMER_SMTP_FROM_NAME", "项目管理系统").strip()
+
+
+def is_non_production_environment() -> bool:
+    return APP_ENV in NON_PRODUCTION_ENVS
+
+
+def dev_login_code_enabled() -> bool:
+    return is_non_production_environment()
+
+
+def api_docs_enabled() -> bool:
+    return is_non_production_environment()
+
+
+def validate_runtime_config() -> None:
+    if APP_ENV not in {"production", *NON_PRODUCTION_ENVS}:
+        raise RuntimeError("CUSTOMER_PROJECT_ENV 必须为 production、development 或 test")
+    if is_non_production_environment():
+        return
+
+    errors = []
+    if len(AUTH_SECRET) < 32 or AUTH_SECRET == LOCAL_DEV_AUTH_SECRET:
+        errors.append("CUSTOMER_AUTH_SECRET 必须设置为至少 32 个字符的随机值")
+    if not (SMTP_HOST and SMTP_FROM_EMAIL and SMTP_USERNAME and SMTP_PASSWORD):
+        errors.append("生产环境必须完整配置 SMTP host、发信邮箱、用户名和密码")
+    if errors:
+        raise RuntimeError("生产环境配置不完整：" + "；".join(errors))
 
 SINGLE_DEVICE_CONTAINER = "01_独立项目"
 PROJECT_GROUP_CONTAINER = "02_客户产品项目"

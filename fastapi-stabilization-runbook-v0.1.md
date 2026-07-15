@@ -41,6 +41,22 @@ CUSTOMER_PROJECT_LOG_DIR
 CUSTOMER_PROJECT_LOG_LEVEL
 ```
 
+环境模式与认证配置：
+
+```text
+CUSTOMER_PROJECT_ENV=development | test | production
+CUSTOMER_AUTH_SECRET
+CUSTOMER_SMTP_HOST
+CUSTOMER_SMTP_FROM_EMAIL
+CUSTOMER_SMTP_USERNAME
+CUSTOMER_SMTP_PASSWORD
+```
+
+- `tools/start-fastapi-server.ps1` 在未设置环境模式时使用 `development`，只监听本机回环地址。
+- 正式部署必须显式设置 `production`、至少 32 字符的随机认证密钥和完整 SMTP 配置。
+- 生产配置不完整时应用启动失败，不允许降级返回测试验证码。
+- 生产环境关闭 FastAPI API 文档，并启用 CSP、禁止 iframe、MIME 嗅探和 Referrer 限制等基础响应头。
+
 ## 3. 日志落盘
 
 应用日志默认写入：

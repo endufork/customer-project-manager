@@ -13,18 +13,19 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import config
 from .api.auth import router as auth_router
 from .api.bootstrap import router as bootstrap_router
 from .api.projects import router as projects_router
 from .api.system import router as system_router
 from .api.workbench import router as workbench_router
-from .config import STATIC_DIR
 from .database import init_db
 from .logging_config import configure_logging
 from .api.schemas import HealthPayload
 
 
 logger = logging.getLogger(__name__)
+STATIC_DIR = config.STATIC_DIR
 
 STATIC_SCRIPT_PATHS = (
     "/static/js/app-core.js",
@@ -65,12 +66,20 @@ def render_index_html() -> str:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    config.validate_runtime_config()
     configure_logging()
     init_db()
     yield
 
 
-app = FastAPI(title="项目管理系统", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="项目管理系统",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url="/docs" if config.api_docs_enabled() else None,
+    redoc_url="/redoc" if config.api_docs_enabled() else None,
+    openapi_url="/openapi.json" if config.api_docs_enabled() else None,
+)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(auth_router)
 app.include_router(bootstrap_router)
@@ -104,6 +113,16 @@ async def request_logging_and_cache_headers(request: Request, call_next):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if not config.api_docs_enabled():
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self'; "
+            "img-src 'self' data:; font-src 'self'; connect-src 'self'; "
+            "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+        )
     return response
 
 

@@ -3,6 +3,10 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $RepoRoot
 . (Join-Path $PSScriptRoot "runtime.ps1")
 
+if ([string]::IsNullOrWhiteSpace($env:CUSTOMER_PROJECT_ENV)) {
+    $env:CUSTOMER_PROJECT_ENV = "development"
+}
+
 function Test-PythonModule {
     param(
         [string]$Python,

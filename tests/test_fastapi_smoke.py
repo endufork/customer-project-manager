@@ -64,6 +64,22 @@ def test_login_code_dev_flow(client):
     assert me_response.json()["user"]["is_pm"] is True
 
 
+def test_production_without_smtp_never_returns_dev_code_or_creates_user(client, monkeypatch):
+    from customer_m import config, database
+
+    email = "production-no-smtp@jinxiangsz.com"
+    monkeypatch.setattr(config, "APP_ENV", "production")
+
+    response = client.post("/api/auth/request-code", json={"email": email})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "生产环境 SMTP 未配置，登录验证码不可用，请联系管理员"
+    assert "dev_code" not in response.json()
+    with database.db_connect() as conn:
+        assert conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone() is None
+        assert conn.execute("SELECT id FROM login_codes WHERE email = ?", (email,)).fetchone() is None
+
+
 def test_new_user_stays_pending_until_admin_assigns_role(client):
     email = "pending-user@jinxiangsz.com"
     code_response = client.post("/api/auth/request-code", json={"email": email})

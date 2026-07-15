@@ -15,6 +15,9 @@ if str(ROOT) not in sys.path:
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     from customer_m import config, database
+
+    monkeypatch.setattr(config, "APP_ENV", "test")
+    monkeypatch.setattr(config, "AUTH_SECRET", "test-auth-secret")
     from customer_m.fastapi_app import app
 
     data_dir = tmp_path / "data"
