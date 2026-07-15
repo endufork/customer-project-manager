@@ -1,13 +1,14 @@
 """Workbench task commands and templates."""
 
 import sqlite3
-from datetime import date, timedelta
+from datetime import date
 
 from ..database import row_to_dict
 from ..utils import make_id, now_iso
 from .lifecycle import create_event
 from .workbench_issues import create_issue, link_issue_to_task
 from .workbench_permissions import require_task_patch_fields, require_task_write
+from .workdays import add_workdays
 from .workbench_common import (
     _bool_value,
     _clean_task_status,
@@ -438,7 +439,7 @@ def apply_template(conn: sqlite3.Connection, project_id: str, template_code: str
                 "title": title,
                 "work_package": work_package,
                 "phase_code": phase_code,
-                "due_date": (base + timedelta(days=offset_days)).isoformat(),
+                "due_date": add_workdays(base, offset_days).isoformat(),
                 "requires_deliverable": requires_deliverable,
             },
         )

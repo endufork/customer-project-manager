@@ -524,6 +524,53 @@ def test_task_update_without_due_date_preserves_existing_due_date(client):
     assert task["due_date"] == "2026-06-12"
 
 
+def test_template_due_dates_use_workdays_and_pm_can_override(client, monkeypatch):
+    from datetime import date
+
+    from customer_m.modules import workbench_tasks
+
+    class Friday(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 7, 17)
+
+    monkeypatch.setattr(workbench_tasks, "date", Friday)
+    headers = auth_headers(client)
+    project_id = create_project(client, headers)
+    template_response = client.post(
+        f"/api/workbench/projects/{project_id}/templates",
+        headers=headers,
+        json={"template": "inq"},
+    )
+    assert template_response.status_code == 200, template_response.text
+
+    detail = client.get(f"/api/workbench/projects/{project_id}", headers=headers).json()
+    tasks = {task["title"]: task for task in detail["tasks"]}
+    assert tasks["澄清客户需求"]["due_date"] == "2026-07-21"
+    assert tasks["输出大致方案"]["due_date"] == "2026-07-22"
+    assert all(date.fromisoformat(task["due_date"]).weekday() < 5 for task in tasks.values())
+
+    manual_task = client.post(
+        f"/api/workbench/projects/{project_id}/tasks",
+        headers=headers,
+        json={"title": "PM override task", "due_date": "2026-07-18"},
+    )
+    assert manual_task.status_code == 201, manual_task.text
+    task_id = manual_task.json()["id"]
+    override = client.post(
+        f"/api/workbench/tasks/{task_id}/due-date-requests",
+        headers=headers,
+        json={
+            "proposed_due_date": "2026-07-19",
+            "reason": "PM confirmed weekend commissioning",
+            "direct": True,
+        },
+    )
+    assert override.status_code == 201, override.text
+    assert override.json()["status"] == "approved"
+    assert override.json()["final_due_date"] == "2026-07-19"
+
+
 def test_blocked_task_auto_creates_task_issue(client):
     headers = auth_headers(client)
     project_id = create_project(client, headers)
