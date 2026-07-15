@@ -16,12 +16,52 @@ function userHasRole(...roles) {
 }
 
 function preferredWorkbenchRole() {
+  if (userHasRole("pm") && userHasRole("engineer")) {
+    const savedRole = localStorage.getItem(workbenchRoleStorageKey());
+    if (["pm", "engineer"].includes(savedRole)) return savedRole;
+    return "pm";
+  }
   if (userHasRole("pm")) return "pm";
   return "engineer";
 }
 
+function workbenchRoleStorageKey() {
+  const userKey = state.auth.user?.id || state.auth.user?.email || "anonymous";
+  return `${WORKBENCH_ROLE_STORAGE_KEY}.${userKey}`;
+}
+
+function lastViewStorageKey() {
+  const userKey = state.auth.user?.id || state.auth.user?.email || "anonymous";
+  return `${LAST_VIEW_STORAGE_PREFIX}.${userKey}`;
+}
+
+function availableHomeViews() {
+  const views = new Set(["board", "workbench"]);
+  if (userHasRole("pm")) ["pmInbox", "library", "create"].forEach((view) => views.add(view));
+  if (userHasRole("admin")) views.add("admin");
+  return views;
+}
+
+function preferredHomeView() {
+  if (userHasRole("pm") && userHasRole("engineer")) {
+    const savedView = localStorage.getItem(lastViewStorageKey());
+    return availableHomeViews().has(savedView) ? savedView : "pmInbox";
+  }
+  if (userHasRole("pm")) return "pmInbox";
+  if (userHasRole("engineer")) return "workbench";
+  if (userHasRole("admin")) return "admin";
+  return "board";
+}
+
+function rememberHomeView(view) {
+  if (!state.appReady || isWorkbenchFocusMode()) return;
+  if (!(userHasRole("pm") && userHasRole("engineer"))) return;
+  if (availableHomeViews().has(view)) localStorage.setItem(lastViewStorageKey(), view);
+}
+
 function showAuthView() {
   state.auth = { token: null, user: null };
+  state.appReady = false;
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   document.body.classList.remove("authenticated");
   $("#authView").hidden = false;

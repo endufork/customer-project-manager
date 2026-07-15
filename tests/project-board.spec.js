@@ -21,6 +21,7 @@ async function login(page, email) {
 
 test("project board opens, filters, shows snapshot, and links to workbench", async ({ page }) => {
   await login(page, `board.viewer.one.${process.env.CUSTOMER_PROJECT_E2E_RUN_ID}@jinxiangsz.com`);
+  await page.getByRole("button", { name: "项目看板", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "项目看板" })).toBeVisible();
   await expect(page.locator("#boardKpis .board-kpi")).toHaveCount(6);
@@ -43,6 +44,7 @@ test("project board opens, filters, shows snapshot, and links to workbench", asy
 
 test("project board risk overview shows cross-project risks", async ({ page }) => {
   await login(page, `board.viewer.two.${process.env.CUSTOMER_PROJECT_E2E_RUN_ID}@jinxiangsz.com`);
+  await page.getByRole("button", { name: "项目看板", exact: true }).click();
 
   await page.getByRole("button", { name: "风险总览" }).click();
   await expect(page.locator("#riskOverviewLayout")).toBeVisible();

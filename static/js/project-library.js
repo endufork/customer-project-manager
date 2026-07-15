@@ -58,6 +58,7 @@ function switchView(view, refresh = true) {
   if (isAdmin && refresh) {
     loadUsers().catch(console.error);
   }
+  rememberHomeView(view);
 }
 
 async function loadBootstrap() {

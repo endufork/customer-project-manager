@@ -910,6 +910,7 @@ project-management-platform-architecture-plan-v0.1.md
 - 客户报价、PO 和采购商务对 Engineer 隔离，使用 NAS 目录级 ACL；当前不增加 Readonly。
 - LAN 第一版复制 UNC 路径；上传限制配置化，默认 500 MB，文档解析另设更小上限。
 - Engineer 默认进入我的待办，PM 默认进入 PM 待处理，多角色用户记住上次页面。
+- 2026-07-15 已实施：Engineer 登录后进入工作台“我的待办”；PM 进入“PM待处理”；PM+Engineer 多角色账号按用户记忆最近主页面，无历史记录时进入“PM待处理”。
 - 第一版做系统内通知和未读计数，邮件后置；任务模板按工作日计算，PM 可覆盖。
 - 正式运行机器、SMTP、备份、RPO/RTO 和恢复责任人保持为团队试用前阻塞确认项。
 

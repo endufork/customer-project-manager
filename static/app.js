@@ -159,7 +159,7 @@ function bindEvents() {
   }, 300));
   $("#workbenchRoleSelect").addEventListener("change", () => {
     if ($("#workbenchRoleSelect").disabled) return;
-    localStorage.setItem(WORKBENCH_ROLE_STORAGE_KEY, $("#workbenchRoleSelect").value);
+    localStorage.setItem(workbenchRoleStorageKey(), $("#workbenchRoleSelect").value);
     loadWorkbench().catch(console.error);
   });
   $("#workbenchViewFilter").addEventListener("change", () => loadWorkbench().catch(console.error));
@@ -176,11 +176,27 @@ async function startAuthenticatedApp() {
   if (isWorkbenchFocusMode()) {
     switchView("workbench", false);
     await loadWorkbench(initialWorkbenchProjectId());
-  } else if (!$("#adminView").hidden) {
-    await loadUsers();
   } else {
-    switchView("board", false);
-    await loadProjectBoard();
+    const homeView = preferredHomeView();
+    if (homeView === "workbench") {
+      state.workbenchMode = "tasks";
+      switchView("workbench", false);
+      await loadWorkbench();
+    } else if (homeView === "pmInbox") {
+      switchView("pmInbox", false);
+      await loadPmInbox();
+    } else if (homeView === "library") {
+      switchView("library", false);
+      await loadProjects();
+    } else if (homeView === "admin") {
+      switchView("admin", false);
+      await loadUsers();
+    } else if (homeView === "create") {
+      switchView("create", false);
+    } else {
+      switchView("board", false);
+      await loadProjectBoard();
+    }
   }
   state.appReady = true;
 }
